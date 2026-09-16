@@ -10,10 +10,17 @@ import { ElementPalette } from "./panels/ElementPalette";
 import { PropertyPanel } from "./panels/PropertyPanel";
 import { PagePanel } from "./panels/PagePanel";
 import { JsonEditor } from "./json/JsonEditor";
+import { EditorErrorBoundary } from "./EditorErrorBoundary";
 
 function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   const mode = useEditor((s) => s.mode);
-  return mode === "preview" ? <Preview reportId={reportId} /> : <div className="p-8 overflow-auto h-full"><Canvas zoom={zoom} /></div>;
+  const report = useEditor((s) => s.report);
+  // 렌더 오류는 이 영역만 폴백으로 바꾼다. 모드를 바꾸면 새로 마운트하고, 레포트를 고치면(JSON 편집 등) 스스로 다시 그려 본다
+  return (
+    <EditorErrorBoundary key={mode} resetKey={report}>
+      {mode === "preview" ? <Preview reportId={reportId} /> : <div className="p-8 overflow-auto h-full"><Canvas zoom={zoom} /></div>}
+    </EditorErrorBoundary>
+  );
 }
 
 export function Editor({ initial }: { initial: Report }) {
