@@ -1,12 +1,13 @@
 "use client";
 import type { Element, Style } from "@daport/core";
-import { useEditor } from "../store";
+import { useEditor, lineBox } from "../store";
 import { NumberField, TextField, SelectField, CheckField } from "./Field";
 
 export function PropertyPanel() {
   const selection = useEditor((s) => s.selection);
   const el = useEditor((s) => (s.selection.length === 1 ? s.findElement(s.selection[0]) : undefined));   // 선택 요소가 바뀔 때만 재렌더
   const updateElement = useEditor((s) => s.updateElement);
+  const resizeElement = useEditor((s) => s.resizeElement);
   if (selection.length !== 1) return <div className="p-3 text-xs text-neutral-500">{selection.length === 0 ? "선택된 요소가 없습니다" : `${selection.length}개 선택됨`}</div>;
   if (!el) return null;
   const set = (patch: Partial<Element>) => updateElement(el.id, patch);
@@ -15,14 +16,17 @@ export function PropertyPanel() {
   const shift = (v: number, d: number) => Math.round((v + d) * 1e6) / 1e6;
   const setX = (x: number) => set(el.type === "line" ? { x, x2: shift(el.x2, x - el.x) } : { x });
   const setY = (y: number) => set(el.type === "line" ? { y, y2: shift(el.y2, y - el.y) } : { y });
+  // 선의 W/H는 끝점에서 정해지므로 그대로 넣으면 스토어가 되돌린다. 핸들처럼 경계 상자를 늘려 두 끝점을 옮긴다
+  const setW = (w: number) => (el.type === "line" ? resizeElement(el.id, { ...lineBox(el), w }) : set({ w }));
+  const setH = (h: number) => (el.type === "line" ? resizeElement(el.id, { ...lineBox(el), h }) : set({ h }));
 
   return (
     <div className="p-3 flex flex-col gap-2">
       <div className="text-xs font-semibold">{el.type} <span className="text-neutral-400">#{el.id}</span></div>
       <NumberField label="X" value={el.x} onChange={setX} />
       <NumberField label="Y" value={el.y} onChange={setY} />
-      <NumberField label="W" value={el.w} min={0} onChange={(w) => set({ w })} />
-      <NumberField label="H" value={el.h} min={0} onChange={(h) => set({ h })} />
+      <NumberField label="W" value={el.w} min={0} onChange={setW} />
+      <NumberField label="H" value={el.h} min={0} onChange={setH} />
       {el.type === "line" && <><NumberField label="X2" value={el.x2} onChange={(x2) => set({ x2 })} /><NumberField label="Y2" value={el.y2} onChange={(y2) => set({ y2 })} /></>}
       {el.type === "text" && <TextField label="내용" value={el.value} multiline onChange={(value) => set({ value })} />}
       {el.type === "image" && <><TextField label="src" value={el.src} onChange={(src) => set({ src })} />

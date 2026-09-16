@@ -1,16 +1,20 @@
 "use client";
 import { useMemo, useState, type PointerEvent } from "react";
 import { layout } from "@daport/renderer/layout";
+import type { PlacedItem } from "@daport/renderer";
 import { PaintPage, pageCss, fontFaceCss } from "@daport/renderer/paint";   // 패키지 루트는 react-dom/server를 쓰는 html.ts까지 끌어온다
 import { resolveDataSync } from "@/lib/data";
 import { resolveAssetUrls } from "@/lib/assets";
-import { useEditor } from "../store";
+import { useEditor, lineBox } from "../store";
 import { useDrag, type Box, type Handle } from "./useDrag";
 import { SelectionBox } from "./SelectionBox";
 import { pxToMm } from "./snap";
 
 /** 채우기 없는 사각형은 선에서 이 화면 거리(px) 안쪽일 때만 고른다 */
 const STROKE_HIT_PX = 3;
+
+/** 선택 상자·드래그 시작 상자. 선은 두 끝점을 감싸는 상자다 (x/y가 시작점이라 오른쪽→왼쪽 선이면 왼쪽 변이 아니다) */
+const itemBox = (it: PlacedItem): Box => (it.kind === "line" ? lineBox(it) : { x: it.x, y: it.y, w: it.w, h: it.h });
 
 export function Canvas({ zoom }: { zoom: number }) {
   const report = useEditor((s) => s.report);
@@ -31,7 +35,7 @@ export function Canvas({ zoom }: { zoom: number }) {
   // 선택 요소들의 절대 박스 (그룹 자식은 layout 결과에서 좌표를 얻는다)
   const boxes = useMemo(() => {
     const m: Record<string, Box> = {};
-    for (const it of pages[0].items) if (selection.includes(it.elementId)) m[it.elementId] = { x: it.x, y: it.y, w: it.w, h: it.h };
+    for (const it of pages[0].items) if (selection.includes(it.elementId)) m[it.elementId] = itemBox(it);
     return m;
   }, [pages, selection]);
 
@@ -51,8 +55,9 @@ export function Canvas({ zoom }: { zoom: number }) {
       }
       for (const [id, b] of entries) {
         const el = findElement(id); const orig = boxes[id]; if (!el || !orig) continue;
-        // 그룹 자식은 layout 절대좌표와 요소 상대좌표의 차이를 유지한다
-        resizeElement(id, { x: el.x + (b.x - orig.x), y: el.y + (b.y - orig.y), w: b.w, h: b.h });
+        // 그룹 자식은 layout 절대좌표와 요소 상대좌표의 차이를 유지한다. 선은 상대좌표의 경계 상자를 옮긴다
+        const rel = el.type === "line" ? lineBox(el) : el;
+        resizeElement(id, { x: rel.x + (b.x - orig.x), y: rel.y + (b.y - orig.y), w: b.w, h: b.h });
       }
     },
   });
@@ -90,7 +95,7 @@ export function Canvas({ zoom }: { zoom: number }) {
     const ids = selection.includes(id) ? selection : [id];
     if (!selection.includes(id)) select([id]);
     const start: Record<string, Box> = {};
-    for (const sid of ids) { const it = pages[0].items.find((i) => i.elementId === sid); if (it) start[sid] = { x: it.x, y: it.y, w: it.w, h: it.h }; }
+    for (const sid of ids) { const it = pages[0].items.find((i) => i.elementId === sid); if (it) start[sid] = itemBox(it); }
     drag.begin(e, "move", start);
   };
   // 핸들은 단일 선택에만 보인다. 선은 크기 0이 정상이라 최소 크기를 0으로 둔다 (1이면 가로선의 n/s 핸들이 선을 1mm 기울인다)

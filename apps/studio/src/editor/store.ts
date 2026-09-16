@@ -53,10 +53,31 @@ function newId(base: string, report: Report): string {
 
 const round = (v: number) => Math.round(v * 100) / 100;
 
+/**
+ * 선의 경계 상자. 선의 x/y는 시작점이고 x2/y2는 끝점이라, 오른쪽→왼쪽·아래→위로 그린 선은 x/y가 상자의 왼쪽·위가 아니다.
+ * 요소(그룹 상대좌표)와 layout 결과(절대좌표) 모두에 쓴다
+ */
+export function lineBox(l: { x: number; y: number; x2: number; y2: number }): { x: number; y: number; w: number; h: number } {
+  return { x: Math.min(l.x, l.x2), y: Math.min(l.y, l.y2), w: Math.abs(l.x2 - l.x), h: Math.abs(l.y2 - l.y) };
+}
+
+/**
+ * 한 축의 끝점 좌표 p를 옛 구간 [from, from+size]에서 새 구간 [to, to+nsize]로 비례해 옮긴다. 선의 끝점은 늘 구간 끝에 있으므로
+ * 왼쪽(위) 끝점은 새 왼쪽(위) 끝에 남아 방향이 유지된다. 길이 0인 축(가로선의 높이 등)은 비율이 없으므로 끝점을 제자리에 두되
+ * 새 구간 안으로만 당긴다. 그래야 가로선의 n/s 핸들이 선을 기울이거나 한쪽 핸들만 선을 옮기지 않는다
+ */
+function mapAxis(p: number, from: number, size: number, to: number, nsize: number): number {
+  return size === 0 ? Math.min(Math.max(p, to), to + nsize) : to + ((p - from) / size) * nsize;
+}
+
 export function createEditorStore(initial: Report) {
   return createStore<EditorState>((set, get) => {
     const apply = (mutate: (r: Report) => void) => {
-      const h = commit(get().history, mutate);
+      // 선의 w/h는 끝점에서 정해진다. X2·Y2 편집(패널·JSON)이나 추가·교체 뒤에도 선택 상자와 그린 선이 어긋나지 않게 모든 편집 뒤에 맞춘다
+      const h = commit(get().history, (r) => {
+        mutate(r);
+        walk(r.elements, (el) => { if (el.type === "line") { const b = lineBox(el); el.w = round(b.w); el.h = round(b.h); } });
+      });
       if (h !== get().history) set({ history: h, report: h.present, dirty: true, problems: [] });
     };
     const pruneSelection = () => set({ selection: get().selection.filter((id) => !!get().findElement(id)) });
@@ -76,9 +97,15 @@ export function createEditorStore(initial: Report) {
       updateElement: (id, patch) => apply((r) => { walk(r.elements, (el) => { if (el.id === id) { Object.assign(el, patch); return true; } }); }),
       moveSelected: (dx, dy) => apply((r) => { const sel = new Set(get().selection); walk(r.elements, (el) => {
         if (sel.has(el.id)) { el.x = round(el.x + dx); el.y = round(el.y + dy); if (el.type === "line") { el.x2 = round(el.x2 + dx); el.y2 = round(el.y2 + dy); } } }); }),
-      resizeElement: (id, box) => apply((r) => { walk(r.elements, (el) => { if (el.id === id) {
-        if (el.type === "line") { el.x2 = round(el.x2 + (box.x + box.w) - (el.x + el.w)); el.y2 = round(el.y2 + (box.y + box.h) - (el.y + el.h)); }
-        el.x = round(box.x); el.y = round(box.y); el.w = round(box.w); el.h = round(box.h); return true; } }); }),
+      // box는 새 경계 상자다. 선은 두 끝점을 옛 상자에서 새 상자로 옮기고 w/h는 apply가 끝점에서 다시 계산한다
+      resizeElement: (id, box) => apply((r) => { walk(r.elements, (el) => { if (el.id !== id) return;
+        if (el.type === "line") {
+          const old = lineBox(el);
+          el.x = round(mapAxis(el.x, old.x, old.w, box.x, box.w)); el.x2 = round(mapAxis(el.x2, old.x, old.w, box.x, box.w));
+          el.y = round(mapAxis(el.y, old.y, old.h, box.y, box.h)); el.y2 = round(mapAxis(el.y2, old.y, old.h, box.y, box.h));
+          return true;
+        }
+        el.x = round(box.x); el.y = round(box.y); el.w = round(box.w); el.h = round(box.h); return true; }); }),
       addElement: (el) => { apply((r) => { r.elements.push(el); }); set({ selection: [el.id] }); },
       duplicateSelected: () => {
         const ids: string[] = [];

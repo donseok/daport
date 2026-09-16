@@ -224,6 +224,44 @@ describe("Canvas", () => {
     expect(store.getState().history.past).toHaveLength(0);
   });
 
+  it("places a line's selection box on its bounding box, so right-to-left and grouped lines move and resize in place", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "rl", type: "line", x: 60, y: 30, w: 50, h: 10, x2: 10, y2: 20 },
+      { id: "g", type: "group", x: 50, y: 50, w: 20, h: 20, children: [{ id: "gl", type: "line", x: 20, y: 10, w: 15, h: 10, x2: 5, y2: 0 }] },
+    ]}));
+    const { container, getByTestId } = mount(store, <Canvas zoom={1} />);
+    const canvas = getByTestId("canvas");
+    const node = (id: string) => container.querySelector(`[data-element-id="${id}"]`) as HTMLElement;
+    const handle = (h: string) => container.querySelector(`[data-handle="${h}"]`) as HTMLElement;
+    const box = () => {
+      const d = container.querySelector<HTMLElement>(".border-blue-500.pointer-events-none")!;
+      return [d.style.left, d.style.top, d.style.width, d.style.height];
+    };
+    const drag = (target: HTMLElement, dx: number, dy: number) => {
+      fireEvent.pointerDown(target, ptr(0, 0));
+      fireEvent.pointerMove(canvas, ptr(dx, dy));
+      fireEvent.pointerUp(canvas, ptr(dx, dy));
+    };
+
+    fireEvent.pointerDown(node("rl"), ptr(0, 0));
+    expect(store.getState().selection).toEqual(["rl"]);
+    expect(box()).toEqual(["10mm", "20mm", "50mm", "10mm"]);                     // 왼쪽 = min(x, x2)
+    fireEvent.pointerMove(canvas, ptr(px(5), 0));
+    expect(box()).toEqual(["15mm", "20mm", "50mm", "10mm"]);                     // 고스트도 상자에서 출발한다
+    fireEvent.pointerUp(canvas, ptr(px(5), 0));
+    expect(store.getState().findElement("rl")).toMatchObject({ x: 65, y: 30, x2: 15, y2: 20, w: 50, h: 10 });
+
+    drag(handle("e"), px(10), 0);                                                   // 오른쪽 변 = 시작점
+    expect(store.getState().findElement("rl")).toMatchObject({ x: 75, y: 30, x2: 15, y2: 20, w: 60, h: 10 });
+    expect(box()).toEqual(["15mm", "20mm", "60mm", "10mm"]);
+
+    act(() => store.getState().select(["gl"]));
+    expect(box()).toEqual(["55mm", "50mm", "15mm", "10mm"]);                     // 그룹 자식은 절대좌표 상자
+    drag(handle("w"), px(-5), 0);
+    expect(store.getState().findElement("gl")).toMatchObject({ x: 20, y: 10, x2: 0, y2: 0, w: 20, h: 10 });
+    expect(box()).toEqual(["50mm", "50mm", "20mm", "10mm"]);
+  });
+
   it("discards the drag on pointercancel without committing", () => {
     const { store, canvas, el, boxes } = setup();
     fireEvent.pointerDown(el("a"), ptr(0, 0));

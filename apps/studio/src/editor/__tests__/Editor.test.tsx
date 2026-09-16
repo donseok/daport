@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { parseReport } from "@daport/core";
 import { Editor } from "../Editor";
 
@@ -13,7 +13,14 @@ vi.mock("../canvas/Canvas", () => ({
 
 const report = parseReport({ id: "r", name: "R", version: 1, page: { width: 100, height: 100 }, elements: [] });
 
-afterEach(() => { cleanup(); canvasBroken = false; vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); canvasBroken = false; vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+
+/** 탭 닫기·새로고침·다른 주소 이동 때 브라우저가 보내는 이벤트를 흉내 내고, 이탈 확인을 요청했는지 돌려준다 */
+function leavePage(): boolean {
+  const e = new Event("beforeunload", { cancelable: true });
+  window.dispatchEvent(e);
+  return e.defaultPrevented;
+}
 
 describe("Editor", () => {
   it("confines a renderer error to the canvas area and redraws once the report changes", () => {
@@ -31,5 +38,24 @@ describe("Editor", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.getByTestId("canvas-ok")).toBeTruthy();
     expect(screen.getByText("R *")).toBeTruthy();                // 편집은 스토어에 남아 있다
+  });
+
+  it("asks before leaving only while there are unsaved changes", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 200 })));
+    const { unmount } = render(<Editor initial={report} />);
+    expect(leavePage()).toBe(false);
+
+    fireEvent.click(screen.getByText("+ 텍스트"));
+    expect(screen.getByText("R *")).toBeTruthy();
+    expect(leavePage()).toBe(true);
+
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(screen.getByText("R")).toBeTruthy());           // 저장되면 dirty가 풀린다
+    expect(leavePage()).toBe(false);
+
+    fireEvent.click(screen.getByText("+ 텍스트"));
+    expect(leavePage()).toBe(true);
+    unmount();
+    expect(leavePage()).toBe(false);                                             // 에디터를 떠나면 리스너도 사라진다
   });
 });
