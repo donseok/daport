@@ -1,0 +1,53 @@
+{
+  "id": "quality-cert",
+  "name": "품질보증서",
+  "version": 1,
+  "page": { "width": 210, "height": 297, "margin": [15, 15, 15, 15] },
+  "params": [{ "name": "lotNo", "type": "string", "required": true }],
+  "datasets": [
+    { "name": "cert", "type": "static", "rows": [{
+      "CUSTOMER_NAME": "대한정밀(주)", "PRODUCT_NAME": "베어링 하우징 BH-220", "LOT_NO": "L2609-0142",
+      "QTY": 1200, "ISSUE_DT": "2026-09-16", "INSPECTOR": "김품질", "SPEC": "KS B 2023"
+    }]},
+    { "name": "results", "type": "static", "rows": [
+      { "ITEM": "외경", "STD": "220.0 ±0.05", "MEASURED": "220.02", "JUDGE": "합격" },
+      { "ITEM": "내경", "STD": "180.0 ±0.05", "MEASURED": "179.98", "JUDGE": "합격" },
+      { "ITEM": "경도", "STD": "HRC 58~62", "MEASURED": "HRC 60", "JUDGE": "합격" }
+    ]}
+  ],
+  "elements": [
+    { "id": "border", "type": "rect", "x": 10, "y": 10, "w": 190, "h": 277, "style": { "stroke": "#000", "strokeWidth": 0.4 } },
+    { "id": "title", "type": "text", "x": 15, "y": 20, "w": 180, "h": 14, "value": "품 질 보 증 서",
+      "style": { "fontSize": 24, "bold": true, "align": "center" } },
+    { "id": "subtitle", "type": "text", "x": 15, "y": 34, "w": 180, "h": 6, "value": "CERTIFICATE OF QUALITY",
+      "style": { "fontSize": 10, "align": "center", "color": "#444" } },
+    { "id": "hr", "type": "line", "x": 15, "y": 44, "w": 180, "h": 0, "x2": 195, "y2": 44, "style": { "stroke": "#000", "strokeWidth": 0.5 } },
+    { "id": "info", "type": "group", "x": 15, "y": 50, "w": 180, "h": 50, "children": [
+      { "id": "lbl-cust", "type": "text", "x": 0, "y": 0, "w": 35, "h": 8, "value": "고객사", "style": { "bold": true, "valign": "middle", "fill": "#f2f2f2", "padding": 2 } },
+      { "id": "val-cust", "type": "text", "x": 35, "y": 0, "w": 145, "h": 8, "value": "{{ cert.CUSTOMER_NAME }}", "style": { "valign": "middle", "padding": 2 } },
+      { "id": "lbl-prod", "type": "text", "x": 0, "y": 8, "w": 35, "h": 8, "value": "품명", "style": { "bold": true, "valign": "middle", "fill": "#f2f2f2", "padding": 2 } },
+      { "id": "val-prod", "type": "text", "x": 35, "y": 8, "w": 145, "h": 8, "value": "{{ cert.PRODUCT_NAME }}", "style": { "valign": "middle", "padding": 2 } },
+      { "id": "lbl-lot", "type": "text", "x": 0, "y": 16, "w": 35, "h": 8, "value": "LOT No.", "style": { "bold": true, "valign": "middle", "fill": "#f2f2f2", "padding": 2 } },
+      { "id": "val-lot", "type": "text", "x": 35, "y": 16, "w": 55, "h": 8, "value": "{{ cert.LOT_NO }}", "style": { "valign": "middle", "padding": 2 } },
+      { "id": "lbl-qty", "type": "text", "x": 90, "y": 16, "w": 35, "h": 8, "value": "수량", "style": { "bold": true, "valign": "middle", "fill": "#f2f2f2", "padding": 2 } },
+      { "id": "val-qty", "type": "text", "x": 125, "y": 16, "w": 55, "h": 8, "value": "{{ formatNumber(cert.QTY, '#,##0') }} EA", "style": { "valign": "middle", "padding": 2 } },
+      { "id": "lbl-spec", "type": "text", "x": 0, "y": 24, "w": 35, "h": 8, "value": "적용규격", "style": { "bold": true, "valign": "middle", "fill": "#f2f2f2", "padding": 2 } },
+      { "id": "val-spec", "type": "text", "x": 35, "y": 24, "w": 145, "h": 8, "value": "{{ cert.SPEC }}", "style": { "valign": "middle", "padding": 2 } },
+      { "id": "info-box", "type": "rect", "x": 0, "y": 0, "w": 180, "h": 32, "style": { "stroke": "#000", "strokeWidth": 0.3 } }
+    ]},
+    { "id": "results-title", "type": "text", "x": 15, "y": 95, "w": 100, "h": 8, "value": "검사 결과", "style": { "fontSize": 12, "bold": true } },
+    { "id": "results-table", "type": "table", "x": 15, "y": 104, "w": 180, "h": 60, "source": "results",
+      "columns": [
+        { "header": "검사항목", "value": "{{ row.ITEM }}", "w": 45 },
+        { "header": "규격", "value": "{{ row.STD }}", "w": 55 },
+        { "header": "측정값", "value": "{{ row.MEASURED }}", "w": 45 },
+        { "header": "판정", "value": "{{ row.JUDGE }}", "w": 35 }
+      ]},
+    { "id": "statement", "type": "text", "x": 15, "y": 180, "w": 180, "h": 20,
+      "value": "상기 제품은 당사 품질관리 기준에 따라 검사한 결과 규격에 적합함을 보증합니다.", "style": { "fontSize": 11, "align": "center", "valign": "middle" } },
+    { "id": "issue-dt", "type": "text", "x": 15, "y": 230, "w": 180, "h": 8, "value": "{{ formatDate(cert.ISSUE_DT, 'yyyy년 MM월 dd일') }}", "style": { "fontSize": 12, "align": "center" } },
+    { "id": "inspector", "type": "text", "x": 110, "y": 250, "w": 60, "h": 8, "value": "검사자: {{ cert.INSPECTOR }}", "style": { "fontSize": 11, "align": "right", "valign": "middle" } },
+    { "id": "stamp", "type": "image", "x": 172, "y": 244, "w": 20, "h": 20, "src": "asset://stamp" },
+    { "id": "pn", "type": "pageNumber", "x": 15, "y": 278, "w": 180, "h": 6, "style": { "fontSize": 8, "align": "center", "color": "#666" } }
+  ]
+}
