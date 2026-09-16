@@ -71,8 +71,9 @@ export class DbReportStore implements ReportStore {
   }
 }
 
-let store: ReportStore | null = null;
+// Next는 페이지와 라우트 핸들러를 따로 번들해 모듈 인스턴스가 갈리므로, 메모리 저장소는 globalThis에 한 번만 둔다
+const holder = globalThis as typeof globalThis & { __daportReportStore?: ReportStore };
 export function getStore(): ReportStore {
-  if (!store) store = process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
-  return store;
+  holder.__daportReportStore ??= process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
+  return holder.__daportReportStore;
 }

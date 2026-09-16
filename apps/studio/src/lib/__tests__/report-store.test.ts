@@ -39,3 +39,14 @@ describe("MemoryReportStore", () => {
     expect((await s.list())[0].updatedAt).toBe(t1); // moves on update()
   });
 });
+
+describe("getStore", () => {
+  it("shares one store across separately loaded module instances (Next bundles pages and route handlers apart)", async () => {
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    const a = (await import("../report-store")).getStore();
+    vi.resetModules();
+    const b = (await import("../report-store")).getStore();
+    expect(b).toBe(a);
+  });
+});
