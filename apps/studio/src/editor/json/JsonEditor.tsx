@@ -27,6 +27,9 @@ export function JsonEditor() {
     setSyntaxError(null);
     replaceReport(r.value);
   };
+  // blur 구독은 onMount에서 한 번만 걸려 첫 렌더의 클로저를 잡는다. 렌더마다 최신 커밋 함수를 ref에 담아 그것을 부른다
+  const commitRef = useRef(commitEditorText);
+  commitRef.current = commitEditorText;
   const cancelPending = () => { if (timer.current) { clearTimeout(timer.current); timer.current = null; } };
 
   /**
@@ -46,6 +49,7 @@ export function JsonEditor() {
       applyingStoreText.current = false;
     }
     ed.restoreViewState(view);
+    setSyntaxError(null);   // 깨진 텍스트가 스토어 텍스트(늘 올바른 JSON)로 바뀌었으니 그 텍스트의 구문 오류도 지운다
   };
 
   // 스토어 → 편집기
@@ -54,6 +58,7 @@ export function JsonEditor() {
     const text = ed.getValue();
     const action = decideSync({ pendingEdit: timer.current !== null, editorText: text, report });
     // flush가 스토어를 바꾸면 이 효과가 다시 돌아 그때 동기화한다. 구문·검증 오류면 입력 중인 텍스트를 그대로 둔다.
+    // 그때 방금 온 스토어 변경은 편집기에 보이지 않고, 나중에 고친 텍스트가 커밋되면 그 변경은 덮인다(되돌리기로 되찾는다).
     // 이 효과는 스토어 변경이 커밋된 뒤에 돌므로 flush한 입력이 그 변경을 덮는다(되돌리기로 되찾는다). 편집기 밖을 누르면
     // 아래 blur 구독이 먼저 커밋하므로, 여기까지 오는 것은 편집기가 포커스를 가진 채 스토어가 바뀐 드문 경우다
     if (action === "flush") { cancelPending(); commitEditorText(text); }
@@ -68,7 +73,7 @@ export function JsonEditor() {
     try { editor.setValue(toEditorText(reportRef.current)); } finally { applyingStoreText.current = false; }
     // 캔버스·팔레트·툴바·패널을 누르면 그 변경보다 mousedown의 포커스 이동이 먼저 온다. 대기 중인 입력을 그때 커밋해야
     // 뒤이은 변경이 입력 위에 쌓이고, 입력이 그 변경을 덮지 않는다
-    editor.onDidBlurEditorText(() => { if (timer.current) { cancelPending(); commitEditorText(editor.getValue()); } });
+    editor.onDidBlurEditorText(() => { if (timer.current) { cancelPending(); commitRef.current(editor.getValue()); } });
     fetch("/api/schema").then((r) => r.json()).then((schema) => {
       monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: true, schemas: [{ uri: "daport://report", fileMatch: ["*"], schema }] });
     });

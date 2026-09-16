@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { useRef } from "react";
-import { render, cleanup, act } from "@testing-library/react";
+import { render, cleanup, act, screen } from "@testing-library/react";
 import { parseReport } from "@daport/core";
 import { createEditorStore, EditorContext } from "../../store";
 import { JsonEditor } from "../JsonEditor";
@@ -75,9 +75,11 @@ function setup() {
   vi.useFakeTimers();
   vi.stubGlobal("fetch", vi.fn(() => new Promise<Response>(() => {})));   // 스키마 요청은 응답하지 않는다
   const store = createEditorStore(report);
+  // 편집기가 스토어로 커밋하는 모든 경로를 본다 (원래 동작은 그대로 부른다)
+  const replaceReport = vi.spyOn(store.getState(), "replaceReport");
   render(<EditorContext.Provider value={store}><JsonEditor /></EditorContext.Provider>);
   const mountEditor = () => { let editor!: FakeCodeEditor; act(() => { editor = finishMount!(); }); return editor; };
-  return { store, mountEditor };
+  return { store, mountEditor, replaceReport };
 }
 
 const titleOf = (text: string) => JSON.parse(text).elements[0];
@@ -146,11 +148,12 @@ describe("JsonEditor", () => {
   });
 
   it("does nothing on blur when no typed text is pending", () => {
-    const { store, mountEditor } = setup();
+    const { store, mountEditor, replaceReport } = setup();
     const editor = mountEditor();
     act(() => { store.getState().select(["title"]); store.getState().moveSelected(10, 0); });
     const history = store.getState().history;
     act(() => editor.blur());
+    expect(replaceReport).not.toHaveBeenCalled();   // 같은 내용이면 스토어가 걸러 주지만, 편집기가 아예 커밋하지 않아야 한다
     expect(store.getState().history).toBe(history);
   });
 
@@ -174,6 +177,22 @@ describe("JsonEditor", () => {
     expect(store.getState().report.page.width).toBe(100);
     act(() => store.getState().undo());
     expect(store.getState().report.page.width).toBe(120);
+  });
+
+  it("clears the JSON syntax error banner when store text replaces the broken editor text", async () => {
+    const { store, mountEditor } = setup();
+    const editor = mountEditor();
+
+    act(() => editor.type("{ bad"));
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(screen.queryByText(/JSON 구문 오류/)).not.toBeNull();
+
+    // 대기 중인 입력이 없고 편집기 텍스트가 깨져 있으므로 스토어 텍스트가 들어간다. 스토어 텍스트는 늘 올바른 JSON이다
+    act(() => store.getState().updatePage({ width: 120 }));
+    expect(JSON.parse(editor.getValue())).toMatchObject({ page: { width: 120 } });
+    expect(screen.queryByText(/JSON 구문 오류/)).toBeNull();
+    await act(async () => { vi.advanceTimersByTime(1000); });
+    expect(screen.queryByText(/JSON 구문 오류/)).toBeNull();
   });
 
   it("keeps half-typed invalid JSON when a store change lands during the debounce", async () => {
