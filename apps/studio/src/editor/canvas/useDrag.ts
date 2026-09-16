@@ -5,11 +5,12 @@ import { pxToMm, snapMm } from "./snap";
 export type Handle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
 export type Box = { x: number; y: number; w: number; h: number };
 
-type DragState = { handle: Handle; start: { px: number; py: number }; boxes: Record<string, Box>; last: Record<string, Box> };
+type DragState = { handle: Handle; start: { px: number; py: number }; boxes: Record<string, Box>; last: Record<string, Box>; min: number };
 
 /**
  * 포인터 드래그를 mm 델타로 바꿔 onChange(boxes)로 흘리고, 끝나면 onEnd(boxes, handle)로 최종 박스를 넘긴다.
  * pointercancel(터치 스크롤, 펜 이탈 등)이 오면 커밋 없이 버리고 onCancel을 부른다.
+ * min은 리사이즈 최소 크기(mm)다. 선은 가로선 h=0·세로선 w=0이 정상이므로 0을 넘겨 핸들을 잡기만 해도 기울지 않게 한다.
  */
 export function useDrag(opts: {
   zoom: number;
@@ -19,9 +20,9 @@ export function useDrag(opts: {
 }) {
   const state = useRef<DragState | null>(null);
 
-  const begin = useCallback((e: ReactPointerEvent, handle: Handle, boxes: Record<string, Box>) => {
+  const begin = useCallback((e: ReactPointerEvent, handle: Handle, boxes: Record<string, Box>, min = 1) => {
     (e.target as Element).setPointerCapture(e.pointerId);
-    state.current = { handle, start: { px: e.clientX, py: e.clientY }, boxes, last: boxes };
+    state.current = { handle, start: { px: e.clientX, py: e.clientY }, boxes, last: boxes, min };
   }, []);
 
   // opts는 렌더마다 새 객체이므로 useCallback으로 감싸도 메모가 되지 않는다. 항상 최신 콜백을 쓰도록 그대로 둔다.
@@ -30,7 +31,7 @@ export function useDrag(opts: {
     const dx = snapMm(pxToMm(e.clientX - s.start.px, opts.zoom));
     const dy = snapMm(pxToMm(e.clientY - s.start.py, opts.zoom));
     const next: Record<string, Box> = {};
-    for (const [id, b] of Object.entries(s.boxes)) next[id] = applyHandle(b, s.handle, dx, dy);
+    for (const [id, b] of Object.entries(s.boxes)) next[id] = applyHandle(b, s.handle, dx, dy, s.min);
     s.last = next;
     opts.onChange(next);
   };

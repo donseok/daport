@@ -44,6 +44,17 @@ describe("PropertyPanel", () => {
     expect(store.getState().findElement("b")).toMatchObject({ style: { radius: 1 } });
     expect(store.getState().problems).toEqual([]);
   });
+  it("moves a whole line with X/Y so its box keeps matching the drawn line", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "l", type: "line", x: 10, y: 20, w: 50, h: 0, x2: 60, y2: 20 },
+    ]}));
+    store.getState().select(["l"]);
+    render(<EditorContext.Provider value={store}><PropertyPanel /></EditorContext.Provider>);
+    fireEvent.change(screen.getByLabelText("X"), { target: { value: "15" } });
+    fireEvent.change(screen.getByLabelText("Y"), { target: { value: "30" } });
+    expect(store.getState().findElement("l")).toMatchObject({ x: 15, y: 30, w: 50, h: 0, x2: 65, y2: 30 });
+    expect(store.getState().history.past).toHaveLength(2);
+  });
   it("accepts negative numbers and ignores an emptied number field", () => {
     const store = createEditorStore(report);
     store.getState().select(["a"]);

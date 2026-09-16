@@ -12,6 +12,13 @@ const mkReport = (w: number, h: number) => parseReport({ id: "t", version: 1, pa
   { id: "t", type: "text", x: 5, y: 5, w: w - 10, h: 10, value: "품질 TEST 123", style: { fontSize: 12, bold: true } },
 ]});
 
+/**
+ * 다른 픽셀 비율 상한. 측정값(macOS)은 합성 레포트 0.006%, 품질보증서 0.012%이고, 0.1%(A4에서 약 890px)는 그 약 8배다.
+ * 품질보증서 제목을 2mm 옮기면 0.14%라 잡지만, 부제목·소제목 같은 작은 글자를 3mm 옮기면 0.05~0.07%라 전체 페이지 비율로는
+ * 못 잡는다. 작은 요소의 어긋남까지 보려면 요소 상자별 비교가 필요하다
+ */
+const MAX_DIFF_RATIO = 0.001;
+
 /** 96dpi 반올림으로 두 래스터가 1px 어긋날 수 있어 공통 크기로 잘라 비교한다 */
 function crop(png: PNG, w: number, h: number): Uint8Array {
   const out = new PNG({ width: w, height: h });
@@ -61,7 +68,7 @@ describe("renderPdf", () => {
   }, 30_000);
 
   it("PDF raster matches HTML screenshot within tolerance", async () => {
-    expect(await rasterDiff(mkReport(100, 60), { params: {} })).toBeLessThan(0.01);   // 1% 미만 차이
+    expect(await rasterDiff(mkReport(100, 60), { params: {} })).toBeLessThan(MAX_DIFF_RATIO);
   }, 30_000);
 
   it("draws horizontal and vertical lines with a stroke width in mm in both PDF and HTML", async () => {
@@ -86,7 +93,7 @@ describe("renderPdf", () => {
   it("PDF raster of the quality certificate golden fixture matches its HTML screenshot", async () => {
     // 완료 기준 3은 합성 레포트가 아니라 실제 양식으로 확인한다 (asset:// 도장은 두 출력 모두 비어 같다)
     const report = parseReport(qualityCert);
-    expect(await rasterDiff(report, await resolveData(report, { lotNo: "L2609-0142" }))).toBeLessThan(0.01);
+    expect(await rasterDiff(report, await resolveData(report, { lotNo: "L2609-0142" }))).toBeLessThan(MAX_DIFF_RATIO);
   }, 30_000);
 
   it("draws the quality certificate divider line (hr, y=44mm) in both PDF and HTML", async () => {

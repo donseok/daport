@@ -105,6 +105,23 @@ describe("Toolbar", () => {
     await waitFor(() => expect(pdfButton().disabled).toBe(false));
   });
 
+  it("keeps save available while a PDF is rendering", async () => {
+    const { store, fetchMock } = setup();
+    let respond!: (r: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { respond = resolve; }));
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(true));
+    const save = screen.getByTestId("save") as HTMLButtonElement;
+    expect(save.disabled).toBe(false);
+    fireEvent.click(save);
+    await waitFor(() => expect(store.getState().dirty).toBe(false));
+    expect(fetchMock.mock.calls[1][1]?.method).toBe("PUT");
+    expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(true);   // 저장이 끝나도 PDF는 아직 렌더 중
+    await act(async () => { respond(new Response(new Blob(["%PDF-"]), { status: 200 })); });
+    await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
   it("reports the HTTP status when a failed PDF response is not JSON and re-enables the button", async () => {
     const { fetchMock } = setup();
     const alertMock = vi.fn();

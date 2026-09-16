@@ -93,7 +93,8 @@ export function Canvas({ zoom }: { zoom: number }) {
     for (const sid of ids) { const it = pages[0].items.find((i) => i.elementId === sid); if (it) start[sid] = { x: it.x, y: it.y, w: it.w, h: it.h }; }
     drag.begin(e, "move", start);
   };
-  const onHandleDown = (e: PointerEvent, h: Handle) => { drag.begin(e, h, boxes); };
+  // 핸들은 단일 선택에만 보인다. 선은 크기 0이 정상이라 최소 크기를 0으로 둔다 (1이면 가로선의 n/s 핸들이 선을 1mm 기울인다)
+  const onHandleDown = (e: PointerEvent, h: Handle) => { drag.begin(e, h, boxes, findElement(selection[0])?.type === "line" ? 0 : 1); };
 
   const shown = ghost ?? boxes;
   return (

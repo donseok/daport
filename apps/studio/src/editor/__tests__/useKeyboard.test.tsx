@@ -74,6 +74,19 @@ describe("useKeyboard", () => {
     expect(store.getState().findElement("b")).toBeUndefined();
   });
 
+  it("does not delete, duplicate or nudge the hidden selection in preview mode, but still undoes", () => {
+    const { store } = setup();
+    press("ArrowRight");
+    store.getState().setMode("preview");                 // 미리보기에서는 캔버스와 선택 상자가 보이지 않는다
+    for (const [key, init] of [["Backspace", {}], ["Delete", {}], ["ArrowLeft", {}], ["d", { metaKey: true }]] as const) {
+      expect(press(key, init)).toBe(false);
+    }
+    expect(store.getState().report.elements).toHaveLength(2);
+    expect(store.getState().findElement("a")).toMatchObject({ x: 10.5 });
+    expect(press("z", { metaKey: true })).toBe(true);
+    expect(store.getState().findElement("a")).toMatchObject({ x: 10 });
+  });
+
   it("ignores keys typed inside form controls", () => {
     const { store, getByLabelText } = setup();
     const input = getByLabelText("field");

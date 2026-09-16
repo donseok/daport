@@ -199,6 +199,31 @@ describe("Canvas", () => {
     expect(container.querySelector('[data-element-id="ok"]')!.textContent).toBe("fine");
   });
 
+  it("lets a flat line keep zero height or width when dragging a handle, so it does not tilt", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "h", type: "line", x: 10, y: 80, w: 50, h: 0, x2: 60, y2: 80 },
+      { id: "v", type: "line", x: 90, y: 10, w: 0, h: 40, x2: 90, y2: 50 },
+    ]}));
+    const { container, getByTestId } = mount(store, <Canvas zoom={1} />);
+    const canvas = getByTestId("canvas");
+    const handle = (h: string) => container.querySelector(`[data-handle="${h}"]`) as HTMLElement;
+    const drag = (h: string, dx: number, dy: number) => {
+      fireEvent.pointerDown(handle(h), ptr(0, 0));
+      fireEvent.pointerMove(canvas, ptr(dx, dy));
+      fireEvent.pointerUp(canvas, ptr(dx, dy));
+    };
+    act(() => store.getState().select(["h"]));
+    drag("n", 0, px(0.1));                  // 스냅하면 0mm
+    drag("s", 0, px(-3));
+    drag("n", 0, px(3));
+    expect(store.getState().findElement("h")).toMatchObject({ x: 10, y: 80, w: 50, h: 0, x2: 60, y2: 80 });
+    act(() => store.getState().select(["v"]));
+    drag("e", px(-3), 0);
+    drag("w", px(3), 0);
+    expect(store.getState().findElement("v")).toMatchObject({ x: 90, y: 10, w: 0, h: 40, x2: 90, y2: 50 });
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+
   it("discards the drag on pointercancel without committing", () => {
     const { store, canvas, el, boxes } = setup();
     fireEvent.pointerDown(el("a"), ptr(0, 0));

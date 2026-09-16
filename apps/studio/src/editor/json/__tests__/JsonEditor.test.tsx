@@ -19,11 +19,13 @@ type FakeCodeEditor = {
   saveViewState(): ViewState;
   restoreViewState(s: ViewState | null): void;
   onDidBlurEditorText(listener: () => void): { dispose(): void };
+  hasTextFocus(): boolean;
   /** 테스트 도우미: 사용자가 편집기에 입력한다 */
   type(v: string): void;
   /** 테스트 도우미: 편집기가 포커스를 잃는다 */
   blur(): void;
   cursor: number;
+  focused: boolean;
   undoStackCleared: boolean;
   /** 마지막 pushEditOperations의 편집 전 선택과 커서 계산기가 돌려준 편집 후 선택 */
   lastPush: { before: Selection[] | null; after: Selection[] | null } | null;
@@ -39,7 +41,7 @@ vi.mock("@monaco-editor/react", () => ({
       let value = "";
       const blurListeners: (() => void)[] = [];
       const editor: FakeCodeEditor = {
-        cursor: 0, undoStackCleared: false, lastPush: null,
+        cursor: 0, focused: false, undoStackCleared: false, lastPush: null,
         getValue: () => value,
         setValue: (v) => { value = v; editor.cursor = 0; editor.undoStackCleared = true; onChangeRef.current?.(v); },
         getModel: () => ({
@@ -55,8 +57,9 @@ vi.mock("@monaco-editor/react", () => ({
         saveViewState: () => ({ cursor: editor.cursor }),
         restoreViewState: (s) => { if (s) editor.cursor = s.cursor; },
         onDidBlurEditorText: (listener) => { blurListeners.push(listener); return { dispose: () => {} }; },
-        type: (v) => { value = v; editor.cursor = 7; onChangeRef.current?.(v); },
-        blur: () => { for (const l of blurListeners) l(); },
+        hasTextFocus: () => editor.focused,
+        type: (v) => { value = v; editor.cursor = 7; editor.focused = true; onChangeRef.current?.(v); },
+        blur: () => { editor.focused = false; for (const l of blurListeners) l(); },
       };
       const monaco = { languages: { json: { jsonDefaults: { setDiagnosticsOptions: () => {} } } } };
       onMountRef.current?.(editor, monaco);
@@ -214,6 +217,26 @@ describe("JsonEditor", () => {
     act(() => store.getState().undo());                         // 되돌리기가 편집기 텍스트를 스토어 텍스트로 바꾼다
     expect(titleOf(editor.getValue()).w).toBe(50);
     expect(screen.queryByText(/elements\.0\.w/)).toBeNull();
+  });
+
+  it("keeps the typed text and cursor while focused when the committed report only adds defaults or reorders keys", async () => {
+    const { store, mountEditor } = setup();
+    const editor = mountEditor();
+
+    // 필수 필드만 넣은 요소를 입력하고 멈춘다. 스토어 모델에는 기본값(flow, style 등)이 채워진다
+    const typed = editor.getValue().replace('"value": "T"\n    }', '"value": "T"\n    }, {"id":"b","type":"rect","x":1,"y":1,"w":1,"h":1}');
+    expect(typed).not.toBe(editor.getValue());
+    act(() => editor.type(typed));
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(store.getState().findElement("b")).toMatchObject({ flow: "once" });
+    expect(editor.getValue()).toBe(typed);            // 줄이 늘어 커서가 엉뚱한 곳에 가지 않도록 텍스트를 그대로 둔다
+    expect(editor.cursor).toBe(7);
+    expect(editor.lastPush).toBeNull();
+
+    // 편집기 밖의 변경은 정리된 스토어 텍스트를 넣는다
+    act(() => editor.blur());
+    act(() => store.getState().updatePage({ width: 120 }));
+    expect(JSON.parse(editor.getValue())).toMatchObject({ page: { width: 120 }, elements: [{ id: "title" }, { id: "b", flow: "once" }] });
   });
 
   it("keeps half-typed invalid JSON when a store change lands during the debounce", async () => {

@@ -121,5 +121,10 @@ test("create empty A4 portrait, A4 landscape and tag reports: canvas and PDF siz
     const { width: pw, height: ph } = pdf.getPage(0).getSize();
     expect(Math.abs(ptToMm(pw) - w), `${id} PDF width ${ptToMm(pw)}mm`).toBeLessThanOrEqual(0.5);
     expect(Math.abs(ptToMm(ph) - h), `${id} PDF height ${ptToMm(ph)}mm`).toBeLessThanOrEqual(0.5);
+
+    // 브라우저 뒤로가기로 돌아온 홈 목록에도 방금 만든 레포트가 보인다 (클라이언트 라우터 캐시의 옛 목록이 아니다)
+    await page.goBack();
+    await expect(page).toHaveURL(/\/$/);
+    await expect(page.getByRole("link", { name: id, exact: true })).toBeVisible();
   }
 });

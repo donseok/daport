@@ -56,7 +56,7 @@ export function JsonEditor() {
   useEffect(() => {
     const ed = editorRef.current; if (!ed) return;
     const text = ed.getValue();
-    const action = decideSync({ pendingEdit: timer.current !== null, editorText: text, report });
+    const action = decideSync({ pendingEdit: timer.current !== null, editorText: text, report, editorFocused: ed.hasTextFocus() });
     // flush가 스토어를 바꾸면 이 효과가 다시 돌아 그때 동기화한다. 구문·검증 오류면 입력 중인 텍스트를 그대로 둔다.
     // 그때 방금 온 스토어 변경은 편집기에 보이지 않고, 나중에 고친 텍스트가 커밋되면 그 변경은 덮인다(되돌리기로 되찾는다).
     // 이 효과는 스토어 변경이 커밋된 뒤에 돌므로 flush한 입력이 그 변경을 덮는다(되돌리기로 되찾는다). 편집기 밖을 누르면

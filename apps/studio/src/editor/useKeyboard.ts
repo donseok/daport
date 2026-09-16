@@ -9,6 +9,8 @@ export function useKeyboard(store: EditorStore) {
       const s = store.getState();
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? s.redo() : s.undo(); return; }
+      // 미리보기에서는 캔버스와 선택 상자가 가려져 있으므로 보이지 않는 선택을 복제·삭제·이동하지 않는다
+      if (s.mode !== "design") return;
       if (meta && e.key.toLowerCase() === "d") { e.preventDefault(); s.duplicateSelected(); return; }
       if (e.key === "Delete" || e.key === "Backspace") { if (s.selection.length) { e.preventDefault(); s.deleteSelected(); } return; }
       const step = e.shiftKey ? 5 : 0.5;

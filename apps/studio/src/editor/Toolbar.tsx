@@ -20,12 +20,14 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const markSaved = useEditor((s) => s.markSaved);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
-  const [busy, setBusy] = useState(false);
+  // PDF 렌더는 몇 초 걸릴 수 있으므로 저장과 따로 막는다
+  const [saving, setSaving] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const save = async () => {
     // 보낸 모델을 기억해 두고, 요청이 끝났을 때 그 사이 편집이 있으면 저장 안 됨(*)으로 남긴다
     const saved = store.getState().report;
-    setBusy(true);
+    setSaving(true);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(saved) });
       if (r.ok) { markSaved(saved); return; }
@@ -33,11 +35,11 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     } catch (e) {
       alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setBusy(false);
+      setSaving(false);
     }
   };
   const pdf = async () => {
-    setBusy(true);
+    setExporting(true);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ report, params: sampleParams(report) }) });
@@ -49,7 +51,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     } catch (e) {
       alert(`PDF 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setBusy(false);
+      setExporting(false);
     }
   };
   const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
@@ -61,8 +63,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       <button className={btn} onClick={() => setMode(mode === "design" ? "preview" : "design")}>{mode === "design" ? "미리보기" : "디자인"}</button>
       <label className="text-xs ml-2">배율 <input type="range" min={0.25} max={3} step={0.25} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {Math.round(zoom * 100)}%</label>
       <div className="flex-1" />
-      <button className={btn} disabled={busy} onClick={pdf}>PDF</button>
-      <button className={btn} disabled={busy || !dirty} onClick={save} data-testid="save">저장</button>
+      <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>
+      <button className={btn} disabled={saving || !dirty} onClick={save} data-testid="save">저장</button>
     </div>
   );
 }

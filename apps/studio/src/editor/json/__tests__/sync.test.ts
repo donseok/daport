@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { parseReport } from "@daport/core";
 import { shouldPushToEditor, parseEditorText, decideSync } from "../sync";
 
 describe("json sync", () => {
@@ -26,5 +27,17 @@ describe("json sync", () => {
     expect(decideSync({ pendingEdit: false, editorText: same.replace("1", "2"), report })).toBe("push");
     expect(decideSync({ pendingEdit: false, editorText: "{ bad", report })).toBe("push");
     expect(decideSync({ pendingEdit: false, editorText: JSON.stringify(report), report })).toBe("skip");
+  });
+  it("does not push over focused text that only lacks defaults or orders keys differently", () => {
+    const report = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "b", type: "rect", x: 1, y: 1, w: 1, h: 1 },
+    ]});
+    // 사용자가 필수 필드만 입력했고, 커밋된 모델은 기본값이 채워져 텍스트가 다르다
+    const typed = '{ "version": 1, "id": "r", "page": { "height": 100, "width": 100 }, "elements": [{"id":"b","type":"rect","x":1,"y":1,"w":1,"h":1}] }';
+    expect(decideSync({ pendingEdit: false, editorText: typed, report, editorFocused: true })).toBe("skip");
+    expect(decideSync({ pendingEdit: false, editorText: typed, report, editorFocused: false })).toBe("push");   // 포커스가 없으면 정리된 텍스트를 보인다
+    expect(decideSync({ pendingEdit: false, editorText: typed.replace('"x":1', '"x":2'), report, editorFocused: true })).toBe("push");
+    expect(decideSync({ pendingEdit: false, editorText: typed.replace('"id": "r"', '"id": "other"'), report, editorFocused: true })).toBe("push");
+    expect(decideSync({ pendingEdit: false, editorText: "{ bad", report, editorFocused: true })).toBe("push");
   });
 });

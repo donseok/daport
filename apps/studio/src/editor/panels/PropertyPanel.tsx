@@ -11,12 +11,16 @@ export function PropertyPanel() {
   if (!el) return null;
   const set = (patch: Partial<Element>) => updateElement(el.id, patch);
   const setStyle = (patch: Partial<Style>) => set({ style: { ...el.style, ...patch } });
+  // 선의 상자(x/y/w/h)는 그린 선(x..x2, y..y2)을 감싼다. X/Y만 바꾸면 시작점만 움직여 상자가 선과 어긋나므로 캔버스 이동처럼 끝점도 옮긴다
+  const shift = (v: number, d: number) => Math.round((v + d) * 1e6) / 1e6;
+  const setX = (x: number) => set(el.type === "line" ? { x, x2: shift(el.x2, x - el.x) } : { x });
+  const setY = (y: number) => set(el.type === "line" ? { y, y2: shift(el.y2, y - el.y) } : { y });
 
   return (
     <div className="p-3 flex flex-col gap-2">
       <div className="text-xs font-semibold">{el.type} <span className="text-neutral-400">#{el.id}</span></div>
-      <NumberField label="X" value={el.x} onChange={(x) => set({ x })} />
-      <NumberField label="Y" value={el.y} onChange={(y) => set({ y })} />
+      <NumberField label="X" value={el.x} onChange={setX} />
+      <NumberField label="Y" value={el.y} onChange={setY} />
       <NumberField label="W" value={el.w} min={0} onChange={(w) => set({ w })} />
       <NumberField label="H" value={el.h} min={0} onChange={(h) => set({ h })} />
       {el.type === "line" && <><NumberField label="X2" value={el.x2} onChange={(x2) => set({ x2 })} /><NumberField label="Y2" value={el.y2} onChange={(y2) => set({ y2 })} /></>}
