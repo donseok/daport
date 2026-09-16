@@ -5,6 +5,7 @@ import { flatten } from "../layout/flatten";
 
 const page = { width: 100, height: 50, margin: [5, 5, 5, 5] as [number, number, number, number] };
 const ctx = { params: {}, order: { NAME: "ACME", HIDE: false } };
+const hideCtx = { params: {}, order: { NAME: "ACME", HIDE: true } };
 
 describe("flatten", () => {
   it("offsets group children to absolute coordinates", () => {
@@ -81,5 +82,77 @@ describe("layout", () => {
     ]});
     const kinds = layout(r, ctx)[0].items.map((i) => i.kind);
     expect(kinds).toEqual(["placeholder", "placeholder", "placeholder"]);
+  });
+});
+
+describe("flatten nested groups", () => {
+  it("accumulates coordinates including line x2/y2", () => {
+    const r = parseReport({ id: "r", version: 1, page, elements: [
+      { id: "g1", type: "group", x: 10, y: 10, w: 50, h: 20, children: [
+        { id: "g2", type: "group", x: 5, y: 5, w: 20, h: 10, children: [
+          { id: "l", type: "line", x: 1, y: 1, w: 5, h: 0, x2: 6, y2: 1 },
+        ]},
+      ]},
+    ]});
+    expect(flatten(r.elements)[0]).toMatchObject({ id: "l", x: 16, y: 16, x2: 21, y2: 16 });
+  });
+});
+
+describe("layout visible", () => {
+  const ids = (r: ReturnType<typeof parseReport>, c: Record<string, unknown>) =>
+    layout(r, c)[0].items.map((i) => i.elementId);
+
+  it("hides every child of a hidden group", () => {
+    const r = parseReport({ id: "r", version: 1, page, elements: [
+      { id: "g", type: "group", x: 0, y: 0, w: 10, h: 10, visible: "{{ !order.HIDE }}", children: [
+        { id: "a", type: "rect", x: 0, y: 0, w: 1, h: 1 },
+        { id: "b", type: "rect", x: 1, y: 1, w: 1, h: 1 },
+      ]},
+      { id: "c", type: "rect", x: 0, y: 0, w: 1, h: 1 },
+    ]});
+    expect(ids(r, hideCtx)).toEqual(["c"]);
+    expect(ids(r, ctx)).toEqual(["a", "b", "c"]);
+  });
+  it("combines nested group visibility with AND", () => {
+    const r = parseReport({ id: "r", version: 1, page, elements: [
+      { id: "outer", type: "group", x: 0, y: 0, w: 50, h: 20, visible: "true", children: [
+        { id: "shown", type: "rect", x: 0, y: 0, w: 1, h: 1 },
+        { id: "inner", type: "group", x: 0, y: 0, w: 10, h: 10, visible: "false", children: [
+          { id: "hidden", type: "rect", x: 0, y: 0, w: 1, h: 1 },
+        ]},
+      ]},
+    ]});
+    expect(ids(r, ctx)).toEqual(["shown"]);
+  });
+  it("evaluates visible without {{ }} as a bare expression", () => {
+    const r = parseReport({ id: "r", version: 1, page, elements: [
+      { id: "lit", type: "rect", x: 0, y: 0, w: 1, h: 1, visible: "false" },
+      { id: "expr", type: "rect", x: 0, y: 0, w: 1, h: 1, visible: "!order.HIDE" },
+      { id: "empty", type: "rect", x: 0, y: 0, w: 1, h: 1, visible: "" },
+    ]});
+    expect(ids(r, hideCtx)).toEqual(["empty"]);
+    expect(ids(r, ctx)).toEqual(["expr", "empty"]);
+  });
+  it("isolates a group visible error to its descendants as #ERR (blank mode)", () => {
+    const r = parseReport({ id: "r", version: 1, page, elements: [
+      { id: "g", type: "group", x: 10, y: 10, w: 20, h: 20, visible: "{{ order. }}", children: [
+        { id: "a", type: "text", x: 1, y: 1, w: 5, h: 5, value: "x" },
+        { id: "b", type: "rect", x: 2, y: 2, w: 5, h: 5 },
+      ]},
+      { id: "ok", type: "text", x: 0, y: 0, w: 10, h: 5, value: "fine" },
+    ]});
+    const items = layout(r, ctx)[0].items;
+    expect(items.map((i) => i.elementId)).toEqual(["a", "b", "ok"]);
+    expect(items[0]).toMatchObject({ kind: "text", x: 11, y: 11, lines: ["#ERR"], error: expect.stringContaining("Expression") });
+    expect(items[1]).toMatchObject({ kind: "text", x: 12, y: 12, lines: ["#ERR"], error: expect.stringContaining("Expression") });
+    expect(items[2].error).toBeUndefined();
+  });
+  it("throws on a group visible error in fail mode", () => {
+    const r = parseReport({ id: "r", version: 1, page, onExpressionError: "fail", elements: [
+      { id: "g", type: "group", x: 0, y: 0, w: 20, h: 20, visible: "{{ order. }}", children: [
+        { id: "a", type: "rect", x: 0, y: 0, w: 1, h: 1 },
+      ]},
+    ]});
+    expect(() => layout(r, ctx)).toThrow();
   });
 });

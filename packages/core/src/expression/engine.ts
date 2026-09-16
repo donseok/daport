@@ -1,6 +1,7 @@
 import jexl from "jexl";
 
 type JexlInstance = typeof jexl;
+type Ast = ReturnType<ReturnType<JexlInstance["compile"]>["_getAst"]>;
 const JexlCtor = (jexl as unknown as { Jexl: new () => JexlInstance }).Jexl;
 
 export class ExpressionError extends Error {
@@ -12,7 +13,12 @@ export class ExpressionError extends Error {
 
 export type DataContext = Record<string, unknown>;
 
-const FORBIDDEN = /(^|[^\w])(constructor|__proto__|prototype|globalThis|window|process|require|eval|Function)([^\w]|$)/;
+/** 프로토타입 키는 어디에 쓰여도(멤버, 문자열 키) 빠르게 거부한다 */
+const FORBIDDEN_KEY_RE = /(^|[^\w$])(constructor|__proto__|prototype)(?![\w$])/;
+/** 전역 이름은 루트 식별자일 때만 거부한다. `order.window` 같은 멤버 이름은 데이터에서 읽는다 */
+const FORBIDDEN_ROOT_RE = /(^|[^\w.$])(globalThis|window|process|require|eval|Function)(?![\w$])/;
+const STRING_LITERAL_RE = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g;
+const FORBIDDEN_KEYS = new Set<PropertyKey>(["constructor", "__proto__", "prototype"]);
 
 function toNumber(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
@@ -43,10 +49,26 @@ export function formatDate(value: unknown, pattern = "yyyy-MM-dd"): string {
     .replace(/ss/g, p(d.getUTCSeconds()));
 }
 
+/** 계산된 멤버 키 검사 함수의 등록 이름. `#`은 jexl 식별자에 쓸 수 없어 표현식에서 직접 부를 수 없다 */
+const KEY_GUARD = "#key";
+
+/**
+ * 멤버 키를 평가 시점에 검사한다. 불리언은 jexl에서 키가 아니라 필터(`a[true]`는 a 자체)라 그대로 둔다.
+ * 그 밖의 값은 JS가 속성 키로 바꾸는 것과 같게 문자열로 바꿔 검사하고 그 문자열을 키로 쓴다
+ * (`a[['constructor']]`처럼 배열이 키 문자열이 되는 경우도 막힌다).
+ */
+function checkKey(key: unknown): unknown {
+  if (typeof key === "boolean") return key;
+  const k = String(key);
+  if (FORBIDDEN_KEYS.has(k)) throw new Error(`forbidden property: ${k}`);
+  return k;
+}
+
 function createJexl(): JexlInstance {
   const j = new JexlCtor();
+  j.addFunction(KEY_GUARD, checkKey);
   j.addFunction("sum", (rows: unknown, field: string) =>
-    Array.isArray(rows) ? rows.reduce((a, r) => a + toNumber((r as Record<string, unknown>)?.[field]), 0) : 0);
+    Array.isArray(rows) ? rows.reduce((a, r) => a + toNumber((r as Record<string, unknown>)?.[checkKey(field) as string]), 0) : 0);
   j.addFunction("count", (rows: unknown) => (Array.isArray(rows) ? rows.length : 0));
   j.addFunction("formatNumber", formatNumber);
   j.addFunction("formatDate", formatDate);
@@ -59,12 +81,76 @@ function createJexl(): JexlInstance {
 
 const engine = createJexl();
 
+/**
+ * 컴파일된 AST를 검사하고 고친다. jexl이 속성을 읽는 경로는 두 가지뿐이다.
+ * - 식별자(`a.b`, `.b`, 루트 `b`): 이름이 소스에 그대로 있으므로 여기서 바로 거부한다.
+ * - 계산된 멤버(`a[expr]`, relative가 아닌 FilterExpression): 키가 평가 중에 정해지므로
+ *   expr을 KEY_GUARD 호출로 감싸 읽기 직전에 검사한다.
+ * 주체가 데이터 객체든 원시값·리터럴·필터 결과 배열이든 같은 경로를 지나므로,
+ * 중간 단계에서도 constructor·__proto__·prototype에 닿지 못한다.
+ */
+function guardAst(node: Ast): void {
+  switch (node.type) {
+    case "Literal":
+      return;
+    case "Identifier":
+      checkKey(node.value);
+      if (node.from) guardAst(node.from);
+      return;
+    case "FilterExpression":
+      guardAst(node.subject);
+      guardAst(node.expr);
+      if (!node.relative) node.expr = { type: "FunctionCall", name: KEY_GUARD, pool: "functions", args: [node.expr] };
+      return;
+    case "UnaryExpression":
+      guardAst(node.right);
+      return;
+    case "BinaryExpression":
+      guardAst(node.left);
+      guardAst(node.right);
+      return;
+    case "ConditionalExpression":
+      guardAst(node.test);
+      if (node.consequent) guardAst(node.consequent);
+      guardAst(node.alternate);
+      return;
+    case "ArrayLiteral":
+      node.value.forEach(guardAst);
+      return;
+    case "ObjectLiteral":
+      for (const [key, value] of Object.entries(node.value)) {
+        checkKey(key);
+        guardAst(value);
+      }
+      return;
+    case "FunctionCall":
+      node.args.forEach(guardAst);
+      return;
+    default:
+      throw new Error(`unsupported expression node: ${(node as { type?: unknown }).type}`);
+  }
+}
+
+/** 멤버 함수 값(`order.toString`)처럼 키 검사로 걸러지지 않는 함수·프로토타입 결과를 마지막으로 막는다 */
+function isForbiddenResult(value: unknown): boolean {
+  if (typeof value === "function") return true;
+  if (value === null || typeof value !== "object") return false;
+  const ctor = Object.hasOwn(value, "constructor") ? (value as { constructor: unknown }).constructor : undefined;
+  return typeof ctor === "function" && ctor.prototype === value;
+}
+
 export function evaluate(expression: string, context: DataContext): unknown {
-  if (FORBIDDEN.test(expression)) throw new ExpressionError(expression, "forbidden identifier");
+  if (FORBIDDEN_KEY_RE.test(expression) || FORBIDDEN_ROOT_RE.test(expression.replace(STRING_LITERAL_RE, "''"))) {
+    throw new ExpressionError(expression, "forbidden identifier");
+  }
+  let result: unknown;
   try {
-    engine.compile(expression);               // 구문 오류를 확실히 던지게 한다
-    return engine.evalSync(expression, context);
+    const compiled = engine.compile(expression);   // 구문 오류를 확실히 던지게 한다
+    guardAst(compiled._getAst());
+    result = compiled.evalSync(context);
   } catch (e) {
     throw new ExpressionError(expression, e);
   }
+  if (isForbiddenResult(result)) throw new ExpressionError(expression, "forbidden value");
+  return result;
 }

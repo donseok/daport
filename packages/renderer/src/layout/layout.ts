@@ -1,4 +1,4 @@
-import { interpolate, evaluateTemplateValue, type Report, type DataContext, type Style } from "@daport/core";
+import { interpolate, evaluate, evaluateTemplateValue, hasTemplate, ExpressionError, type Report, type DataContext, type Style } from "@daport/core";
 import { flatten, type FlatElement } from "./flatten";
 import { wrapText, lineHeightMm } from "../text/measure";
 import type { Page, PlacedItem, PlacedText } from "./types";
@@ -11,8 +11,15 @@ function textItem(el: { id: string; x: number; y: number; w: number; h: number; 
   return { kind: "text", elementId: el.id, x: el.x, y: el.y, w: el.w, h: el.h, style: el.style, lines, lineHeight: lh, overflow };
 }
 
+/** visible 표현식: "{{ }}"가 있으면 템플릿 값, 없으면 맨 표현식으로 평가한다. 미지정·빈 문자열은 항상 표시 */
+function isVisible(visible: string | undefined, ctx: DataContext): boolean {
+  if (visible === undefined || visible.trim() === "") return true;
+  return Boolean(hasTemplate(visible) ? evaluateTemplateValue(visible, ctx) : evaluate(visible, ctx));
+}
+
 function place(el: FlatElement, ctx: DataContext): PlacedItem | null {
-  if (el.visible !== undefined && !evaluateTemplateValue(el.visible, ctx)) return null;
+  // 조상 그룹(바깥부터) → 요소 자신 순서의 AND. 그룹 visible 오류는 자손마다 각자의 #ERR 항목이 된다
+  if (!el.ancestorsVisible.every((v) => isVisible(v, ctx)) || !isVisible(el.visible, ctx)) return null;
   const base = { elementId: el.id, x: el.x, y: el.y, w: el.w, h: el.h, style: el.style };
   switch (el.type) {
     case "text": return textItem(el, interpolate(el.value, ctx));
@@ -34,8 +41,9 @@ export function layout(report: Report, data: DataContext): Page[] {
       const item = place(el, ctx);
       if (item) items.push(item);
     } catch (e) {
-      if (report.onExpressionError === "fail") throw e;
-      const msg = e instanceof Error ? e.message : String(e);
+      // 표현식 오류만 요소 단위로 격리한다. 렌더러 자체 오류는 모드와 무관하게 그대로 던진다
+      if (!(e instanceof ExpressionError) || report.onExpressionError === "fail") throw e;
+      const msg = e.message;
       items.push({ kind: "text", elementId: el.id, x: el.x, y: el.y, w: el.w, h: el.h, style: el.style,
         lines: ["#ERR"], lineHeight: lineHeightMm(el.style.fontSize, el.style.lineHeight), overflow: false, error: msg });
     }
