@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
-import { parseReport } from "@daport/core";
+import { parseReport, StyleSchema, type Style } from "@daport/core";
 import { layout } from "../layout/layout";
+import type { Page } from "../layout/types";
 import { PaintPages } from "../paint/Paint";
 import { pageCss } from "../paint/css";
 import { renderToHtml } from "../html";
@@ -75,6 +76,22 @@ describe("paint", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+  it("drops color, stroke and fill values that bypassed the schema instead of writing them into inline styles", () => {
+    // 캔버스는 검증 전의 메모리 편집을 그리므로 스키마를 거치지 않은 Page[]를 직접 만든다
+    const evil = "red;background:url(http://x)";
+    const style: Style = { ...StyleSchema.parse({}), color: evil, stroke: evil, fill: evil };
+    const pages: Page[] = [{ index: 0, width: 60, height: 40, items: [
+      { kind: "text", elementId: "t", x: 0, y: 0, w: 20, h: 10, style, lines: ["x"], lineHeight: 4, overflow: false },
+      { kind: "rect", elementId: "r", x: 0, y: 10, w: 20, h: 10, style },
+      { kind: "line", elementId: "l", x: 0, y: 30, w: 20, h: 0, x2: 20, y2: 30, style },
+    ]}];
+    const html = renderToStaticMarkup(<PaintPages pages={pages} />);
+    expect(html).toContain('data-element-id="t"');
+    expect(html).not.toContain("url(");
+    expect(html).not.toContain("background");
+    expect(html).not.toContain("border:");
+    expect(html).toContain('stroke="#000"');
   });
   it("keeps an empty text line as a non-breaking space", () => {
     const r = parseReport({ id: "r2", version: 1, page: { width: 60, height: 40 }, elements: [
