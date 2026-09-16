@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { parseReport, type Report, type ReportInput } from "@daport/core";
 import { db } from "@/db/client";
 import { reports } from "@/db/schema";
+import fixture from "../../../../packages/renderer/src/__tests__/fixtures/quality-cert.report.json";
 
 export type ReportSummary = { id: string; name: string; updatedAt: string };
 
@@ -71,8 +72,16 @@ export class DbReportStore implements ReportStore {
   }
 }
 
-let store: ReportStore | null = null;
+// Next는 페이지와 라우트 핸들러를 따로 번들해 모듈 인스턴스가 갈리므로, 메모리 저장소와 시드 약속은 globalThis에 한 번만 둔다
+const holder = globalThis as typeof globalThis & { __daportReportStore?: ReportStore; __daportSeeded?: Promise<void> };
 export function getStore(): ReportStore {
-  if (!store) store = process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
-  return store;
+  if (!holder.__daportReportStore) {
+    const store = process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
+    holder.__daportReportStore = store;
+    // 메모리 저장소는 프로세스마다 비므로 dev 서버 부팅 시 품질보증서 골든 픽스처를 넣는다 (DB는 scripts/seed.ts)
+    if (!process.env.DATABASE_URL) holder.__daportSeeded = store.create(fixture as unknown as ReportInput).then(() => {});
+  }
+  return holder.__daportReportStore;
 }
+/** 시드가 끝나면 풀린다. 호출 순서가 getStore()보다 앞서도 되도록 저장소를 먼저 만든다. */
+export function ready(): Promise<void> { getStore(); return holder.__daportSeeded ?? Promise.resolve(); }

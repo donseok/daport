@@ -1,5 +1,5 @@
 import { createElement } from "react";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderToStaticMarkup } from "#markup";   // react-server 번들(Next App Route)에서는 markup.react-server.ts로 바뀐다
 import type { Report, DataContext } from "@daport/core";
 import { layout } from "./layout/layout";
 import { PaintPages } from "./paint/Paint";
