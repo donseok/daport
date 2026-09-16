@@ -10,6 +10,7 @@ import { ElementPalette } from "./panels/ElementPalette";
 import { PropertyPanel } from "./panels/PropertyPanel";
 import { PagePanel } from "./panels/PagePanel";
 import { JsonEditor } from "./json/JsonEditor";
+import { EditorErrorBoundary } from "./EditorErrorBoundary";
 
 function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   const mode = useEditor((s) => s.mode);
@@ -27,7 +28,7 @@ export function Editor({ initial }: { initial: Report }) {
         <div className="flex-1 grid grid-cols-[200px_1fr_260px] min-h-0">
           <aside className="border-r bg-white overflow-auto"><ElementPalette /></aside>
           <main className="min-w-0 min-h-0 flex flex-col">
-            <div className="flex-1 min-h-0 overflow-auto"><Body reportId={initial.id} zoom={zoom} /></div>
+            <div className="flex-1 min-h-0 overflow-auto"><EditorErrorBoundary><Body reportId={initial.id} zoom={zoom} /></EditorErrorBoundary></div>
             <div className="h-64 border-t bg-white"><JsonEditor /></div>
           </main>
           <aside className="border-l bg-white overflow-auto"><PagePanel /><PropertyPanel /></aside>

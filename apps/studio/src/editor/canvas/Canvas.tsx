@@ -23,8 +23,9 @@ export function Canvas({ zoom }: { zoom: number }) {
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
 
   const data = useMemo(() => resolveDataSync(report), [report]);
-  // 미리보기·PDF와 같게 asset://을 /api/assets/{id}로 바꾼다 (상대 URL이라 studio 출처 기준으로 해석된다)
-  const pages = useMemo(() => layout(resolveAssetUrls(report, ""), data), [report, data]);
+  // 미리보기·PDF와 같게 asset://을 /api/assets/{id}로 바꾼다 (상대 URL이라 studio 출처 기준으로 해석된다).
+  // 스펙 10: 디자이너는 표현식 오류를 요소마다 #ERR로 보인다. onExpressionError("fail")는 미리보기·PDF 렌더만 따른다
+  const pages = useMemo(() => layout({ ...resolveAssetUrls(report, ""), onExpressionError: "blank" }, data), [report, data]);
   const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height), [report.page.width, report.page.height]);
 
   // 선택 요소들의 절대 박스 (그룹 자식은 layout 결과에서 좌표를 얻는다)

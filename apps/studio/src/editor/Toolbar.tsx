@@ -31,12 +31,24 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     }
   };
   const pdf = async () => {
-    const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ report, params: sampleParams(report) }) });
-    if (!r.ok) { alert((await r.json()).error); return; }
-    const url = URL.createObjectURL(await r.blob());
-    const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
-    a.click(); URL.revokeObjectURL(url);
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ report, params: sampleParams(report) }) });
+      if (!r.ok) {
+        const body = await r.json().catch(() => null);   // 프록시·서버 오류 페이지는 JSON이 아니다
+        alert(body?.error ?? `PDF 실패 (HTTP ${r.status})`);
+        return;
+      }
+      const url = URL.createObjectURL(await r.blob());
+      const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);   // 클릭 직후 바로 해제하면 일부 브라우저에서 다운로드가 시작되기 전에 URL이 사라진다
+    } catch (e) {
+      alert(`PDF 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
   };
   const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
   return (
@@ -47,7 +59,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       <button className={btn} onClick={() => setMode(mode === "design" ? "preview" : "design")}>{mode === "design" ? "미리보기" : "디자인"}</button>
       <label className="text-xs ml-2">배율 <input type="range" min={0.25} max={3} step={0.25} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {Math.round(zoom * 100)}%</label>
       <div className="flex-1" />
-      <button className={btn} onClick={pdf}>PDF</button>
+      <button className={btn} disabled={busy} onClick={pdf}>PDF</button>
       <button className={btn} disabled={busy || !dirty} onClick={save} data-testid="save">저장</button>
     </div>
   );

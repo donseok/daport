@@ -67,4 +67,47 @@ describe("Toolbar", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/pdf");
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).params).toEqual(sampleParams(report));
   });
+
+  it("disables PDF while rendering and revokes the blob URL only after the download click", async () => {
+    const { fetchMock } = setup();
+    let respond!: (r: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { respond = resolve; }));
+    const revoke = vi.fn();
+    Object.assign(URL, { createObjectURL: vi.fn(() => "blob:pdf"), revokeObjectURL: revoke });
+    // 클릭한 함수의 동기 구간이 끝난 직후(마이크로태스크) 해제 횟수를 본다. 동기 해제면 1, setTimeout으로 미루면 0
+    let revokedRightAfterClick = -1;
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => { queueMicrotask(() => { revokedRightAfterClick = revoke.mock.calls.length; }); });
+    const pdfButton = () => screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement;
+
+    fireEvent.click(pdfButton());
+    await waitFor(() => expect(pdfButton().disabled).toBe(true));
+    fireEvent.click(pdfButton());                                                   // 렌더 중 다시 눌러도 요청이 늘지 않는다
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => { respond(new Response(new Blob(["%PDF-"]), { status: 200 })); });
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    await waitFor(() => expect(revokedRightAfterClick).not.toBe(-1));
+    expect(revokedRightAfterClick).toBe(0);                                         // 클릭 직후에는 아직 해제하지 않는다
+    await waitFor(() => expect(revoke).toHaveBeenCalledWith("blob:pdf"));
+    await waitFor(() => expect(pdfButton().disabled).toBe(false));
+  });
+
+  it("reports the HTTP status when a failed PDF response is not JSON and re-enables the button", async () => {
+    const { fetchMock } = setup();
+    const alertMock = vi.fn();
+    vi.stubGlobal("alert", alertMock);
+    fetchMock.mockImplementationOnce(async () => new Response("<html>Bad Gateway</html>", { status: 502, headers: { "content-type": "text/html" } }));
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    await waitFor(() => expect(alertMock).toHaveBeenCalledWith("PDF 실패 (HTTP 502)"));
+    await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("shows the error message from a JSON PDF error body", async () => {
+    const { fetchMock } = setup();
+    const alertMock = vi.fn();
+    vi.stubGlobal("alert", alertMock);
+    fetchMock.mockImplementationOnce(async () => Response.json({ error: "표현식 오류" }, { status: 422 }));
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    await waitFor(() => expect(alertMock).toHaveBeenCalledWith("표현식 오류"));
+  });
 });

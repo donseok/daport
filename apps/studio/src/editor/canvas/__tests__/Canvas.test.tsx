@@ -188,6 +188,17 @@ describe("Canvas", () => {
     expect(container.querySelector('[data-element-id="logo"]')!.getAttribute("src")).toBe("https://example.com/logo.png");
   });
 
+  it("shows #ERR for a broken expression even when the report fails on expression errors", () => {
+    // 스펙 10: 디자이너는 요소마다 #ERR을 보이고, onExpressionError는 미리보기·PDF 렌더만 따른다
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, onExpressionError: "fail", elements: [
+      { id: "broken", type: "text", x: 0, y: 0, w: 30, h: 5, value: "{{ cert..X }}" },
+      { id: "ok", type: "text", x: 0, y: 10, w: 30, h: 5, value: "fine" },
+    ]}));
+    const { container } = mount(store, <Canvas zoom={1} />);
+    expect(container.querySelector('[data-element-id="broken"]')!.textContent).toBe("#ERR");
+    expect(container.querySelector('[data-element-id="ok"]')!.textContent).toBe("fine");
+  });
+
   it("discards the drag on pointercancel without committing", () => {
     const { store, canvas, el, boxes } = setup();
     fireEvent.pointerDown(el("a"), ptr(0, 0));
