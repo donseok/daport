@@ -1,42 +1,18 @@
-import { createRequire } from "node:module";
-import { readFile } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import type { Page } from "playwright";
 import type { Report, DataContext } from "@daport/core";
 import { renderToHtml } from "@daport/renderer";
 import { getBrowser } from "./pool";
+import { fontBaseUrl, serveFonts } from "./fonts";
 export { closePool } from "./pool";
 
-const fontsDir = resolve(dirname(createRequire(import.meta.url).resolve("@daport/renderer")), "../fonts");
-/** setContent 문서(about:blank)는 file:// 폰트를 CORS로 거부하므로 가상 오리진에서 라우트로 서빙한다 */
-const fontBaseUrl = "http://fonts.daport.local";
-const fontCache = new Map<string, Promise<Buffer>>();
-
-function readFont(name: string): Promise<Buffer> {
-  let p = fontCache.get(name);
-  if (!p) { p = readFile(join(fontsDir, name)); fontCache.set(name, p); }
-  return p;
-}
-
-async function serveFonts(ctx: import("playwright").BrowserContext): Promise<void> {
-  await ctx.route(`${fontBaseUrl}/**`, async (route) => {
-    const name = basename(new URL(route.request().url()).pathname);
-    try {
-      const body = await readFont(name);
-      await route.fulfill({ status: 200, body, headers: { "content-type": "font/otf", "access-control-allow-origin": "*" } });
-    } catch {
-      await route.fulfill({ status: 404 });
-    }
-  });
-}
-
-async function withPage<T>(html: string, fn: (page: import("playwright").Page) => Promise<T>): Promise<T> {
+async function withPage<T>(html: string, fn: (page: Page) => Promise<T>): Promise<T> {
   const b = await getBrowser();
   const ctx = await b.newContext();
   try {
     await serveFonts(ctx);
     const page = await ctx.newPage();
     await page.setContent(html, { waitUntil: "load" });
-    await page.evaluate(() => (document as any).fonts.ready);
+    await page.evaluate(() => document.fonts.ready);
     return await fn(page);
   } finally {
     await ctx.close();

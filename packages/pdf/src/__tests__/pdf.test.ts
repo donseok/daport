@@ -3,8 +3,7 @@ import { PDFDocument } from "pdf-lib";
 import { pdf as pdfToImg } from "pdf-to-img";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
-import { parseReport, resolveData } from "@daport/core";
-import { renderToHtml } from "@daport/renderer";
+import { parseReport } from "@daport/core";
 import { renderPdf, renderHtmlScreenshot, closePool } from "../index";
 
 const mkReport = (w: number, h: number) => parseReport({ id: "t", version: 1, page: { width: w, height: h }, elements: [
@@ -29,6 +28,8 @@ describe("renderPdf", () => {
     const { width, height } = doc.getPage(0).getSize();      // pt
     expect(width / 72 * 25.4).toBeCloseTo(w, 0);
     expect(height / 72 * 25.4).toBeCloseTo(h, 0);
+    // 폰트 서빙이 깨지면 시스템 폰트로 대체돼 픽셀 비교로는 못 잡으므로, 임베드된 서브셋 폰트 이름으로 확인한다
+    expect(buf.includes("Pretendard")).toBe(true);
   }, 30_000);
 
   it("PDF raster matches HTML screenshot within tolerance", async () => {
