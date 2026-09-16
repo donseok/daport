@@ -14,8 +14,8 @@ export function PagePanel() {
     <div className="p-3 flex flex-col gap-2">
       <div className="text-xs font-semibold">페이지</div>
       <SelectField label="프리셋" value={current} options={Object.keys(PRESETS)} onChange={(k) => { const [w, h] = PRESETS[k]; if (w) updatePage({ width: w, height: h }); }} />
-      <NumberField label="너비(mm)" value={page.width} onChange={(width) => updatePage({ width })} />
-      <NumberField label="높이(mm)" value={page.height} onChange={(height) => updatePage({ height })} />
+      <NumberField label="너비(mm)" value={page.width} onChange={(width) => { if (width > 0) updatePage({ width }); }} />
+      <NumberField label="높이(mm)" value={page.height} onChange={(height) => { if (height > 0) updatePage({ height }); }} />
     </div>
   );
 }

@@ -4,8 +4,8 @@ import type { EditorStore } from "./store";
 export function useKeyboard(store: EditorStore) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.closest("input, textarea, select, .monaco-editor")) return;
+      // target이 window/document인 합성 이벤트도 들어올 수 있으므로 Element일 때만 폼 컨트롤 안인지 본다
+      if (!(e.target instanceof Element) || e.target.closest("input, textarea, select, .monaco-editor")) return;
       const s = store.getState();
       const meta = e.metaKey || e.ctrlKey;
       if (meta && e.key.toLowerCase() === "z") { e.preventDefault(); e.shiftKey ? s.redo() : s.undo(); return; }

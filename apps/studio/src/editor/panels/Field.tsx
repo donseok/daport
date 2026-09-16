@@ -4,7 +4,7 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 }
 export function NumberField({ label, value, onChange, step = 0.5 }: { label: string; value: number; onChange: (v: number) => void; step?: number }) {
   return <Field label={label}><input aria-label={label} type="number" step={step} value={value} className="w-full border rounded px-1 py-0.5"
-    onChange={(e) => { const n = Number(e.target.value); if (Number.isFinite(n)) onChange(n); }} /></Field>;
+    onChange={(e) => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) onChange(n); }} /></Field>;   // 빈 값·입력 중인 "-" 등은 NaN이라 커밋하지 않는다
 }
 export function TextField({ label, value, onChange, multiline = false }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean }) {
   return <Field label={label}>{multiline

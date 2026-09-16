@@ -5,15 +5,12 @@ import { NumberField, TextField, SelectField, CheckField } from "./Field";
 
 export function PropertyPanel() {
   const selection = useEditor((s) => s.selection);
-  const findElement = useEditor((s) => s.findElement);
+  const el = useEditor((s) => (s.selection.length === 1 ? s.findElement(s.selection[0]) : undefined));   // 선택 요소가 바뀔 때만 재렌더
   const updateElement = useEditor((s) => s.updateElement);
-  const report = useEditor((s) => s.report);   // 구독용: 변경 시 재렌더
-  void report;
   if (selection.length !== 1) return <div className="p-3 text-xs text-neutral-500">{selection.length === 0 ? "선택된 요소가 없습니다" : `${selection.length}개 선택됨`}</div>;
-  const el = findElement(selection[0]);
   if (!el) return null;
   const set = (patch: Partial<Element>) => updateElement(el.id, patch);
-  const setStyle = (patch: Partial<Style>) => updateElement(el.id, { style: { ...el.style, ...patch } } as Partial<Element>);
+  const setStyle = (patch: Partial<Style>) => set({ style: { ...el.style, ...patch } });
 
   return (
     <div className="p-3 flex flex-col gap-2">
@@ -22,10 +19,10 @@ export function PropertyPanel() {
       <NumberField label="Y" value={el.y} onChange={(y) => set({ y })} />
       <NumberField label="W" value={el.w} onChange={(w) => set({ w })} />
       <NumberField label="H" value={el.h} onChange={(h) => set({ h })} />
-      {el.type === "line" && <><NumberField label="X2" value={el.x2} onChange={(x2) => set({ x2 } as any)} /><NumberField label="Y2" value={el.y2} onChange={(y2) => set({ y2 } as any)} /></>}
-      {el.type === "text" && <TextField label="내용" value={el.value} multiline onChange={(value) => set({ value } as any)} />}
-      {el.type === "image" && <><TextField label="src" value={el.src} onChange={(src) => set({ src } as any)} />
-        <SelectField label="fit" value={el.fit} options={["contain", "cover", "stretch"]} onChange={(fit) => set({ fit } as any)} /></>}
+      {el.type === "line" && <><NumberField label="X2" value={el.x2} onChange={(x2) => set({ x2 })} /><NumberField label="Y2" value={el.y2} onChange={(y2) => set({ y2 })} /></>}
+      {el.type === "text" && <TextField label="내용" value={el.value} multiline onChange={(value) => set({ value })} />}
+      {el.type === "image" && <><TextField label="src" value={el.src} onChange={(src) => set({ src })} />
+        <SelectField label="fit" value={el.fit} options={["contain", "cover", "stretch"]} onChange={(fit) => set({ fit })} /></>}
       <TextField label="visible" value={el.visible ?? ""} onChange={(v) => set({ visible: v || undefined })} />
       <div className="text-xs font-semibold mt-2">스타일</div>
       {(el.type === "text" || el.type === "pageNumber") && <>
