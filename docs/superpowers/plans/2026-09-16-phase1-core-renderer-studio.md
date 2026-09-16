@@ -662,7 +662,10 @@ Expected: FAIL, 모듈 없음.
 
 `packages/core/src/expression/engine.ts`:
 ```ts
-import { Jexl } from "jexl";
+import jexl from "jexl";
+
+type JexlInstance = typeof jexl;
+const JexlCtor = (jexl as unknown as { Jexl: new () => JexlInstance }).Jexl;
 
 export class ExpressionError extends Error {
   constructor(public expression: string, cause: unknown) {
@@ -704,8 +707,8 @@ export function formatDate(value: unknown, pattern = "yyyy-MM-dd"): string {
     .replace(/ss/g, p(d.getUTCSeconds()));
 }
 
-function createJexl(): Jexl {
-  const j = new Jexl();
+function createJexl(): JexlInstance {
+  const j = new JexlCtor();
   j.addFunction("sum", (rows: unknown, field: string) =>
     Array.isArray(rows) ? rows.reduce((a, r) => a + toNumber((r as Record<string, unknown>)?.[field]), 0) : 0);
   j.addFunction("count", (rows: unknown) => (Array.isArray(rows) ? rows.length : 0));
@@ -718,12 +721,13 @@ function createJexl(): Jexl {
   return j;
 }
 
-const jexl = createJexl();
+const engine = createJexl();
 
 export function evaluate(expression: string, context: DataContext): unknown {
   if (FORBIDDEN.test(expression)) throw new ExpressionError(expression, "forbidden identifier");
   try {
-    return jexl.evalSync(expression, context);
+    engine.compile(expression);               // 구문 오류를 확실히 던지게 한다
+    return engine.evalSync(expression, context);
   } catch (e) {
     throw new ExpressionError(expression, e);
   }
@@ -763,7 +767,7 @@ export * from "./expression/template";
 - [ ] **Step 4: 통과 확인**
 
 Run: `pnpm --filter @daport/core test`
-Expected: 모두 통과. jexl에서 `order.`가 예외가 아니라 undefined를 돌려주면 `evaluate` 앞에 `jexl.compile(expression)`을 호출해 구문 오류를 강제로 발생시킨다.
+Expected: 모두 통과. `jexl` 패키지의 기본 export는 인스턴스이고 클래스는 `jexl.Jexl`에 있다.
 
 - [ ] **Step 5: Commit**
 
@@ -2984,7 +2988,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 `apps/studio/src/app/api/reports/[id]/preview/route.ts`:
 ```ts
 import { NextResponse } from "next/server";
-import { resolveData } from "@daport/core";
+import { resolveData, parseReport } from "@daport/core";
 import { renderToHtml } from "@daport/renderer";
 import { getStore } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
@@ -2992,7 +2996,7 @@ import { resolveAssetUrls } from "@/lib/assets";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const report = body.report ? await import("@daport/core").then((m) => m.parseReport(body.report)) : await getStore().get(id);
+  const report = body.report ? parseReport(body.report) : await getStore().get(id);
   if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });
   try {
     const origin = new URL(req.url).origin;
