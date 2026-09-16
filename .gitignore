@@ -8,3 +8,4 @@ playwright-report
 .worktrees
 next-env.d.ts
 *.tsbuildinfo
+apps/studio/public/fonts
