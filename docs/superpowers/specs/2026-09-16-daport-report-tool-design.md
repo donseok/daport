@@ -111,7 +111,7 @@ studio 에디터 ──▶ 레포트 모델(JSON) ──▶ renderer ──▶ H
 
 등록 함수 초기 세트: `sum(dataset, field)`, `count(dataset)`, `formatDate(value, pattern)`, `formatNumber(value, pattern)`, `pad(value, len, char)`, `upper`, `lower`, `default(value, fallback)`.
 
-금지: 자바스크립트 실행, 프로토타입·전역 객체 접근. 위반 시 요소 단위로 `#ERR` 처리한다(8장).
+금지: 자바스크립트 실행, 프로토타입·전역 객체 접근. 위반 시 요소 단위로 `#ERR` 처리한다(10장).
 
 컨텍스트 변수: `params`, 각 데이터셋 이름(첫 행 객체와 배열 둘 다 접근 가능), `row`(표 안에서 현재 행), `page`, `total`.
 
@@ -209,7 +209,7 @@ Next.js App Router 하나에 UI와 API를 둔다.
 
 로고·도장 등 에셋은 Vercel Blob에 올리고 `asset://id`로 참조한다.
 
-**git 내보내기**: 레포트·컴포넌트·에셋·샘플 스냅샷을 JSON 파일 세트로 내려받거나 GitHub 레포에 커밋한다. 7.3의 번들 포맷과 동일하다. 개발자는 파일로, 현업은 DB로, 같은 내용을 다룬다.
+**git 내보내기**: 레포트·컴포넌트·에셋·샘플 스냅샷을 JSON 파일 세트로 내려받거나 GitHub 레포에 커밋한다. 9.3의 번들 포맷과 동일하다. 개발자는 파일로, 현업은 DB로, 같은 내용을 다룬다.
 
 ### 6.5 인증
 
