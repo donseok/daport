@@ -4,3 +4,5 @@ export * from "./schema/style";
 export * from "./schema/elements";
 export * from "./schema/report";
 export * from "./schema/json-schema";
+export * from "./expression/engine";
+export * from "./expression/template";
