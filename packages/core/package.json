@@ -1,0 +1,20 @@
+{
+  "name": "@daport/core",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.0.0",
+    "jexl": "^2.3.0"
+  },
+  "devDependencies": {
+    "@types/jexl": "^2.3.4"
+  }
+}
