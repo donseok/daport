@@ -1,0 +1,159 @@
+import { describe, it, expect, afterEach, beforeAll } from "vitest";
+import { render, fireEvent, cleanup, act } from "@testing-library/react";
+import { parseReport } from "@daport/core";
+import { createEditorStore, EditorContext, type EditorStore } from "../../store";
+import { Canvas } from "../Canvas";
+import { mmToPxScaled } from "../snap";
+
+const report = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+  { id: "a", type: "text", x: 10, y: 10, w: 20, h: 5, value: "A" },
+  { id: "b", type: "rect", x: 30, y: 30, w: 10, h: 10 },
+  { id: "g", type: "group", x: 50, y: 50, w: 20, h: 20, children: [{ id: "c", type: "rect", x: 5, y: 5, w: 5, h: 5 }] },
+]});
+
+function mount(store: EditorStore, ui: React.ReactNode) {
+  return render(<EditorContext.Provider value={store}>{ui}</EditorContext.Provider>);
+}
+
+function setup(zoom = 1) {
+  const store = createEditorStore(report);
+  const utils = mount(store, <Canvas zoom={zoom} />);
+  const canvas = utils.getByTestId("canvas");
+  const el = (id: string) => utils.container.querySelector(`[data-element-id="${id}"]`) as HTMLElement;
+  const handle = (h: string) => utils.container.querySelector(`[data-handle="${h}"]`) as HTMLElement | null;
+  const boxes = () => Array.from(utils.container.querySelectorAll<HTMLElement>(".border-blue-500.pointer-events-none")).map((d) => d.style.left);
+  return { store, canvas, el, handle, boxes, ...utils };
+}
+
+/** zoom=1에서 mm를 화면 px로 (드래그 델타를 mm 단위로 쓰기 위한 도우미) */
+const px = (mm: number, zoom = 1) => mmToPxScaled(mm, zoom);
+const ptr = (clientX: number, clientY: number, extra: Record<string, unknown> = {}) => ({ pointerId: 1, clientX, clientY, ...extra });
+
+beforeAll(() => {
+  // jsdom 26에는 PointerEvent와 setPointerCapture가 없다. PointerEvent가 없으면 testing-library가 plain Event로
+  // 대체해 clientX/shiftKey가 사라지므로 MouseEvent 기반으로 정의한다.
+  class PointerEventStub extends MouseEvent {
+    pointerId: number;
+    constructor(type: string, init: MouseEventInit & { pointerId?: number } = {}) { super(type, init); this.pointerId = init.pointerId ?? 0; }
+  }
+  (window as unknown as { PointerEvent: unknown }).PointerEvent = PointerEventStub;
+  Element.prototype.setPointerCapture = () => {};
+});
+
+afterEach(cleanup);
+
+describe("Canvas", () => {
+  it("selects on pointerdown, shows a live ghost during the drag, and commits the snapped move on pointerup", () => {
+    const { store, canvas, el, boxes } = setup();
+    expect(boxes()).toEqual([]);
+
+    fireEvent.pointerDown(el("a"), ptr(100, 100));
+    expect(store.getState().selection).toEqual(["a"]);
+    expect(boxes()).toEqual(["10mm"]);
+
+    fireEvent.pointerMove(canvas, ptr(100 + px(10.2), 100));
+    expect(boxes()).toEqual(["20mm"]);                                          // 10.2 → 0.5mm 그리드 스냅 → +10
+    expect(store.getState().findElement("a")).toMatchObject({ x: 10, y: 10 });  // 아직 커밋 전
+    expect(store.getState().history.past).toHaveLength(0);
+
+    fireEvent.pointerUp(canvas, ptr(100 + px(10.2), 100));
+    expect(store.getState().findElement("a")).toMatchObject({ x: 20, y: 10, w: 20, h: 5 });
+    expect(store.getState().history.past).toHaveLength(1);
+    expect(boxes()).toEqual(["20mm"]);
+  });
+
+  it("does not create a history entry for a click without movement", () => {
+    const { store, canvas, el } = setup();
+    fireEvent.pointerDown(el("a"), ptr(100, 100));
+    fireEvent.pointerUp(canvas, ptr(100, 100));
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+
+  it("resizes with the se handle and moves the opposite edge with the nw handle", () => {
+    const { store, canvas, handle } = setup();
+    act(() => store.getState().select(["a"]));
+    expect(handle("se")).not.toBeNull();
+
+    fireEvent.pointerDown(handle("se")!, ptr(0, 0));
+    fireEvent.pointerMove(canvas, ptr(px(5), px(2.5)));
+    fireEvent.pointerUp(canvas, ptr(px(5), px(2.5)));
+    expect(store.getState().findElement("a")).toMatchObject({ x: 10, y: 10, w: 25, h: 7.5 });
+    expect(store.getState().selection).toEqual(["a"]);                          // 핸들 클릭은 선택을 바꾸지 않는다
+
+    fireEvent.pointerDown(handle("nw")!, ptr(0, 0));
+    fireEvent.pointerMove(canvas, ptr(px(-5), px(-2)));
+    fireEvent.pointerUp(canvas, ptr(px(-5), px(-2)));
+    expect(store.getState().findElement("a")).toMatchObject({ x: 5, y: 8, w: 30, h: 9.5 });
+    expect(store.getState().history.past).toHaveLength(2);
+  });
+
+  it("shift-click toggles multi-selection, hides handles, and a drag moves all as one history entry", () => {
+    const { store, canvas, el, handle, boxes } = setup();
+    fireEvent.pointerDown(el("a"), ptr(0, 0));
+    fireEvent.pointerUp(canvas, ptr(0, 0));
+    expect(handle("se")).not.toBeNull();
+
+    fireEvent.pointerDown(el("b"), ptr(0, 0, { shiftKey: true }));
+    fireEvent.pointerUp(canvas, ptr(0, 0));
+    expect(store.getState().selection).toEqual(["a", "b"]);
+    expect(handle("se")).toBeNull();
+    expect(boxes()).toEqual(["10mm", "30mm"]);
+
+    // 이미 선택된 요소를 끌면 선택 전체가 함께 움직인다
+    fireEvent.pointerDown(el("a"), ptr(0, 0));
+    fireEvent.pointerMove(canvas, ptr(px(10), px(5)));
+    expect(boxes()).toEqual(["20mm", "40mm"]);
+    fireEvent.pointerUp(canvas, ptr(px(10), px(5)));
+    expect(store.getState().findElement("a")).toMatchObject({ x: 20, y: 15 });
+    expect(store.getState().findElement("b")).toMatchObject({ x: 40, y: 35 });
+    expect(store.getState().selection).toEqual(["a", "b"]);
+    expect(store.getState().history.past).toHaveLength(1);                      // 한 제스처 = 한 번의 undo
+
+    // shift-click으로 다시 빼기
+    fireEvent.pointerDown(el("b"), ptr(0, 0, { shiftKey: true }));
+    expect(store.getState().selection).toEqual(["a"]);
+  });
+
+  it("keeps a group child's offset relative to its group", () => {
+    const { store, canvas, el, boxes } = setup();
+    fireEvent.pointerDown(el("c"), ptr(0, 0));
+    expect(boxes()).toEqual(["55mm"]);                                          // layout 절대좌표 (50+5)
+    fireEvent.pointerMove(canvas, ptr(px(10), 0));
+    fireEvent.pointerUp(canvas, ptr(px(10), 0));
+    expect(store.getState().findElement("c")).toMatchObject({ x: 15, y: 5 });   // 그룹 기준 상대좌표 유지
+    expect(store.getState().findElement("g")).toMatchObject({ x: 50, y: 50 });
+    expect(boxes()).toEqual(["65mm"]);
+  });
+
+  it("clears the selection when clicking empty page area", () => {
+    const { store, canvas, boxes } = setup();
+    act(() => store.getState().select(["a", "b"]));
+    expect(boxes()).toHaveLength(2);
+    fireEvent.pointerDown(canvas.querySelector(".dp-page")!, ptr(0, 0));
+    expect(store.getState().selection).toEqual([]);
+    expect(boxes()).toEqual([]);
+    fireEvent.pointerMove(canvas, ptr(px(10), 0));
+    fireEvent.pointerUp(canvas, ptr(px(10), 0));
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+
+  it("divides the pointer delta by zoom", () => {
+    const { store, canvas, el } = setup(2);
+    fireEvent.pointerDown(el("a"), ptr(0, 0));
+    fireEvent.pointerMove(canvas, ptr(px(10, 1), 0));                             // zoom 2에서 같은 px는 5mm
+    fireEvent.pointerUp(canvas, ptr(px(10, 1), 0));
+    expect(store.getState().findElement("a")).toMatchObject({ x: 15, y: 10 });
+  });
+
+  it("discards the drag on pointercancel without committing", () => {
+    const { store, canvas, el, boxes } = setup();
+    fireEvent.pointerDown(el("a"), ptr(0, 0));
+    fireEvent.pointerMove(canvas, ptr(px(10), 0));
+    expect(boxes()).toEqual(["20mm"]);
+    fireEvent.pointerCancel(canvas, ptr(px(10), 0));
+    expect(boxes()).toEqual(["10mm"]);                                          // 고스트 제거
+    fireEvent.pointerUp(canvas, ptr(px(10), 0));                                  // 취소 뒤의 pointerup은 아무것도 커밋하지 않는다
+    expect(store.getState().findElement("a")).toMatchObject({ x: 10, y: 10 });
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+});
