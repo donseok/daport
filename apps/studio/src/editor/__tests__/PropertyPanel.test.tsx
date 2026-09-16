@@ -55,6 +55,18 @@ describe("PropertyPanel", () => {
     expect(store.getState().findElement("l")).toMatchObject({ x: 15, y: 30, w: 50, h: 0, x2: 65, y2: 30 });
     expect(store.getState().history.past).toHaveLength(2);
   });
+  it("resizes a line from W/H like a handle, keeping its direction, and keeps W/H in step with X2/Y2", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "l", type: "line", x: 60, y: 20, w: 50, h: 0, x2: 10, y2: 20 },
+    ]}));
+    store.getState().select(["l"]);
+    render(<EditorContext.Provider value={store}><PropertyPanel /></EditorContext.Provider>);
+    fireEvent.change(screen.getByLabelText("W"), { target: { value: "80" } });
+    expect(store.getState().findElement("l")).toMatchObject({ x: 90, y: 20, x2: 10, y2: 20, w: 80, h: 0 });
+    fireEvent.change(screen.getByLabelText("X2"), { target: { value: "30" } });
+    expect(store.getState().findElement("l")).toMatchObject({ x: 90, x2: 30, w: 60 });
+    expect((screen.getByLabelText("W") as HTMLInputElement).value).toBe("60");
+  });
   it("accepts negative numbers and ignores an emptied number field", () => {
     const store = createEditorStore(report);
     store.getState().select(["a"]);

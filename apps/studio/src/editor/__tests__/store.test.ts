@@ -137,3 +137,55 @@ describe("editor store", () => {
     expect(store.getState().dirty).toBe(true);
   });
 });
+
+describe("editor store: line bounding box", () => {
+  type Line = Extract<Element, { type: "line" }>;
+  const lines = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+    { id: "l", type: "line", x: 10, y: 20, w: 50, h: 0, x2: 60, y2: 20 },
+    { id: "g", type: "group", x: 50, y: 50, w: 20, h: 20, children: [{ id: "gl", type: "line", x: 0, y: 0, w: 10, h: 0, x2: 10, y2: 0 }] },
+  ]});
+  const line = (s: ReturnType<typeof createEditorStore>, id: string) => s.getState().findElement(id) as Line;
+
+  it("recomputes w/h from the end points when X2 or Y2 is edited", () => {
+    const s = createEditorStore(lines);
+    s.getState().updateElement("l", { x2: 30.123 });
+    expect(line(s, "l")).toMatchObject({ x: 10, x2: 30.123, w: 20.12, h: 0 });
+    s.getState().updateElement("l", { y2: 5 });
+    expect(line(s, "l")).toMatchObject({ y: 20, y2: 5, w: 20.12, h: 15 });
+    s.getState().updateElement("gl", { x2: -4, y2: 6 });                         // 그룹 안의 선
+    expect(line(s, "gl")).toMatchObject({ w: 4, h: 6 });
+  });
+
+  it("recomputes w/h for lines added, moved or replaced from JSON", () => {
+    const s = createEditorStore(lines);
+    s.getState().addElement(ElementSchema.parse({ id: "n", type: "line", x: 0, y: 0, w: 99, h: 99, x2: 10, y2: 5 }));
+    expect(line(s, "n")).toMatchObject({ w: 10, h: 5 });
+    s.getState().moveSelected(2.5, 1);
+    expect(line(s, "n")).toMatchObject({ x: 2.5, y: 1, x2: 12.5, y2: 6, w: 10, h: 5 });
+    const json = JSON.parse(JSON.stringify(s.getState().report));
+    json.elements[0].x2 = 0;                                                      // JSON 편집기에서 끝점만 고친다
+    expect(s.getState().replaceReport(json)).toBe(true);
+    expect(line(s, "l")).toMatchObject({ x: 10, x2: 0, w: 10, h: 0 });
+  });
+
+  it("resizes a right-to-left, bottom-to-top line by mapping both end points onto the new box", () => {
+    const s = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "rl", type: "line", x: 60, y: 40, w: 50, h: 20, x2: 10, y2: 20 },    // 상자 (10, 20, 50×20)
+    ]}));
+    s.getState().resizeElement("rl", { x: 10, y: 20, w: 80, h: 20 });            // e 핸들: 오른쪽 변만 +30
+    expect(line(s, "rl")).toMatchObject({ x: 90, y: 40, x2: 10, y2: 20, w: 80, h: 20 });
+    s.getState().resizeElement("rl", { x: 5, y: 10, w: 85, h: 30 });             // nw 핸들: 왼쪽·위 변을 옮긴다
+    expect(line(s, "rl")).toMatchObject({ x: 90, y: 40, x2: 5, y2: 10, w: 85, h: 30 });
+    const l = line(s, "rl");
+    expect(l.x).toBeGreaterThan(l.x2);
+    expect(l.y).toBeGreaterThan(l.y2);
+  });
+
+  it("keeps a flat line flat and in place when its box gains the missing dimension", () => {
+    const s = createEditorStore(lines);
+    s.getState().resizeElement("l", { x: 10, y: 20, w: 50, h: 3 });              // 가로선의 s 핸들을 아래로
+    s.getState().resizeElement("l", { x: 10, y: 17, w: 50, h: 3 });              // n 핸들을 위로
+    expect(line(s, "l")).toMatchObject({ x: 10, y: 20, x2: 60, y2: 20, w: 50, h: 0 });
+    expect(s.getState().history.past).toHaveLength(0);
+  });
+});

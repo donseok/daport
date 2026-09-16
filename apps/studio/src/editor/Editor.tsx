@@ -1,7 +1,8 @@
 "use client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useStore } from "zustand";
 import type { Report } from "@daport/core";
-import { createEditorStore, EditorContext, useEditor } from "./store";
+import { createEditorStore, EditorContext, useEditor, type EditorStore } from "./store";
 import { useKeyboard } from "./useKeyboard";
 import { Canvas } from "./canvas/Canvas";
 import { Preview } from "./Preview";
@@ -23,10 +24,22 @@ function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   );
 }
 
+/** 저장하지 않은 편집이 있는 동안에만 문서를 떠날 때(탭 닫기·새로고침·주소창 이동) 브라우저의 이탈 확인을 띄운다 */
+function useUnsavedChangesWarning(store: EditorStore) {
+  const dirty = useStore(store, (s) => s.dirty);
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };   // returnValue는 옛 브라우저용
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+}
+
 export function Editor({ initial }: { initial: Report }) {
   const store = useMemo(() => createEditorStore(initial), [initial]);
   const [zoom, setZoom] = useState(1);
   useKeyboard(store);
+  useUnsavedChangesWarning(store);
   return (
     <EditorContext.Provider value={store}>
       <div className="h-screen flex flex-col">
