@@ -35,6 +35,12 @@ describe("paint", () => {
     expect(html).toContain("/fonts/Pretendard-Regular.otf");
     expect(html).toContain('class="dp-page"');
   });
+  it("escapes the report name in <title>", () => {
+    const r = parseReport({ id: "r3", name: "</title><script>x</script>", version: 1, page: { width: 60, height: 40 }, elements: [] });
+    const html = renderToHtml(r, { params: {} }, { fontBaseUrl: "/fonts" });
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;/title&gt;");
+  });
   it("keeps an empty text line as a non-breaking space", () => {
     const r = parseReport({ id: "r2", version: 1, page: { width: 60, height: 40 }, elements: [
       { id: "m", type: "text", x: 5, y: 5, w: 40, h: 20, value: "a\n\nb", style: { fontSize: 12 } },
