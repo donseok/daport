@@ -3,8 +3,9 @@ import { PDFDocument } from "pdf-lib";
 import { pdf as pdfToImg } from "pdf-to-img";
 import pixelmatch from "pixelmatch";
 import { PNG } from "pngjs";
-import { parseReport } from "@daport/core";
+import { parseReport, resolveData, type Report, type DataContext } from "@daport/core";
 import { renderPdf, renderHtmlScreenshot, closePool } from "../index";
+import qualityCert from "../../../renderer/src/__tests__/fixtures/quality-cert.report.json";
 
 const mkReport = (w: number, h: number) => parseReport({ id: "t", version: 1, page: { width: w, height: h }, elements: [
   { id: "r", type: "rect", x: 2, y: 2, w: w - 4, h: h - 4, style: { stroke: "#000", strokeWidth: 0.5 } },
@@ -16,6 +17,19 @@ function crop(png: PNG, w: number, h: number): Uint8Array {
   const out = new PNG({ width: w, height: h });
   PNG.bitblt(png, out, 0, 0, w, h, 0, 0);
   return out.data;
+}
+
+/** PDF 첫 페이지(96dpi 래스터)와 HTML 스크린샷의 다른 픽셀 비율 */
+async function rasterDiff(report: Report, data: DataContext): Promise<number> {
+  const buf = await renderPdf(report, data);
+  const doc = await pdfToImg(buf, { scale: 96 / 72 });   // 96dpi
+  const pdfPng = PNG.sync.read(Buffer.from((await doc.getPage(1))));
+  const htmlPng = PNG.sync.read(await renderHtmlScreenshot(report, data));
+  expect(Math.abs(htmlPng.width - pdfPng.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(htmlPng.height - pdfPng.height)).toBeLessThanOrEqual(1);
+  const w = Math.min(htmlPng.width, pdfPng.width), h = Math.min(htmlPng.height, pdfPng.height);
+  const diff = pixelmatch(crop(htmlPng, w, h), crop(pdfPng, w, h), undefined, w, h, { threshold: 0.2 });
+  return diff / (w * h);
 }
 
 afterAll(closePool);
@@ -33,16 +47,12 @@ describe("renderPdf", () => {
   }, 30_000);
 
   it("PDF raster matches HTML screenshot within tolerance", async () => {
-    const report = mkReport(100, 60);
-    const buf = await renderPdf(report, { params: {} });
-    const doc = await pdfToImg(buf, { scale: 96 / 72 });   // 96dpi
-    const pdfPng = PNG.sync.read(Buffer.from((await doc.getPage(1))));
-    const shot = await renderHtmlScreenshot(report, { params: {} });
-    const htmlPng = PNG.sync.read(shot);
-    expect(Math.abs(htmlPng.width - pdfPng.width)).toBeLessThanOrEqual(1);
-    expect(Math.abs(htmlPng.height - pdfPng.height)).toBeLessThanOrEqual(1);
-    const w = Math.min(htmlPng.width, pdfPng.width), h = Math.min(htmlPng.height, pdfPng.height);
-    const diff = pixelmatch(crop(htmlPng, w, h), crop(pdfPng, w, h), undefined, w, h, { threshold: 0.2 });
-    expect(diff / (w * h)).toBeLessThan(0.01);   // 1% 미만 차이
+    expect(await rasterDiff(mkReport(100, 60), { params: {} })).toBeLessThan(0.01);   // 1% 미만 차이
+  }, 30_000);
+
+  it("PDF raster of the quality certificate golden fixture matches its HTML screenshot", async () => {
+    // 완료 기준 3은 합성 레포트가 아니라 실제 양식으로 확인한다 (asset:// 도장은 두 출력 모두 비어 같다)
+    const report = parseReport(qualityCert);
+    expect(await rasterDiff(report, await resolveData(report, { lotNo: "L2609-0142" }))).toBeLessThan(0.01);
   }, 30_000);
 });

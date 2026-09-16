@@ -132,6 +132,18 @@ describe("forbidden identifier guard", () => {
     expect(evaluate("order.process", { order: { process: "P" } })).toBe("P");
     expect(evaluate("row.Function", { row: { Function: "F" } })).toBe("F");
   });
+  it("resolves data named like a global as a root identifier", () => {
+    const gctx = { process: rowsProxy([{ NAME: "절단" }]), window: { NO: 3 } };   // MES 공정 데이터셋 이름 등
+    expect(evaluate("process.NAME", gctx)).toBe("절단");
+    expect(evaluate("window.NO + 1", gctx)).toBe(4);
+    expect(() => evaluate("process.NAME + require", gctx)).toThrow(ExpressionError);
+  });
+  it("does not treat words inside string literals as identifiers", () => {
+    expect(evaluate("'a constructor b'", {})).toBe("a constructor b");
+    expect(evaluate("upper(\"process\") + ' __proto__'", {})).toBe("PROCESS __proto__");
+    expectBlocked("order['constructor']", ctx);                                  // 계산된 키는 평가 시점 검사로 막힌다
+    expectBlocked("{'constructor': 1}", ctx);
+  });
   it("rejects global names as root identifiers", () => {
     expect(() => evaluate("window", {})).toThrow(ExpressionError);
     expect(() => evaluate("process", {})).toThrow(ExpressionError);

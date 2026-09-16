@@ -36,7 +36,7 @@ function Item({ item }: { item: PlacedItem }) {
       );
     }
     case "image":
-      return <img {...common} src={item.src} alt="" style={{ ...box(item), objectFit: item.fit === "stretch" ? "fill" : item.fit }} />;
+      return <img {...common} src={item.src || undefined} alt="" style={{ ...box(item), objectFit: item.fit === "stretch" ? "fill" : item.fit }} />;
     case "placeholder":
       return <div {...common} className={cls + " dp-ph"} style={box(item)}>{item.label}</div>;
   }

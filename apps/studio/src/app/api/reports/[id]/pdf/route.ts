@@ -1,25 +1,46 @@
 import { NextResponse } from "next/server";
-import { resolveData, parseReport } from "@daport/core";
+import { ZodError } from "zod";
+import { resolveData, parseReport, ExpressionError, type Report, type DataContext } from "@daport/core";
 import { renderPdf } from "@daport/pdf";
 import { getStore } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
 
 export const maxDuration = 60;
 
+const fail = (e: unknown, status: number) => NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status });
+
+/** RFC 6266/5987: filename에는 ASCII 대체 이름, 한글 이름은 filename*에 UTF-8 퍼센트 인코딩으로 넣는다 */
+function contentDisposition(report: Report): string {
+  const ascii = `${report.id.replace(/[^\w.-]/g, "_")}.pdf`;
+  const utf8 = encodeURIComponent(`${report.name || report.id}.pdf`).replace(/['()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${utf8}`;
+}
+
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
+
+  // 스펙 10장: 모델 검증·파라미터·표현식 오류는 요청 문제(400), 렌더 실패(Chromium 크래시 1회 재시도 후)는 500
+  let report: Report | null;
   try {
-    const report = body.report ? parseReport(body.report) : await getStore().get(id);
-    if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const origin = new URL(req.url).origin;
-    const data = await resolveData(report, body.params ?? {});
-    const pdf = await renderPdf(resolveAssetUrls(report, origin), data);
-    return new NextResponse(new Uint8Array(pdf), { headers: {
-      "content-type": "application/pdf",
-      "content-disposition": `attachment; filename="${encodeURIComponent(report.name || report.id)}.pdf"`,
-    } });
+    report = body.report ? parseReport(body.report) : await getStore().get(id);
   } catch (e) {
-    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
+    return fail(e, e instanceof ZodError ? 400 : 500);
+  }
+  if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });
+
+  let data: DataContext;
+  try {
+    data = await resolveData(report, body.params ?? {});   // 필수 파라미터 누락, 지원하지 않는 데이터셋
+  } catch (e) {
+    return fail(e, 400);
+  }
+
+  try {
+    const origin = new URL(req.url).origin;
+    const pdf = await renderPdf(resolveAssetUrls(report, origin), data);
+    return new NextResponse(new Uint8Array(pdf), { headers: { "content-type": "application/pdf", "content-disposition": contentDisposition(report) } });
+  } catch (e) {
+    return fail(e, e instanceof ExpressionError ? 400 : 500);
   }
 }

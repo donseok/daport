@@ -46,6 +46,10 @@ describe("ReportSchema", () => {
       { id: "a", type: "rect", x: 0, y: 0, w: 1, h: 1 },
     ]})).toThrow(/duplicate/i);
   });
+  it("accepts only URL-safe report ids", () => {
+    for (const id of ["quality-cert", "r1", "land1726000000000"]) expect(ReportSchema.safeParse({ ...base, id }).success).toBe(true);
+    for (const id of ["a/b", "a?b", "a#b", "Quality", "-x", "a b", ""]) expect(ReportSchema.safeParse({ ...base, id }).success).toBe(false);
+  });
   it("rejects unknown element type", () => {
     expect(() => ReportSchema.parse({ ...base, elements: [{ id: "x", type: "chart", x: 0, y: 0, w: 1, h: 1 }] })).toThrow();
   });

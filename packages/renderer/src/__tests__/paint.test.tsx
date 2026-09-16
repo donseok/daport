@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseReport } from "@daport/core";
 import { layout } from "../layout/layout";
@@ -40,6 +40,20 @@ describe("paint", () => {
     const html = renderToHtml(r, { params: {} }, { fontBaseUrl: "/fonts" });
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;/title&gt;");
+  });
+  it("omits the src attribute of an image without a source", () => {
+    const r = parseReport({ id: "r4", version: 1, page: { width: 60, height: 40 }, elements: [
+      { id: "i", type: "image", x: 5, y: 5, w: 10, h: 10, src: "" },
+    ]});
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const html = renderToStaticMarkup(<PaintPages pages={layout(r, { params: {} })} />);
+      expect(html).toContain('data-element-id="i"');
+      expect(html).not.toContain("src=");
+      expect(warn).not.toHaveBeenCalled();   // React의 빈 src 경고 (브라우저가 페이지를 다시 요청할 수 있다)
+    } finally {
+      warn.mockRestore();
+    }
   });
   it("keeps an empty text line as a non-breaking space", () => {
     const r = parseReport({ id: "r2", version: 1, page: { width: 60, height: 40 }, elements: [

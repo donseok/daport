@@ -15,7 +15,7 @@ export function NewReportForm() {
   };
   return (
     <form onSubmit={submit} className="flex gap-2 items-end">
-      <label className="text-xs">ID<input required pattern="[a-z0-9\-]+" value={id} onChange={(e) => setId(e.target.value)} className="block border rounded px-2 py-1" /></label>
+      <label className="text-xs">ID<input required pattern="[a-z0-9][a-z0-9\-]*" value={id} onChange={(e) => setId(e.target.value)} className="block border rounded px-2 py-1" /></label>
       <label className="text-xs">이름<input value={name} onChange={(e) => setName(e.target.value)} className="block border rounded px-2 py-1" /></label>
       <label className="text-xs">크기<select value={size} onChange={(e) => setSize(e.target.value)} className="block border rounded px-2 py-1">
         <option value="210x297">A4 세로</option><option value="297x210">A4 가로</option><option value="60x40">Tag 60×40</option></select></label>

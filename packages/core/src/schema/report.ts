@@ -22,7 +22,7 @@ export const ParamSchema = z.object({
 });
 
 export const ReportSchema = z.object({
-  id: z.string().min(1),
+  id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/, "id는 영문 소문자·숫자로 시작하고 영문 소문자·숫자·-만 쓸 수 있습니다"),   // URL 경로에 그대로 쓴다
   name: z.string().default(""),
   version: z.number().int().nonnegative().default(1),
   page: PageSchema,

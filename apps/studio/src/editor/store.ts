@@ -58,6 +58,13 @@ export function createEditorStore(initial: Report) {
       const h = commit(get().history, mutate);
       if (h !== get().history) set({ history: h, report: h.present, dirty: true, problems: [] });
     };
+    const pruneSelection = () => set({ selection: get().selection.filter((id) => !!get().findElement(id)) });
+    const travel = (step: (h: History<Report>) => History<Report>) => {
+      const h = step(get().history);
+      if (h === get().history) return;   // 되돌릴 것이 없으면 dirty를 바꾸지 않는다
+      set({ history: h, report: h.present, dirty: true });
+      pruneSelection();
+    };
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
       findElement: (id) => { let found: Element | undefined; walk(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
@@ -73,9 +80,23 @@ export function createEditorStore(initial: Report) {
       addElement: (el) => { apply((r) => { r.elements.push(el); }); set({ selection: [el.id] }); },
       duplicateSelected: () => {
         const ids: string[] = [];
-        apply((r) => { const sel = new Set(get().selection); const copies: Element[] = [];
-          walk(r.elements, (el) => { if (sel.has(el.id)) { const c = structuredClone(el) as Element; c.id = newId(el.id, r); c.x += 5; c.y += 5; ids.push(c.id); copies.push(c); } });
-          r.elements.push(...copies); });
+        apply((r) => {
+          const sel = new Set(get().selection);
+          const used = new Set<string>(); walk(r.elements, (el) => { used.add(el.id); });
+          const alloc = (base: string) => { let n = 1; while (used.has(`${base}-${n}`)) n++; used.add(`${base}-${n}`); return `${base}-${n}`; };
+          // 복사본은 원본과 같은 부모 배열의 바로 뒤에 넣는다. 그룹 자식의 x/y는 그룹 기준이라 최상위로 옮기면 위치가 틀어진다
+          const inserts: { parent: Element[]; idx: number; copy: Element }[] = [];
+          walk(r.elements, (el, parent, idx) => {
+            if (!sel.has(el.id)) return;
+            const c = structuredClone(el) as Element;
+            c.id = alloc(el.id); c.x = round(c.x + 5); c.y = round(c.y + 5);
+            if (c.type === "line") { c.x2 = round(c.x2 + 5); c.y2 = round(c.y2 + 5); }
+            if (c.type === "group") walk(c.children, (d) => { d.id = alloc(d.id); });   // 복사한 그룹의 자식도 새 id (중복 id는 검증 실패)
+            ids.push(c.id); inserts.push({ parent, idx, copy: c });
+          });
+          // 같은 부모 안에서는 뒤쪽 인덱스부터 넣어야 앞쪽 인덱스가 밀리지 않는다 (walk는 부모마다 인덱스 오름차순으로 방문)
+          for (const { parent, idx, copy } of inserts.reverse()) parent.splice(idx + 1, 0, copy);
+        });
         set({ selection: ids });
       },
       deleteSelected: () => { apply((r) => { const sel = new Set(get().selection); const prune = (els: Element[]) => { for (let i = els.length - 1; i >= 0; i--) { if (sel.has(els[i].id)) els.splice(i, 1); else if (els[i].type === "group") prune((els[i] as any).children); } }; prune(r.elements); }); set({ selection: [] }); },
@@ -83,12 +104,14 @@ export function createEditorStore(initial: Report) {
       replaceReport: (candidate) => {
         const res = safeParseReport(candidate);
         if (!res.success) { set({ problems: res.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) }); return false; }
+        // 저장 URL이 id로 정해지므로 id를 바꾸면 다른 레포트를 덮어쓴다
+        if (res.data.id !== initial.id) { set({ problems: [{ path: "id", message: "id는 바꿀 수 없습니다" }] }); return false; }
         apply((r) => { Object.assign(r, res.data); for (const k of Object.keys(r)) if (!(k in res.data)) delete (r as any)[k]; });
-        set({ selection: get().selection.filter((id) => !!get().findElement(id)) });
+        pruneSelection();
         return true;
       },
-      undo: () => { const h = undo(get().history); set({ history: h, report: h.present, dirty: true }); },
-      redo: () => { const h = redo(get().history); set({ history: h, report: h.present, dirty: true }); },
+      undo: () => travel(undo),
+      redo: () => travel(redo),
       setMode: (mode) => set({ mode }),
       markSaved: () => set({ dirty: false }),
     };

@@ -13,10 +13,13 @@ export class ExpressionError extends Error {
 
 export type DataContext = Record<string, unknown>;
 
-/** 프로토타입 키는 어디에 쓰여도(멤버, 문자열 키) 빠르게 거부한다 */
+/** 프로토타입 키는 식별자로 쓰이면 빠르게 거부한다. 문자열 키(`a['constructor']`)는 guardAst가 평가 시점에 막는다 */
 const FORBIDDEN_KEY_RE = /(^|[^\w$])(constructor|__proto__|prototype)(?![\w$])/;
-/** 전역 이름은 루트 식별자일 때만 거부한다. `order.window` 같은 멤버 이름은 데이터에서 읽는다 */
-const FORBIDDEN_ROOT_RE = /(^|[^\w.$])(globalThis|window|process|require|eval|Function)(?![\w$])/;
+/**
+ * 전역 이름은 루트 식별자이고 컨텍스트에 그 이름의 데이터가 없을 때만 거부한다.
+ * jexl은 루트 식별자를 컨텍스트에서만 읽으므로 `process`라는 데이터셋은 그대로 쓸 수 있고, `order.window` 같은 멤버 이름도 데이터에서 읽는다
+ */
+const FORBIDDEN_ROOT_RE = /(^|[^\w.$])(globalThis|window|process|require|eval|Function)(?![\w$])/g;
 const STRING_LITERAL_RE = /'(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"/g;
 const FORBIDDEN_KEYS = new Set<PropertyKey>(["constructor", "__proto__", "prototype"]);
 
@@ -140,7 +143,9 @@ function isForbiddenResult(value: unknown): boolean {
 }
 
 export function evaluate(expression: string, context: DataContext): unknown {
-  if (FORBIDDEN_KEY_RE.test(expression) || FORBIDDEN_ROOT_RE.test(expression.replace(STRING_LITERAL_RE, "''"))) {
+  const code = expression.replace(STRING_LITERAL_RE, "''");   // 문자열 리터럴 안의 단어는 식별자가 아니다
+  const unboundGlobal = [...code.matchAll(FORBIDDEN_ROOT_RE)].some((m) => !Object.hasOwn(context, m[2]));
+  if (FORBIDDEN_KEY_RE.test(code) || unboundGlobal) {
     throw new ExpressionError(expression, "forbidden identifier");
   }
   let result: unknown;

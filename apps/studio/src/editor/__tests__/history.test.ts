@@ -24,4 +24,11 @@ describe("history", () => {
     const h0 = createHistory({ a: 1 });
     expect(commit(h0, () => {})).toBe(h0);
   });
+  it("drops keys set to undefined so echoing the same JSON back is not a dead undo step", () => {
+    const h0 = createHistory<{ a: number; b?: string }>({ a: 1, b: "x" });
+    const h1 = commit(h0, (d) => { d.b = undefined; });
+    expect("b" in h1.present).toBe(false);
+    expect(h1.past).toHaveLength(1);
+    expect(commit(h1, (d) => { Object.assign(d, JSON.parse(JSON.stringify(h1.present))); })).toBe(h1);
+  });
 });

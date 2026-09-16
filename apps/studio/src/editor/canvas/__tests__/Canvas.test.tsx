@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, beforeAll } from "vitest";
+import { describe, it, expect, afterEach, beforeAll, vi } from "vitest";
 import { render, fireEvent, cleanup, act } from "@testing-library/react";
 import { parseReport } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../../store";
@@ -143,6 +143,49 @@ describe("Canvas", () => {
     fireEvent.pointerMove(canvas, ptr(px(10, 1), 0));                             // zoom 2에서 같은 px는 5mm
     fireEvent.pointerUp(canvas, ptr(px(10, 1), 0));
     expect(store.getState().findElement("a")).toMatchObject({ x: 15, y: 10 });
+  });
+
+  it("picks the element under a hollow rect unless the pointer is on the rect's stroke", () => {
+    // 품질보증서의 info-box처럼 채우기 없는 틀이 셀들보다 나중에 그려져 DOM 맨 위에 있는 경우
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "cell", type: "text", x: 10, y: 10, w: 40, h: 10, value: "V" },
+      { id: "frame", type: "rect", x: 5, y: 5, w: 50, h: 20, style: { stroke: "#000", strokeWidth: 0.3 } },
+    ]}));
+    const utils = mount(store, <Canvas zoom={1} />);
+    const node = (id: string) => utils.container.querySelector(`[data-element-id="${id}"]`) as HTMLElement;
+    const pageNode = utils.container.querySelector(".dp-page") as HTMLElement;
+    const stack = vi.fn<(x: number, y: number) => Element[]>();
+    Object.defineProperty(document, "elementsFromPoint", { value: stack, configurable: true });   // jsdom에는 없다
+    try {
+      // 틀 안쪽(셀 위) → 셀
+      stack.mockReturnValue([node("frame"), node("cell").firstElementChild!, node("cell"), pageNode]);
+      fireEvent.pointerDown(node("frame"), ptr(px(20), px(15)));
+      fireEvent.pointerUp(node("frame"), ptr(px(20), px(15)));
+      expect(stack).toHaveBeenLastCalledWith(px(20), px(15));
+      expect(store.getState().selection).toEqual(["cell"]);
+
+      // 틀의 선 위 → 틀
+      stack.mockReturnValue([node("frame"), pageNode]);
+      fireEvent.pointerDown(node("frame"), ptr(px(5.2), px(15)));
+      fireEvent.pointerUp(node("frame"), ptr(px(5.2), px(15)));
+      expect(store.getState().selection).toEqual(["frame"]);
+
+      // 틀 안쪽의 빈 곳 → 선택 해제
+      fireEvent.pointerDown(node("frame"), ptr(px(30), px(22)));
+      expect(store.getState().selection).toEqual([]);
+    } finally {
+      delete (document as { elementsFromPoint?: unknown }).elementsFromPoint;
+    }
+  });
+
+  it("rewrites asset:// image sources like preview and PDF do", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "stamp", type: "image", x: 0, y: 0, w: 10, h: 10, src: "asset://stamp" },
+      { id: "logo", type: "image", x: 20, y: 0, w: 10, h: 10, src: "https://example.com/logo.png" },
+    ]}));
+    const { container } = mount(store, <Canvas zoom={1} />);
+    expect(container.querySelector('[data-element-id="stamp"]')!.getAttribute("src")).toBe("/api/assets/stamp");
+    expect(container.querySelector('[data-element-id="logo"]')!.getAttribute("src")).toBe("https://example.com/logo.png");
   });
 
   it("discards the drag on pointercancel without committing", () => {

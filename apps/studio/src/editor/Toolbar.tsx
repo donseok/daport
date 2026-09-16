@@ -1,8 +1,10 @@
 "use client";
 import { useState } from "react";
+import { sampleParams } from "@/lib/data";
 import { useEditor } from "./store";
 
-export function Toolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number) => void }) {
+/** reportId는 열린 레포트의 id다. 편집 모델의 id가 아니라 이 값으로 요청 경로를 정해 다른 레포트를 덮어쓰지 않는다 */
+export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: number; setZoom: (z: number) => void }) {
   const report = useEditor((s) => s.report);
   const dirty = useEditor((s) => s.dirty);
   const mode = useEditor((s) => s.mode);
@@ -14,14 +16,13 @@ export function Toolbar({ zoom, setZoom }: { zoom: number; setZoom: (z: number) 
 
   const save = async () => {
     setBusy(true);
-    const r = await fetch(`/api/reports/${report.id}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(report) });
+    const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(report) });
     setBusy(false);
     if (r.ok) markSaved(); else alert((await r.json()).error);
   };
   const pdf = async () => {
-    const params: Record<string, unknown> = {};
-    for (const p of report.params) params[p.name] = p.default ?? "SAMPLE";
-    const r = await fetch(`/api/reports/${report.id}/pdf`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ report, params }) });
+    const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ report, params: sampleParams(report) }) });
     if (!r.ok) { alert((await r.json()).error); return; }
     const url = URL.createObjectURL(await r.blob());
     const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
