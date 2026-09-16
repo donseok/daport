@@ -23,6 +23,9 @@ importers:
       '@daport/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@daport/pdf':
+        specifier: workspace:*
+        version: link:../../packages/pdf
       '@daport/renderer':
         specifier: workspace:*
         version: link:../../packages/renderer

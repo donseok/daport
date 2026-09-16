@@ -16,6 +16,7 @@
   "dependencies": {
     "@daport/core": "workspace:*",
     "@daport/renderer": "workspace:*",
+    "@daport/pdf": "workspace:*",
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^1.1.0",
     "drizzle-orm": "^0.44.0",
