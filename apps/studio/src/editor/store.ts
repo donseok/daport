@@ -63,7 +63,8 @@ export function createEditorStore(initial: Report) {
     const travel = (step: (h: History<Report>) => History<Report>) => {
       const h = step(get().history);
       if (h === get().history) return;   // 되돌릴 것이 없으면 dirty를 바꾸지 않는다
-      set({ history: h, report: h.present, dirty: true });
+      // 편집기 텍스트가 스토어 텍스트로 바뀌므로 이전 텍스트의 검증 오류는 더 이상 맞지 않는다
+      set({ history: h, report: h.present, dirty: true, problems: [] });
       pruneSelection();
     };
     return {
@@ -107,6 +108,8 @@ export function createEditorStore(initial: Report) {
         if (!res.success) { set({ problems: res.error.issues.map((i) => ({ path: i.path.join("."), message: i.message })) }); return false; }
         // 저장 URL이 id로 정해지므로 id를 바꾸면 다른 레포트를 덮어쓴다
         if (res.data.id !== initial.id) { set({ problems: [{ path: "id", message: "id는 바꿀 수 없습니다" }] }); return false; }
+        // 모델이 그대로여도(잘못 고친 값을 원래대로 되돌린 경우) 텍스트는 이제 올바르므로 오류를 지운다. apply는 바뀔 때만 지운다
+        set({ problems: [] });
         apply((r) => { Object.assign(r, res.data); for (const k of Object.keys(r)) if (!(k in res.data)) delete (r as any)[k]; });
         pruneSelection();
         return true;

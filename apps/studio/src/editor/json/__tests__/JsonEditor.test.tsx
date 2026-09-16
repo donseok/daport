@@ -195,6 +195,27 @@ describe("JsonEditor", () => {
     expect(screen.queryByText(/JSON 구문 오류/)).toBeNull();
   });
 
+  it("hides the schema error banner when the text is changed back to the current report or undo replaces it", async () => {
+    const { store, mountEditor } = setup();
+    const editor = mountEditor();
+    const original = editor.getValue();
+
+    act(() => editor.type(original.replace('"w": 50', '"w": -5')));
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(screen.queryByText(/elements\.0\.w/)).not.toBeNull();
+    act(() => editor.type(original));                          // 원래 값으로 되돌린다. 모델은 바뀌지 않는다
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(screen.queryByText(/elements\.0\.w/)).toBeNull();
+
+    act(() => store.getState().updatePage({ width: 120 }));
+    act(() => editor.type(editor.getValue().replace('"w": 50', '"w": -5')));
+    await act(async () => { vi.advanceTimersByTime(500); });
+    expect(screen.queryByText(/elements\.0\.w/)).not.toBeNull();
+    act(() => store.getState().undo());                         // 되돌리기가 편집기 텍스트를 스토어 텍스트로 바꾼다
+    expect(titleOf(editor.getValue()).w).toBe(50);
+    expect(screen.queryByText(/elements\.0\.w/)).toBeNull();
+  });
+
   it("keeps half-typed invalid JSON when a store change lands during the debounce", async () => {
     const { store, mountEditor } = setup();
     const editor = mountEditor();

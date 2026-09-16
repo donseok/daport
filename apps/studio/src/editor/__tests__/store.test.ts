@@ -91,6 +91,33 @@ describe("editor store", () => {
     expect(store.getState().problems.length).toBeGreaterThan(0);
     expect(store.getState().report.name).toBe("new");   // 마지막 유효 모델 유지
   });
+  it("clears problems when valid JSON identical to the current report replaces invalid input", () => {
+    // 편집기에서 잘못 고친 값을 원래대로 되돌리면 모델은 그대로지만 오류 배너는 사라져야 한다
+    const same = JSON.parse(JSON.stringify(store.getState().report));
+    const invalid = JSON.parse(JSON.stringify(same)); invalid.elements[0].w = -5;
+    expect(store.getState().replaceReport(invalid)).toBe(false);
+    expect(store.getState().problems.length).toBeGreaterThan(0);
+    const history = store.getState().history;
+    expect(store.getState().replaceReport(same)).toBe(true);
+    expect(store.getState().problems).toEqual([]);
+    expect(store.getState().history).toBe(history);   // 같은 내용이면 히스토리는 그대로
+    // id를 바꿨다가 되돌린 경우도 같다
+    expect(store.getState().replaceReport({ ...same, id: "other" })).toBe(false);
+    expect(store.getState().problems).toEqual([{ path: "id", message: "id는 바꿀 수 없습니다" }]);
+    expect(store.getState().replaceReport(same)).toBe(true);
+    expect(store.getState().problems).toEqual([]);
+  });
+  it("clears problems on undo and redo, which replace the editor text with store text", () => {
+    store.getState().updatePage({ width: 50 });
+    expect(store.getState().replaceReport({ ...report, elements: [{ id: "z", type: "nope" }] })).toBe(false);
+    expect(store.getState().problems.length).toBeGreaterThan(0);
+    store.getState().undo();
+    expect(store.getState().problems).toEqual([]);
+    expect(store.getState().replaceReport({ ...report, elements: [{ id: "z", type: "nope" }] })).toBe(false);
+    store.getState().redo();
+    expect(store.getState().report.page.width).toBe(50);
+    expect(store.getState().problems).toEqual([]);
+  });
   it("updates page size", () => {
     store.getState().updatePage({ width: 297, height: 210 });
     expect(store.getState().report.page).toMatchObject({ width: 297, height: 210 });
