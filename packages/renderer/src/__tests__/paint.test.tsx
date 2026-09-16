@@ -35,4 +35,12 @@ describe("paint", () => {
     expect(html).toContain("/fonts/Pretendard-Regular.otf");
     expect(html).toContain('class="dp-page"');
   });
+  it("keeps an empty text line as a non-breaking space", () => {
+    const r = parseReport({ id: "r2", version: 1, page: { width: 60, height: 40 }, elements: [
+      { id: "m", type: "text", x: 5, y: 5, w: 40, h: 20, value: "a\n\nb", style: { fontSize: 12 } },
+    ]});
+    const html = renderToStaticMarkup(<PaintPages pages={layout(r, { params: {} })} />);
+    expect(html).toContain("<div>a</div><div>\u00a0</div><div>b</div>");
+    expect(html).not.toContain("<div> </div>");
+  });
 });

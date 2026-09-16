@@ -17,7 +17,7 @@ function Item({ item }: { item: PlacedItem }) {
           color: s.color, textAlign: s.align, lineHeight: `${item.lineHeight}mm`, padding: `${s.padding}mm`,
           background: s.fill, border: s.stroke ? `${s.strokeWidth}mm solid ${s.stroke}` : undefined,
           display: "flex", flexDirection: "column", justifyContent: justify }}>
-          {item.lines.map((l, n) => <div key={n}>{l === "" ? " " : l}</div>)}
+          {item.lines.map((l, n) => <div key={n}>{l === "" ? " " : l}</div>)}
         </div>
       );
     }
