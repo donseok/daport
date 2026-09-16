@@ -25,13 +25,16 @@ function Item({ item }: { item: PlacedItem }) {
       return <div {...common} style={{ ...box(item), background: s.fill, borderRadius: `${s.radius}mm`,
         border: s.stroke ? `${s.strokeWidth}mm solid ${s.stroke}` : undefined }} />;
     case "line": {
-      const minX = Math.min(item.x, item.x2), minY = Math.min(item.y, item.y2);
-      const w = Math.max(Math.abs(item.x2 - item.x), 0.01), h = Math.max(Math.abs(item.y2 - item.y), 0.01);
+      // SVG 상자를 선 두께의 절반씩 넓힌다. 높이(폭) 0에 가까운 SVG는 Chromium이 그리지 않아 가로·세로선이 사라지고,
+      // 캔버스에서 잡을 영역도 없다. viewBox 단위가 mm이므로 strokeWidth도 mm로 그려진다 (non-scaling-stroke를 쓰면 px가 된다)
+      const sw = s.strokeWidth, p = sw / 2;
+      const left = Math.min(item.x, item.x2) - p, top = Math.min(item.y, item.y2) - p;
+      const w = Math.abs(item.x2 - item.x) + sw, h = Math.abs(item.y2 - item.y) + sw;
       return (
-        <svg {...common} className={cls + " dp-line"} style={{ left: `${minX}mm`, top: `${minY}mm`, width: `${w}mm`, height: `${h}mm` }}
+        <svg {...common} className={cls + " dp-line"} style={{ left: `${left}mm`, top: `${top}mm`, width: `${w}mm`, height: `${h}mm` }}
           viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
-          <line x1={item.x - minX} y1={item.y - minY} x2={item.x2 - minX} y2={item.y2 - minY}
-            stroke={s.stroke ?? "#000"} strokeWidth={s.strokeWidth} vectorEffect="non-scaling-stroke" />
+          <line x1={item.x - left} y1={item.y - top} x2={item.x2 - left} y2={item.y2 - top}
+            stroke={s.stroke ?? "#000"} strokeWidth={sw} />
         </svg>
       );
     }

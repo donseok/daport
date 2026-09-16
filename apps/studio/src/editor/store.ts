@@ -30,7 +30,8 @@ export type EditorState = {
   undo(): void;
   redo(): void;
   setMode(m: "design" | "preview"): void;
-  markSaved(): void;
+  /** saved는 저장 요청에 실어 보낸 모델이다. 요청 중에 편집이 있었으면(참조가 다르면) dirty로 남긴다 */
+  markSaved(saved: Report): void;
 };
 
 function walk(els: Element[], fn: (el: Element, parent: Element[] , idx: number) => boolean | void): boolean {
@@ -113,7 +114,7 @@ export function createEditorStore(initial: Report) {
       undo: () => travel(undo),
       redo: () => travel(redo),
       setMode: (mode) => set({ mode }),
-      markSaved: () => set({ dirty: false }),
+      markSaved: (saved) => set({ dirty: get().report !== saved }),   // 커밋·undo·redo는 늘 새 객체를 만든다
     };
   });
 }

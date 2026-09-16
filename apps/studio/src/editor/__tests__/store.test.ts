@@ -99,7 +99,14 @@ describe("editor store", () => {
     expect(store.getState().dirty).toBe(false);
     store.getState().updatePage({ width: 50 });
     expect(store.getState().dirty).toBe(true);
-    store.getState().markSaved();
+    store.getState().markSaved(store.getState().report);
     expect(store.getState().dirty).toBe(false);
+  });
+  it("stays dirty when the model changed after the saved snapshot was taken", () => {
+    store.getState().updatePage({ width: 50 });
+    const saved = store.getState().report;           // 저장 요청에 실린 모델
+    store.getState().updatePage({ width: 60 });      // 요청이 끝나기 전의 편집
+    store.getState().markSaved(saved);
+    expect(store.getState().dirty).toBe(true);
   });
 });

@@ -18,7 +18,9 @@ function contentDisposition(report: Report): string {
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await req.json().catch(() => ({}));
+  // JSON null은 빈 본문과 같게 본다. 객체가 아닌 본문은 요청 오류다 (null.report를 읽어 500이 나지 않게)
+  const body = (await req.json().catch(() => null)) ?? {};
+  if (typeof body !== "object") return NextResponse.json({ error: "요청 본문은 JSON 객체여야 합니다" }, { status: 400 });
 
   // 스펙 10장: 모델 검증·파라미터·표현식 오류는 요청 문제(400), 렌더 실패(Chromium 크래시 1회 재시도 후)는 500
   let report: Report | null;

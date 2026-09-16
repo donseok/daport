@@ -1,10 +1,11 @@
 "use client";
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { sampleParams } from "@/lib/data";
-import { useEditor } from "./store";
+import { EditorContext, useEditor } from "./store";
 
 /** reportId는 열린 레포트의 id다. 편집 모델의 id가 아니라 이 값으로 요청 경로를 정해 다른 레포트를 덮어쓰지 않는다 */
 export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: number; setZoom: (z: number) => void }) {
+  const store = useContext(EditorContext)!;
   const report = useEditor((s) => s.report);
   const dirty = useEditor((s) => s.dirty);
   const mode = useEditor((s) => s.mode);
@@ -15,10 +16,19 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
+    // 보낸 모델을 기억해 두고, 요청이 끝났을 때 그 사이 편집이 있으면 저장 안 됨(*)으로 남긴다
+    const saved = store.getState().report;
     setBusy(true);
-    const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(report) });
-    setBusy(false);
-    if (r.ok) markSaved(); else alert((await r.json()).error);
+    try {
+      const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(saved) });
+      if (r.ok) { markSaved(saved); return; }
+      const body = await r.json().catch(() => null);
+      alert(body?.error ?? `저장 실패 (HTTP ${r.status})`);
+    } catch (e) {
+      alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setBusy(false);
+    }
   };
   const pdf = async () => {
     const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },

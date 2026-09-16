@@ -11,6 +11,10 @@ export function JsonEditor() {
   const [syntaxError, setSyntaxError] = useState<string | null>(null);
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // @monaco-editor/react는 첫 렌더의 onMount만 기억해 Monaco 로드 후 호출한다. 그 클로저의 report는 첫 렌더 값이라,
+  // 로드 중에 한 캔버스 편집이 편집기에 빠진 채 다음 JSON 편집으로 되돌려진다. 마운트 시점의 최신 report를 ref로 읽는다
+  const reportRef = useRef(report);
+  reportRef.current = report;
 
   // 스토어 → 편집기
   useEffect(() => {
@@ -22,7 +26,7 @@ export function JsonEditor() {
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
     (window as any).monaco = monaco;   // E2E가 편집기 모델을 직접 읽고 쓴다 (Monaco는 보이는 줄만 DOM에 그린다)
-    editor.setValue(toEditorText(report));
+    editor.setValue(toEditorText(reportRef.current));
     fetch("/api/schema").then((r) => r.json()).then((schema) => {
       monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: true, schemas: [{ uri: "daport://report", fileMatch: ["*"], schema }] });
     });

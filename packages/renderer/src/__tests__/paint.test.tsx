@@ -25,6 +25,27 @@ describe("paint", () => {
     expect(html).toContain("barcode:qr");
     expect(html).toContain("<svg");           // line은 svg
   });
+  it("gives a horizontal or vertical line an SVG box at least as thick as its stroke (mm, not screen px)", () => {
+    const r = parseReport({ id: "r5", version: 1, page: { width: 60, height: 40 }, elements: [
+      { id: "h", type: "line", x: 5, y: 20, w: 50, h: 0, x2: 55, y2: 20, style: { stroke: "#000", strokeWidth: 0.5 } },
+      { id: "v", type: "line", x: 30, y: 5, w: 0, h: 30, x2: 30, y2: 35, style: { stroke: "#000", strokeWidth: 2 } },
+    ]});
+    const html = renderToStaticMarkup(<PaintPages pages={layout(r, { params: {} })} />);
+    const svg = (id: string) => {
+      const m = html.match(new RegExp(`<svg[^>]*data-element-id="${id}"[^>]*>(.*?)</svg>`));
+      expect(m).not.toBeNull();
+      const tag = m![0];
+      const mm = (prop: string) => Number(tag.match(new RegExp(`${prop}:([\\d.]+)mm`))![1]);
+      return { tag, left: mm("left"), top: mm("top"), width: mm("width"), height: mm("height") };
+    };
+    const h = svg("h");
+    expect(h.height).toBeGreaterThanOrEqual(0.5);          // 0.01mm 높이의 SVG는 Chromium이 그리지 않는다
+    expect(h.top).toBeCloseTo(19.75); expect(h.left).toBeCloseTo(4.75); expect(h.width).toBeCloseTo(50.5);
+    const v = svg("v");
+    expect(v.width).toBeGreaterThanOrEqual(2);
+    expect(v.left).toBeCloseTo(29); expect(v.top).toBeCloseTo(4); expect(v.height).toBeCloseTo(32);
+    expect(html).not.toContain("vector-effect");            // non-scaling-stroke면 strokeWidth가 mm가 아니라 화면 px로 읽힌다
+  });
   it("emits @page size from page dims", () => {
     expect(pageCss(60, 40)).toContain("@page{size:60mm 40mm;margin:0}");
   });

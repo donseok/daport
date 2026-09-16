@@ -26,6 +26,10 @@ describe("evaluate", () => {
     expect(evaluate("upper('ab')", ctx)).toBe("AB");
     expect(evaluate("default(order.MISSING, '-')", ctx)).toBe("-");
   });
+  it("limits pad length so an expression cannot allocate a huge string", () => {
+    expect(evaluate("pad('', 1000, '0')", ctx)).toHaveLength(1000);
+    expect(() => evaluate("pad('', 400000000)", ctx)).toThrow(ExpressionError);
+  });
   it("blocks prototype and global access", () => {
     expect(() => evaluate("order.constructor", ctx)).toThrow(ExpressionError);
     expect(() => evaluate("order.__proto__", ctx)).toThrow(ExpressionError);

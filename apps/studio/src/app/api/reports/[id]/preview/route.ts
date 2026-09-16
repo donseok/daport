@@ -6,7 +6,9 @@ import { resolveAssetUrls } from "@/lib/assets";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const body = await req.json().catch(() => ({}));
+  // JSON null은 빈 본문과 같게 본다. 객체가 아닌 본문은 요청 오류다
+  const body = (await req.json().catch(() => null)) ?? {};
+  if (typeof body !== "object") return NextResponse.json({ error: "요청 본문은 JSON 객체여야 합니다" }, { status: 400 });
   try {
     const report = body.report ? parseReport(body.report) : await getStore().get(id);
     if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });

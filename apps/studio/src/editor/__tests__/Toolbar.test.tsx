@@ -30,6 +30,34 @@ describe("Toolbar", () => {
     expect(fetchMock.mock.calls[0][1]?.method).toBe("PUT");
   });
 
+  it("keeps edits made while the save request is in flight marked unsaved", async () => {
+    const { store, fetchMock } = setup();
+    let respond!: (r: Response) => void;
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { respond = resolve; }));
+    const sent = store.getState().report;
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual(sent);
+
+    act(() => store.getState().updatePage({ width: 120 }));   // 요청이 진행 중일 때 편집
+    await act(async () => { respond(new Response("{}", { status: 200 })); });
+
+    await waitFor(() => expect((screen.getByTestId("save") as HTMLButtonElement).disabled).toBe(false));
+    expect(store.getState().dirty).toBe(true);
+    expect(screen.getByText(/\*$/)).toBeTruthy();
+  });
+
+  it("re-enables save and reports the error when the request fails", async () => {
+    const { store, fetchMock } = setup();
+    const alertMock = vi.fn();
+    vi.stubGlobal("alert", alertMock);
+    fetchMock.mockImplementationOnce(async () => { throw new TypeError("Failed to fetch"); });
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(alertMock).toHaveBeenCalledWith(expect.stringContaining("Failed to fetch")));
+    await waitFor(() => expect((screen.getByTestId("save") as HTMLButtonElement).disabled).toBe(false));
+    expect(store.getState().dirty).toBe(true);
+  });
+
   it("requests the PDF from the opened report's route with the shared sample params", async () => {
     const { fetchMock } = setup();
     Object.assign(URL, { createObjectURL: vi.fn(() => "blob:pdf"), revokeObjectURL: vi.fn() });

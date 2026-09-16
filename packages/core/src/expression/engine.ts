@@ -67,6 +67,8 @@ function checkKey(key: unknown): unknown {
   return k;
 }
 
+const MAX_PAD = 1000;
+
 function createJexl(): JexlInstance {
   const j = new JexlCtor();
   j.addFunction(KEY_GUARD, checkKey);
@@ -75,7 +77,10 @@ function createJexl(): JexlInstance {
   j.addFunction("count", (rows: unknown) => (Array.isArray(rows) ? rows.length : 0));
   j.addFunction("formatNumber", formatNumber);
   j.addFunction("formatDate", formatDate);
-  j.addFunction("pad", (v: unknown, len: number, ch = " ") => String(v ?? "").padStart(len, ch));
+  j.addFunction("pad", (v: unknown, len: number, ch = " ") => {
+    if (Number(len) > MAX_PAD) throw new Error(`pad length must be at most ${MAX_PAD}`);   // 서버 렌더 메모리 보호
+    return String(v ?? "").padStart(len, ch);
+  });
   j.addFunction("upper", (v: unknown) => String(v ?? "").toUpperCase());
   j.addFunction("lower", (v: unknown) => String(v ?? "").toLowerCase());
   j.addFunction("default", (v: unknown, fb: unknown) => (v === null || v === undefined || v === "" ? fb : v));

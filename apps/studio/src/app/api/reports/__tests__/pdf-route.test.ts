@@ -29,6 +29,14 @@ describe("POST /api/reports/[id]/pdf", () => {
     expect((await call({ report, params: { lot: "L1" } })).status).toBe(400);
   });
 
+  it("treats a JSON null body like an empty body and rejects a non-object body with 400, never 500", async () => {
+    const res = await call(null);
+    expect(res.status).toBe(404);                 // 본문 모델이 없으면 저장된 레포트를 찾는다 (qc는 없다)
+    expect((await call(5)).status).toBe(400);
+    expect((await call("report")).status).toBe(400);
+    expect(renderPdf).not.toHaveBeenCalled();
+  });
+
   it("returns 500 when rendering fails for another reason such as a Chromium crash", async () => {
     renderPdf.mockRejectedValue(new Error("Target page, context or browser has been closed"));
     const res = await call({ report, params: { lot: "L1" } });

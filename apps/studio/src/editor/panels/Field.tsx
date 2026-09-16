@@ -2,9 +2,10 @@ import type { ReactNode } from "react";
 export function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="flex items-center gap-2 text-xs"><span className="w-16 shrink-0 text-neutral-500">{label}</span>{children}</label>;
 }
-export function NumberField({ label, value, onChange, step = 0.5 }: { label: string; value: number; onChange: (v: number) => void; step?: number }) {
-  return <Field label={label}><input aria-label={label} type="number" step={step} value={value} className="w-full border rounded px-1 py-0.5"
-    onChange={(e) => { const n = e.target.valueAsNumber; if (Number.isFinite(n)) onChange(n); }} /></Field>;   // 빈 값·입력 중인 "-" 등은 NaN이라 커밋하지 않는다
+/** min보다 작은 값은 커밋하지 않는다. 스토어의 편집은 스키마 검증을 거치지 않아, 음수 크기 등이 들어가면 저장이 400으로 실패한다 */
+export function NumberField({ label, value, onChange, step = 0.5, min }: { label: string; value: number; onChange: (v: number) => void; step?: number; min?: number }) {
+  return <Field label={label}><input aria-label={label} type="number" step={step} min={min} value={value} className="w-full border rounded px-1 py-0.5"
+    onChange={(e) => { const n = e.target.valueAsNumber; if (Number.isFinite(n) && (min === undefined || n >= min)) onChange(n); }} /></Field>;   // 빈 값·입력 중인 "-" 등은 NaN이라 커밋하지 않는다
 }
 export function TextField({ label, value, onChange, multiline = false }: { label: string; value: string; onChange: (v: string) => void; multiline?: boolean }) {
   return <Field label={label}>{multiline
