@@ -91,6 +91,42 @@ describe("forbidden identifier guard", () => {
     expectBlocked("items[.QTY > 1]['con' + 'structor']", ctx);
     expectBlocked("items[.QTY > 1]['__pro' + 'to__']", ctx);
   });
+  // 중간 단계에서 읽은 프로토타입 키도 막아야 한다 (예: 생성자 이름 "String"이 새어 나오면 실패)
+  const pctx = {
+    ...ctx,
+    order: { ...ctx.order, FLAG: true },
+    rows: rowsProxy([{ DT: new Date("2026-09-16T00:00:00Z"), NAME: "A" }]),
+  };
+  it.each([
+    // 원시값(문자열·숫자·불리언)
+    "order.CUSTOMER_NAME['con' + 'structor'].name",
+    "params.orderNo['con' + 'structor'].name",
+    "order.QTY['con' + 'structor'].name",
+    "order.FLAG['con' + 'structor'].name",
+    "order.CUSTOMER_NAME['__pro' + 'to__'].length",
+    // 리터럴에서 출발한 값
+    "{a: 'x'}.a['con' + 'structor'].name",
+    // jexl 필터가 새로 만든 배열
+    "items[.QTY > 1]['con' + 'structor'].name",
+    // rowsProxy의 쓰기 불가 필드를 괄호로 읽은 값
+    "rows['DT']['con' + 'structor'].name",
+    // 대괄호 안에서 다른 방식으로 계산된 키
+    "order.CUSTOMER_NAME[lower('CONSTRUCTOR')].name",
+    "order.CUSTOMER_NAME[['con' + 'structor']].name",
+    "order.CUSTOMER_NAME[order.QTY > 1 ? 'con' + 'structor' : ''].name",
+    // 등록 함수가 필드 이름으로 속성을 읽는 경우
+    "sum(items, 'con' + 'structor')",
+  ])("blocks prototype keys read partway through: %s", (expression) => {
+    expectBlocked(expression, pctx);
+  });
+  it("keeps legitimate computed keys working", () => {
+    const kctx = { ...ctx, params: { ...ctx.params, key: "QTY" } };
+    expect(evaluate("order[params.key]", kctx)).toBe(3);
+    expect(evaluate("order['QT' + 'Y']", kctx)).toBe(3);
+    expect(evaluate("items[count(items) - 1].QTY", kctx)).toBe(2);
+    expect(evaluate("items[.QTY > 1][0].QTY", kctx)).toBe(2);
+    expect(evaluate("count(items[order.QTY > 2])", kctx)).toBe(2);
+  });
   it("resolves global names used as member names from data", () => {
     expect(evaluate("order.window", { order: { window: "W1" } })).toBe("W1");
     expect(evaluate("order.process", { order: { process: "P" } })).toBe("P");
