@@ -15,6 +15,7 @@ export type EditorState = {
   mode: "design" | "preview";
   // queries
   findElement(id: string): Element | undefined;
+  allocateId(base: string): string;   // 트리 전체에서 비어 있는 `${base}-n`
   // mutations
   select(ids: string[]): void;
   toggleSelect(id: string): void;
@@ -60,6 +61,7 @@ export function createEditorStore(initial: Report) {
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
       findElement: (id) => { let found: Element | undefined; walk(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
+      allocateId: (base) => newId(base, get().report),
       select: (ids) => set({ selection: ids }),
       toggleSelect: (id) => set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
       updateElement: (id, patch) => apply((r) => { walk(r.elements, (el) => { if (el.id === id) { Object.assign(el, patch); return true; } }); }),
