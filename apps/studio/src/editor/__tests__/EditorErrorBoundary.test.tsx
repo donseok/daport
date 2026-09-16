@@ -31,4 +31,25 @@ describe("EditorErrorBoundary", () => {
     expect(screen.getByText("canvas ok")).toBeTruthy();
     expect((screen.getByTestId("sibling") as HTMLTextAreaElement).value).toBe("unsaved");
   });
+
+  it("clears the fallback on its own when the reset key changes (the report is fixed or the mode switches)", () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    function Body({ value }: { value: string }) {
+      if (value === "broken") throw new TypeError("renderer boom");
+      return <div>{value}</div>;
+    }
+    const { rerender } = render(<EditorErrorBoundary resetKey="broken"><Body value="broken" /></EditorErrorBoundary>);
+    expect(screen.getByRole("alert")).toBeTruthy();
+
+    rerender(<EditorErrorBoundary resetKey="broken"><Body value="broken" /></EditorErrorBoundary>);   // 키가 같으면 그대로
+    expect(screen.getByRole("alert")).toBeTruthy();
+
+    rerender(<EditorErrorBoundary resetKey="fixed"><Body value="fixed" /></EditorErrorBoundary>);
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByText("fixed")).toBeTruthy();
+
+    // 키가 바뀌는 바로 그 렌더에서 오류가 나도 폴백을 보이고 무한히 다시 그리지 않는다
+    rerender(<EditorErrorBoundary resetKey="broken"><Body value="broken" /></EditorErrorBoundary>);
+    expect(screen.getByRole("alert").textContent).toContain("renderer boom");
+  });
 });

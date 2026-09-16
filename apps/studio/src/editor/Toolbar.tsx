@@ -3,6 +3,13 @@ import { useContext, useState } from "react";
 import { sampleParams } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
 
+/** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
+async function failureMessage(r: Response, label: string): Promise<string> {
+  const body: unknown = await r.json().catch(() => null);
+  const error = body && typeof body === "object" ? (body as { error?: unknown }).error : undefined;
+  return typeof error === "string" ? error : `${label} 실패 (HTTP ${r.status})`;
+}
+
 /** reportId는 열린 레포트의 id다. 편집 모델의 id가 아니라 이 값으로 요청 경로를 정해 다른 레포트를 덮어쓰지 않는다 */
 export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: number; setZoom: (z: number) => void }) {
   const store = useContext(EditorContext)!;
@@ -22,8 +29,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(saved) });
       if (r.ok) { markSaved(saved); return; }
-      const body = await r.json().catch(() => null);
-      alert(body?.error ?? `저장 실패 (HTTP ${r.status})`);
+      alert(await failureMessage(r, "저장"));
     } catch (e) {
       alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
@@ -35,11 +41,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ report, params: sampleParams(report) }) });
-      if (!r.ok) {
-        const body = await r.json().catch(() => null);   // 프록시·서버 오류 페이지는 JSON이 아니다
-        alert(body?.error ?? `PDF 실패 (HTTP ${r.status})`);
-        return;
-      }
+      if (!r.ok) { alert(await failureMessage(r, "PDF")); return; }
       const url = URL.createObjectURL(await r.blob());
       const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
       a.click();
