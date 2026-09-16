@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/report-store";
+import { getStore, NotFoundError } from "@/lib/report-store";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -13,6 +13,6 @@ export async function PUT(req: Request, { params }: Ctx) {
     return NextResponse.json(await getStore().update((await params).id, await req.json()));
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: /not found/.test(msg) ? 404 : 400 });
+    return NextResponse.json({ error: msg }, { status: e instanceof NotFoundError ? 404 : 400 });
   }
 }
