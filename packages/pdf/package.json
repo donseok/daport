@@ -11,11 +11,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@daport/core": "workspace:*",
     "@daport/renderer": "workspace:*",
     "playwright": "^1.55.0"
   },
   "devDependencies": {
+    "@daport/core": "workspace:*",
     "pdf-lib": "^1.17.1",
     "pdf-to-img": "^4.4.0",
     "pixelmatch": "^7.1.0",

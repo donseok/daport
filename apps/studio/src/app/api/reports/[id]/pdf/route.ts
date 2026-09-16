@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { resolveData, parseReport, ExpressionError, type Report, type DataContext } from "@daport/core";
 import { renderPdf } from "@daport/pdf";
-import { getStore } from "@/lib/report-store";
+import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
 
 export const maxDuration = 60;
@@ -25,6 +25,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // 스펙 10장: 모델 검증·파라미터·표현식 오류는 요청 문제(400), 렌더 실패(Chromium 크래시 1회 재시도 후)는 500
   let report: Report | null;
   try {
+    await ready();
     report = body.report ? parseReport(body.report) : await getStore().get(id);
   } catch (e) {
     return fail(e, e instanceof ZodError ? 400 : 500);

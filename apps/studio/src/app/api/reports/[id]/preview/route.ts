@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveData, parseReport } from "@daport/core";
 import { renderToHtml } from "@daport/renderer";
-import { getStore } from "@/lib/report-store";
+import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -10,6 +10,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = (await req.json().catch(() => null)) ?? {};
   if (typeof body !== "object") return NextResponse.json({ error: "요청 본문은 JSON 객체여야 합니다" }, { status: 400 });
   try {
+    await ready();
     const report = body.report ? parseReport(body.report) : await getStore().get(id);
     if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });
     const origin = new URL(req.url).origin;

@@ -1,9 +1,12 @@
 import type { Page } from "playwright";
-import type { Report, DataContext } from "@daport/core";
-import { renderToHtml } from "@daport/renderer";
+import { renderToHtml, type Report, type DataContext } from "@daport/renderer";
 import { getBrowser } from "./pool";
 import { fontBaseUrl, serveFonts } from "./fonts";
+import { isBrowserCrash } from "./crash";
 export { closePool } from "./pool";
+
+/** 라우트 maxDuration(60초) 안에 크래시 재시도까지 두 번 시도가 들어가도록 문서 로드를 묶는다 (page.pdf에는 timeout 옵션이 없다) */
+const SET_CONTENT_TIMEOUT_MS = 20_000;
 
 async function withPage<T>(html: string, fn: (page: Page) => Promise<T>): Promise<T> {
   const b = await getBrowser();
@@ -11,7 +14,7 @@ async function withPage<T>(html: string, fn: (page: Page) => Promise<T>): Promis
   try {
     await serveFonts(ctx);
     const page = await ctx.newPage();
-    await page.setContent(html, { waitUntil: "load" });
+    await page.setContent(html, { waitUntil: "load", timeout: SET_CONTENT_TIMEOUT_MS });
     await page.evaluate(() => document.fonts.ready);
     return await fn(page);
   } finally {
@@ -27,7 +30,7 @@ export async function renderPdf(report: Report, data: DataContext, attempt = 0):
       printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 },
     }));
   } catch (e) {
-    if (attempt === 0) return renderPdf(report, data, 1);     // Chromium 크래시 1회 재시도
+    if (attempt === 0 && isBrowserCrash(e)) return renderPdf(report, data, 1);     // Chromium 크래시·끊김만 1회 재시도
     throw e;
   }
 }
