@@ -1,5 +1,6 @@
 export const VERSION = "0.0.1";
 export * from "./units";
+export * from "./schema/color";
 export * from "./schema/style";
 export * from "./schema/elements";
 export * from "./schema/report";

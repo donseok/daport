@@ -8,9 +8,9 @@ const { GET: getAsset } = await import("../[id]/route");
 const { GET: listAssets, POST: uploadAsset } = await import("../route");
 
 const ctx = (id: string) => ({ params: Promise.resolve({ id }) });
-const upload = () => {
+const upload = (file = new File(["png"], "stamp.png", { type: "image/png" })) => {
   const form = new FormData();
-  form.set("file", new File(["png"], "stamp.png", { type: "image/png" }));
+  form.set("file", file);
   return new Request("http://localhost/api/assets", { method: "POST", body: form });
 };
 
@@ -62,5 +62,45 @@ describe("GET /api/assets/[id] with storage configured", () => {
     const res = await getAsset(new Request("http://localhost/api/assets/a1"), ctx("a1"));
     expect(res.status).toBe(502);
     expect((await res.json()).error).toContain("Access denied");
+  });
+});
+
+describe("POST /api/assets with storage configured", () => {
+  beforeEach(() => { process.env.BLOB_READ_WRITE_TOKEN = "vercel_blob_rw_test"; });
+
+  it("uploads an image with its content type", async () => {
+    put.mockResolvedValue({ url: "https://blob.example/assets/x-stamp.png" });
+    const res = await uploadAsset(upload());
+    expect(res.status).toBe(201);
+    expect(await res.json()).toMatchObject({ url: "https://blob.example/assets/x-stamp.png", name: "stamp.png" });
+    expect(put).toHaveBeenCalledWith(expect.stringMatching(/^assets\/.+-stamp\.png$/), expect.any(File),
+      expect.objectContaining({ contentType: "image/png" }));
+  });
+
+  it("answers 413 JSON for a file larger than 5 MB without calling the storage", async () => {
+    const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], "big.png", { type: "image/png" });
+    const res = await uploadAsset(upload(big));
+    expect(res.status).toBe(413);
+    expect(await res.json()).toEqual({ error: "file too large" });
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it("accepts a file of exactly 5 MB", async () => {
+    put.mockResolvedValue({ url: "https://blob.example/assets/x-edge.png" });
+    const edge = new File([new Uint8Array(5 * 1024 * 1024)], "edge.png", { type: "image/png" });
+    expect((await uploadAsset(upload(edge))).status).toBe(201);
+  });
+
+  it.each(["text/html", "application/octet-stream", ""])("answers 415 JSON for content type %j without calling the storage", async (type) => {
+    const res = await uploadAsset(upload(new File(["<script>x</script>"], "evil.html", { type })));
+    expect(res.status).toBe(415);
+    expect(await res.json()).toEqual({ error: "unsupported file type" });
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it.each(["image/jpeg", "image/webp", "image/gif", "image/svg+xml"])("accepts %s", async (type) => {
+    put.mockResolvedValue({ url: "https://blob.example/assets/x-a" });
+    expect((await uploadAsset(upload(new File(["x"], "a", { type })))).status).toBe(201);
+    expect(put).toHaveBeenCalledWith(expect.any(String), expect.any(File), expect.objectContaining({ contentType: type }));
   });
 });
