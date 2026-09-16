@@ -49,4 +49,13 @@ describe("getStore", () => {
     const b = (await import("../report-store")).getStore();
     expect(b).toBe(a);
   });
+  it("seeds the in-memory store with the quality-cert fixture; ready() resolves once it is in", async () => {
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    const mod = await import("../report-store");
+    const store = mod.getStore();
+    await mod.ready();
+    expect((await store.get("quality-cert"))?.name).toBe("품질보증서");
+    expect((await store.list()).map((r) => r.id)).toContain("quality-cert");
+  });
 });

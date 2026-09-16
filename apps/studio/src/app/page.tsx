@@ -1,10 +1,11 @@
 import Link from "next/link";
-import { getStore } from "@/lib/report-store";
+import { getStore, ready } from "@/lib/report-store";
 import { NewReportForm } from "./NewReportForm";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  await ready();
   const list = await getStore().list();
   return (
     <main className="max-w-2xl mx-auto p-8">

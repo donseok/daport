@@ -21,6 +21,7 @@ export function JsonEditor() {
 
   const onMount: OnMount = (editor, monaco) => {
     editorRef.current = editor;
+    (window as any).monaco = monaco;   // E2E가 편집기 모델을 직접 읽고 쓴다 (Monaco는 보이는 줄만 DOM에 그린다)
     editor.setValue(toEditorText(report));
     fetch("/api/schema").then((r) => r.json()).then((schema) => {
       monaco.languages.json.jsonDefaults.setDiagnosticsOptions({ validate: true, schemas: [{ uri: "daport://report", fileMatch: ["*"], schema }] });

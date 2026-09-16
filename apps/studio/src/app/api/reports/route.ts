@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
-import { getStore } from "@/lib/report-store";
+import { getStore, ready } from "@/lib/report-store";
 
-export async function GET() { return NextResponse.json(await getStore().list()); }
+export async function GET() { await ready(); return NextResponse.json(await getStore().list()); }
 
 export async function POST(req: Request) {
   try {
+    await ready();
     const r = await getStore().create(await req.json());
     return NextResponse.json(r, { status: 201 });
   } catch (e) {
