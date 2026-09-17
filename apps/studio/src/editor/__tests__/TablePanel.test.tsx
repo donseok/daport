@@ -66,4 +66,14 @@ describe("TablePanel", () => {
     fireEvent.click(getByRole("button", { name: "그룹 삭제" }));
     expect(table().groups).toEqual([]);
   });
+  it("does not commit an empty source or group key (schema requires min 1)", () => {
+    const { getByLabelText, getByRole, table } = setup();
+    fireEvent.change(getByLabelText("소스"), { target: { value: "" } });
+    expect(table().source).toBe("items");
+    fireEvent.change(getByLabelText("소스"), { target: { value: "record.items" } });
+    expect(table().source).toBe("record.items");
+    fireEvent.click(getByRole("button", { name: "+ 그룹" }));
+    fireEvent.change(getByLabelText("그룹 기준"), { target: { value: "   " } });
+    expect(table().groups[0].by).toBe("row.");
+  });
 });

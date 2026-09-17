@@ -35,7 +35,8 @@ export function TablePanel({ el }: { el: TableElement }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="text-xs font-semibold mt-2">표</div>
-      <TextField label="소스" value={el.source} onChange={(source) => set({ source })} />
+      {/* 빈 값은 스키마(min 1)에 걸려 저장이 실패하므로 커밋하지 않는다 */}
+      <TextField label="소스" value={el.source} onChange={(v) => { if (v.trim() !== "") set({ source: v }); }} />
       <NumberField label="행 높이" value={el.rowHeight} min={0.5} onChange={(rowHeight) => set({ rowHeight })} />
       <NumberField label="머리 높이" value={el.headerHeight} min={0.5} onChange={(headerHeight) => set({ headerHeight })} />
       <CheckField label="머리 반복" value={el.repeatHeader} onChange={(repeatHeader) => set({ repeatHeader })} />
@@ -63,7 +64,8 @@ export function TablePanel({ el }: { el: TableElement }) {
       <div className="text-xs font-semibold mt-2">그룹</div>
       {el.groups.map((g, i) => (
         <div key={i} className="flex flex-col gap-1 border rounded p-1">
-          <TextField label="그룹 기준" value={g.by} onChange={(by) => setGroup(i, { by })} />
+          {/* 빈 값은 스키마(min 1)에 걸려 저장이 실패하므로 커밋하지 않는다 */}
+          <TextField label="그룹 기준" value={g.by} onChange={(v) => { if (v.trim() !== "") setGroup(i, { by: v }); }} />
           <CheckField label="머리와 행 함께" value={g.keepHeaderWithRows} onChange={(keepHeaderWithRows) => setGroup(i, { keepHeaderWithRows })} />
           <CellsEditor label="그룹 머리" cells={g.header} onChange={(header) => setGroup(i, { header })} addLabel="+ 머리 셀" />
           <CellsEditor label="그룹 소계" cells={g.footer} onChange={(footer) => setGroup(i, { footer })} addLabel="+ 소계 셀" />
