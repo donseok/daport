@@ -15,6 +15,22 @@ async function failureMessage(r: Response, label: string): Promise<string> {
   return typeof error === "string" ? error : `${label} 실패 (HTTP ${r.status})`;
 }
 
+/**
+ * 레포트 저장 응답의 경고 헤더 (스펙 6.3). 값은 문자열의 JSON 배열이다.
+ * 이 이름은 서버의 lib/report-guard.ts WARNINGS_HEADER와 같다. 그 모듈은 DB 저장소를 import하므로 클라이언트에서 가져오지 않는다
+ */
+const WARNINGS_HEADER = "X-Daport-Warnings";
+function saveWarnings(r: Response): string[] {
+  const raw = r.headers.get(WARNINGS_HEADER);
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((w): w is string => typeof w === "string") : [];
+  } catch {
+    return [];   // 헤더가 깨져도 저장 성공은 그대로 둔다
+  }
+}
+
 /** reportId는 열린 레포트의 id다. 편집 모델의 id가 아니라 이 값으로 요청 경로를 정해 다른 레포트를 덮어쓰지 않는다 */
 export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: number; setZoom: (z: number) => void }) {
   const store = useContext(EditorContext)!;
@@ -56,14 +72,17 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   // PDF 렌더는 몇 초 걸릴 수 있으므로 저장과 따로 막는다
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  // 마지막 레포트 저장이 남긴 경고. 다음 저장을 시작하면 지운다
+  const [warnings, setWarnings] = useState<string[]>([]);
 
   const save = async () => {
     // 보낸 모델을 기억해 두고, 요청이 끝났을 때 그 사이 편집이 있으면 저장 안 됨(*)으로 남긴다
     const saved = store.getState().report;
     setSaving(true);
+    setWarnings([]);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}`, { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(saved) });
-      if (r.ok) { markSaved(saved); return; }
+      if (r.ok) { markSaved(saved); setWarnings(saveWarnings(r)); return; }
       alert(await failureMessage(r, "저장"));
     } catch (e) {
       alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
@@ -178,6 +197,11 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
         <span data-testid="component-usage" className="text-xs text-neutral-600">사용하는 레포트 {usage.length}개</span>
         <button className={btn} disabled={applying || usage.length === 0} onClick={applyAll}>모든 레포트에 최신 적용</button>
       </>}
+      {warnings.length > 0 && (
+        <span role="status" data-testid="save-warnings" className="text-xs text-amber-700 max-w-md truncate" title={warnings.join("\n")}>
+          저장했지만 경고가 있습니다: {warnings.join(", ")}
+        </span>
+      )}
       <button className={btn} disabled={saving || !dirty} onClick={componentMode ? saveComponentVersion : save} data-testid="save">저장</button>
     </div>
   );

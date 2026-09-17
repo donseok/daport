@@ -218,3 +218,56 @@ describe("Toolbar label actions", () => {
     expect(JSON.parse(String(printCall[1]?.body))).toMatchObject({ printer: "라인1", report: { id: "r" } });
   });
 });
+
+describe("Toolbar save warnings", () => {
+  const warned = (value: string | null) =>
+    new Response("{}", { status: 200, headers: value === null ? {} : { "X-Daport-Warnings": value } });
+
+  it("shows the warnings from the X-Daport-Warnings header after a successful save", async () => {
+    const { store, fetchMock } = setup();
+    fetchMock.mockImplementationOnce(async () => warned(JSON.stringify(["component hdr@2 is not in the library", "component std@1 is not in the library"])));
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(store.getState().dirty).toBe(false));   // 경고가 있어도 저장은 성공이다
+    const box = await screen.findByTestId("save-warnings");
+    expect(box.textContent).toContain("component hdr@2 is not in the library");
+    expect(box.textContent).toContain("component std@1 is not in the library");
+  });
+
+  it("shows nothing without the header, and clears earlier warnings on the next successful save", async () => {
+    const { store, fetchMock } = setup();
+    fetchMock.mockImplementationOnce(async () => warned(JSON.stringify(["component hdr@2 is not in the library"])));
+    fireEvent.click(screen.getByTestId("save"));
+    await screen.findByTestId("save-warnings");
+    act(() => store.getState().updatePage({ width: 120 }));   // 다시 저장할 수 있게 편집
+    fetchMock.mockImplementationOnce(async () => warned(null));
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(store.getState().dirty).toBe(false));
+    expect(screen.queryByTestId("save-warnings")).toBeNull();
+  });
+
+  it("ignores a malformed header or a non-string array without breaking the save", async () => {
+    const { store, fetchMock } = setup();
+    fetchMock.mockImplementationOnce(async () => warned("not json"));
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(store.getState().dirty).toBe(false));
+    expect(screen.queryByTestId("save-warnings")).toBeNull();
+    act(() => store.getState().updatePage({ width: 130 }));
+    fetchMock.mockImplementationOnce(async () => warned(JSON.stringify([1, { a: 1 }, "component x@1 is not in the library"])));
+    fireEvent.click(screen.getByTestId("save"));
+    const box = await screen.findByTestId("save-warnings");
+    expect(box.textContent).toContain("component x@1 is not in the library");
+    expect(box.textContent).not.toContain("[object Object]");
+  });
+
+  it("does not show warnings when the save fails", async () => {
+    const { store, fetchMock } = setup();
+    const alertMock = vi.fn();
+    vi.stubGlobal("alert", alertMock);
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: "component hdr@1 differs from the library", code: "COMPONENT_MISMATCH" }),
+      { status: 409, headers: { "X-Daport-Warnings": JSON.stringify(["component a@1 is not in the library"]) } }));
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(alertMock).toHaveBeenCalledWith("component hdr@1 differs from the library"));
+    expect(store.getState().dirty).toBe(true);
+    expect(screen.queryByTestId("save-warnings")).toBeNull();
+  });
+});
