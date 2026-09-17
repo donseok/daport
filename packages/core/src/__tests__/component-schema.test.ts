@@ -3,7 +3,7 @@ import {
   ComponentBodySchema, ComponentPropSchema, parseComponentBody, componentKey, COMPONENT_ID_RE, COMPONENT_KEY_RE,
 } from "../schema/component";
 import { ElementSchema } from "../schema/elements";
-import { parseReport, safeParseReport, RESERVED_CONTEXT_NAMES } from "../schema/report";
+import { parseReport, safeParseReport, RESERVED_CONTEXT_NAMES, type ReportInput } from "../schema/report";
 import { reportJsonSchema } from "../schema/json-schema";
 import * as core from "../index";
 
@@ -174,5 +174,51 @@ describe("report components", () => {
     const js = reportJsonSchema() as { properties: { components: { propertyNames: { pattern: string } } } };
     expect(js.properties.components.propertyNames.pattern).toBe(COMPONENT_KEY_RE.source);
     expect(JSON.stringify(js)).toContain('"required":["id","x","y","w","h","type","ref","version"]');
+  });
+});
+
+describe("component schema typing and shared tree rules", () => {
+  const components = { "company-header@3": body() };
+
+  it("keeps the schema input type: components values are checked, and the object shape stays reachable", () => {
+    // 입력 타입이 unknown으로 무너지면 아래 @ts-expect-error가 "쓰이지 않은 지시"로 타입 검사에서 걸린다
+    // @ts-expect-error components 값은 컴포넌트 내용이어야 한다
+    const bad: ReportInput = { ...base, components: { "company-header@3": 42 } };
+    expect(safeParseReport(bad).success).toBe(false);
+    expect(safeParseReport({ ...base, components: { "company-header@3": 42 } }).success).toBe(false);
+    expect(safeParseReport({ ...base, components: { "company-header@3": null } }).success).toBe(false);
+    expect(safeParseReport({ ...base, components: { "company-header@3": "x" } }).success).toBe(false);
+    expect(Object.keys(ComponentBodySchema.shape).sort()).toEqual(["elements", "h", "name", "props", "w"]);
+  });
+
+  it("rejects a ref hidden in a repeater group band inside a component body", () => {
+    const headerBand = { ...repeater("rp", []), groups: [{ by: "item.LINE", header: { h: 8, children: [ref("inHeader")] } }] };
+    const footerBand = { ...repeater("rp", []), groups: [{ by: "item.LINE", footer: { h: 8, children: [ref("inFooter")] } }] };
+    expect(bodyIssues(body({ elements: [headerBand] }))).toContain("ref inside component: inHeader");
+    expect(bodyIssues(body({ elements: [footerBand] }))).toContain("ref inside component: inFooter");
+  });
+
+  it("rejects a component whose non-clip table is hidden in a group when used inside a repeater template", () => {
+    const deep = { "deep-table@1": { name: "숨은 표", w: 50, h: 20, elements: [group("g", [table("t")])] } };
+    const inTpl = ref("a", { ref: "deep-table", version: 1, w: 50, h: 20 });
+    expect(issues({ ...base, components: deep, elements: [repeater("rp", [inTpl])] }))
+      .toContain("component with continue table or repeater inside repeater template: a");
+    expect(issues({ ...base, components: deep, elements: [inTpl] })).toEqual([]);
+  });
+
+  it("rejects a ref size mismatch inside groups and repeater templates too", () => {
+    expect(issues({ ...base, components, elements: [group("g", [ref("inGroup", { w: 170 })])] }))
+      .toContain("ref size differs from component company-header@3: inGroup");
+    expect(issues({ ...base, components, elements: [repeater("rp", [ref("inTpl", { h: 30 })])] }))
+      .toContain("ref size differs from component company-header@3: inTpl");
+  });
+
+  it("puts embedded component body issues under components.<key>", () => {
+    const r = safeParseReport({ ...base, components: { "company-header@3": body({ elements: [text("a"), text("a")] }) } });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    const paths = r.error.issues.map((i) => i.path.join("."));
+    expect(paths).toContain("components.company-header@3.elements");
+    expect(paths.every((p) => p.startsWith("components.company-header@3"))).toBe(true);
   });
 });
