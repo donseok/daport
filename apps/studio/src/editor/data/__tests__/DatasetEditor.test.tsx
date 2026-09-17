@@ -15,7 +15,8 @@ describe("DatasetEditor", () => {
     fireEvent.change(ta, { target: { value: "[1]" } });
     expect(getByText(/객체 배열/)).toBeTruthy();
     fireEvent.change(ta, { target: { value: "{" } });
-    expect(getByText(/JSON/)).toBeTruthy();
+    // 라벨 '행(JSON)'과 겹치지 않게 오류 문구로 찾는다
+    expect(getByText(/구문 오류/)).toBeTruthy();
     expect(onChange).toHaveBeenCalledTimes(1);
     fireEvent.change(getByLabelText("이름"), { target: { value: "s2" } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ name: "s2" }));

@@ -21,8 +21,8 @@ function StaticRows({ rows, onChange }: { rows: Record<string, unknown>[]; onCha
   };
   return (
     <label className="flex flex-col gap-1 text-xs">
-      {/* 화면 라벨은 오류 메시지("JSON 구문 오류")와 텍스트 매칭이 겹치지 않도록 "JSON"을 넣지 않는다. aria-label은 스펙대로 유지 */}
-      <span className="text-neutral-500">행 데이터</span>
+      {/* WCAG 2.5.3(label in name): 화면에 보이는 라벨과 접근성 이름(aria-label)이 같아야 한다 */}
+      <span className="text-neutral-500">행(JSON)</span>
       <textarea aria-label="행(JSON)" value={text} rows={6} className="border rounded px-1 py-0.5 font-mono" onChange={(e) => change(e.target.value)} />
       {error && <span className="text-red-700">{error}</span>}
     </label>
