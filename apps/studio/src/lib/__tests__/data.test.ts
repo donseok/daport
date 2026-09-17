@@ -33,6 +33,15 @@ describe("sampleContext", () => {
     expect(ctx.extra).toEqual([{ X: 1 }]);
     expect(ctx.junk).toEqual([]);
   });
+  it("skips __proto__/constructor/prototype in sample data and never touches the context's own prototype, while an identifier like toString is included", () => {
+    const r = parseReport({ ...base, params: [{ name: "lot" }], datasets: [{ name: "s", type: "static", rows: [{ A: 1 }] }],
+      // JSON.parse(문자열)로 만들어야 진짜 own key "__proto__"가 생긴다
+      sample: { params: {}, data: JSON.parse('{"__proto__": [{"x": 1}], "toString": [{"y": 1}]}'), capturedAt: "2026-09-17T00:00:00.000Z" } });
+    const ctx = sampleContext(r);
+    expect(Object.getPrototypeOf(ctx)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(ctx, "__proto__")).toBe(false);
+    expect((ctx.toString as unknown as { y: number }[])[0].y).toBe(1);
+  });
 });
 
 describe("requestBody", () => {

@@ -1,4 +1,4 @@
-import { resolveParams, rowsProxy, RESERVED_CONTEXT_NAMES, type Report, type DataContext, type Dataset } from "@daport/core";
+import { resolveParams, rowsProxy, RESERVED_CONTEXT_NAMES, FORBIDDEN_CONTEXT_KEYS, type Report, type DataContext, type Dataset } from "@daport/core";
 import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver } from "./types";
 import { runSql } from "./sql";
 import { runHttp } from "./http";
@@ -12,6 +12,11 @@ export type ExecuteOptions = {
 };
 
 const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === "object" && !Array.isArray(v);
+// 요청 data의 이름은 식별자여야 한다 (스키마의 데이터셋 이름 규칙과 같다)
+const IDENTIFIER_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+/** 어떤 setter도 타지 않도록 own data property로만 컨텍스트에 심는다 (프로토타입 오염 방지) */
+const setContext = (context: DataContext, name: string, value: unknown) =>
+  Object.defineProperty(context, name, { value, enumerable: true, writable: true, configurable: true });
 
 /** 객체 → [객체], 객체 배열 → 그대로. 그 밖은 BAD_DATA (rowsProxy는 객체 행을 전제한다) */
 export function toRows(value: unknown): Record<string, unknown>[] {
@@ -60,12 +65,16 @@ export async function executeDatasets(report: Report, opts: ExecuteOptions): Pro
   }
   for (const [name, value] of Object.entries(data)) {
     if (report.datasets.some((ds) => ds.name === name)) continue;
-    // 예약어 이름은 거부 — 요청에서 컨텍스트 변수 덮어쓰기 방지
-    if (RESERVED_CONTEXT_NAMES.includes(name)) {
+    // 예약어·프로토타입 오염 키는 거부 — 요청에서 컨텍스트 변수 덮어쓰기·프로토타입 변경 방지
+    if (RESERVED_CONTEXT_NAMES.includes(name) || (FORBIDDEN_CONTEXT_KEYS as readonly string[]).includes(name)) {
       errors.push({ dataset: name, code: "BAD_DATA", message: `reserved name: ${name}` });
       continue;
     }
-    try { context[name] = rowsProxy(checkRows(toRows(value), limits)); }
+    if (!IDENTIFIER_RE.test(name)) {
+      errors.push({ dataset: name, code: "BAD_DATA", message: `invalid name: ${name}` });
+      continue;
+    }
+    try { setContext(context, name, rowsProxy(checkRows(toRows(value), limits))); }
     catch (e) { errors.push(toError(name, e, "BAD_DATA")); }
   }
   return { context, errors };

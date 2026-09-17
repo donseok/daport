@@ -32,6 +32,10 @@ describe("report schema (phase 2)", () => {
     expect(issues({ ...base, datasets: [{ name: "record", type: "static", rows: [] }] })).toContain("reserved name: record");
     expect(issues({ ...base, datasets: [{ name: "a", type: "static", rows: [] }, { name: "a", type: "static", rows: [] }] })).toContain("duplicate dataset name: a");
   });
+  it("rejects a dataset name that is not an identifier or is a forbidden prototype key", () => {
+    expect(issues({ ...base, datasets: [{ name: "a-b", type: "static", rows: [] }] }).length).toBeGreaterThan(0);
+    expect(issues({ ...base, datasets: [{ name: "__proto__", type: "static", rows: [] }] })).toContain("reserved name: __proto__");
+  });
   it("rejects duplicate ids across repeater template children", () => {
     expect(issues({ ...base, elements: [text("t"), repeater("r", [text("t")])] })).toContain("duplicate element id: t");
   });

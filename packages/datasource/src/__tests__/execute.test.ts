@@ -42,6 +42,14 @@ describe("executeDatasets", () => {
     const { errors } = await run({ data: { items: [{ A: 1 }, { A: 2 }], orders: [], lines: [] }, limits: { maxRows: 1 } });
     expect(errors).toEqual([{ dataset: "items", code: "TOO_MANY_ROWS", message: "2 rows, more than the limit of 1" }]);
   });
+  it("refuses __proto__/constructor/prototype as data-only names and never touches the context's own prototype", async () => {
+    // JSON.parse(문자열)로 만들어야 진짜 own key "__proto__"가 생긴다 (객체 리터럴의 __proto__:는 특수 취급되어 프로토타입을 바꾼다)
+    const data = JSON.parse('{"__proto__": [{"x": 1}], "orders": [], "lines": []}');
+    const { context, errors } = await run({ data });
+    expect(errors.map((e) => [e.dataset, e.code, e.message])).toContainEqual(["__proto__", "BAD_DATA", "reserved name: __proto__"]);
+    expect(Object.getPrototypeOf(context)).toBe(Object.prototype);
+    expect(Object.prototype.hasOwnProperty.call(context, "__proto__")).toBe(false);
+  });
   it("refuses request data whose name is a reserved context name and keeps params intact", async () => {
     const { context, errors } = await run({ data: { params: [{ hack: 1 }], page: { x: 1 }, orders: [], lines: [] } });
     expect(context.params).toEqual({ no: "A", qty: 3 });

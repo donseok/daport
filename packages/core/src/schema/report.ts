@@ -17,10 +17,20 @@ export const RESERVED_CONTEXT_NAMES: readonly string[] = [
 // repeat.as를 위한 예약어 (record는 기본값이므로 제외)
 const RESERVED_REPEAT_AS_NAMES = RESERVED_CONTEXT_NAMES.filter((n) => n !== "record");
 
-export const StaticDatasetSchema = z.object({ name: z.string().min(1), type: z.literal("static"), rows: z.array(z.record(z.string(), z.unknown())) });
-export const SqlDatasetSchema = z.object({ name: z.string().min(1), type: z.literal("sql"), connection: z.string(), query: z.string() });
+/**
+ * 프로토타입 오염 방지: 데이터셋 이름·요청 data 이름으로 쓰면 컨텍스트 객체의 프로토타입을 바꾸거나
+ * 상속 멤버를 가릴 수 있는 키. JSON.parse가 만든 own key "__proto__"는 Object.entries로 그대로 보이므로
+ * 스키마·실행기(datasource) 양쪽에서 예약어처럼 거부한다
+ */
+export const FORBIDDEN_CONTEXT_KEYS = ["__proto__", "constructor", "prototype"] as const;
+
+const DATASET_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const datasetName = () => z.string().regex(DATASET_NAME_RE, "데이터셋 이름은 식별자여야 합니다");
+
+export const StaticDatasetSchema = z.object({ name: datasetName(), type: z.literal("static"), rows: z.array(z.record(z.string(), z.unknown())) });
+export const SqlDatasetSchema = z.object({ name: datasetName(), type: z.literal("sql"), connection: z.string(), query: z.string() });
 export const HttpDatasetSchema = z.object({
-  name: z.string().min(1), type: z.literal("http"),
+  name: datasetName(), type: z.literal("http"),
   url: z.string(),                                            // 템플릿. 값은 encodeURIComponent
   method: z.enum(["GET", "POST"]).default("GET"),
   headers: z.record(z.string(), z.string()).default({}),      // 값은 템플릿(그대로 넣음)
@@ -70,7 +80,9 @@ export const ReportSchema = z.object({
   });
   const names = new Set<string>();
   r.datasets.forEach((ds, i) => {
-    if (RESERVED_CONTEXT_NAMES.includes(ds.name)) ctx.addIssue({ code: "custom", message: `reserved name: ${ds.name}`, path: ["datasets", i, "name"] });
+    if (RESERVED_CONTEXT_NAMES.includes(ds.name) || (FORBIDDEN_CONTEXT_KEYS as readonly string[]).includes(ds.name)) {
+      ctx.addIssue({ code: "custom", message: `reserved name: ${ds.name}`, path: ["datasets", i, "name"] });
+    }
     if (names.has(ds.name)) ctx.addIssue({ code: "custom", message: `duplicate dataset name: ${ds.name}`, path: ["datasets", i, "name"] });
     names.add(ds.name);
   });
