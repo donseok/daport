@@ -10,6 +10,7 @@ import { clampView, currentPage, primaryItem, isOtherInstance } from "./pages";
 import { layoutFor, layoutError } from "./layoutCache";
 import { resolveDrop, DRAG_MIME, type DragField, type DropTarget } from "../data/bindings";
 import { COMPONENT_MIME, fetchComponent } from "../library/api";
+import { MakeComponentDialog, makeComponentCheck } from "../library/MakeComponentDialog";
 
 /** 채우기 없는 사각형은 선에서 이 화면 거리(px) 안쪽일 때만 고른다 */
 const STROKE_HIT_PX = 3;
@@ -35,6 +36,16 @@ export function Canvas({ zoom }: { zoom: number }) {
   const componentMode = useEditor((s) => s.componentMode);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  /** 우클릭 메뉴 위치(페이지 기준 mm). 캔버스 div가 scale로 확대되므로 mm로 두면 배율과 함께 따라간다 */
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  const [making, setMaking] = useState(false);
+  const makeCheck = makeComponentCheck(report, selection, !!componentMode);
+  useEffect(() => {
+    if (!menu) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [menu]);
 
   // 캔버스와 페이지 선택기가 같은 레이아웃을 쓴다 (report 객체당 한 번 계산). 스펙 10: 표현식 오류는 요소마다 #ERR로 보인다
   const pages = useMemo(() => layoutFor(report), [report]);
@@ -112,7 +123,10 @@ export function Canvas({ zoom }: { zoom: number }) {
   };
 
   const onPagePointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    setMenu(null);
     const id = pickElementId(e);
+    // 오른쪽 버튼은 드래그를 시작하지 않는다. 선택 밖 요소면 그 요소만 선택하고, 선택 안 요소나 빈 곳이면 선택을 유지한다 (우클릭 메뉴용)
+    if (e.button === 2) { if (id && !selection.includes(id)) select([id]); return; }
     if (!id) { select([]); return; }
     if (e.shiftKey) { toggleSelect(id); return; }
     const ids = selection.includes(id) ? selection : [id];
@@ -160,8 +174,14 @@ export function Canvas({ zoom }: { zoom: number }) {
     }
     return { kind: "canvas", x, y };
   };
+  const onContextMenu = (e: MouseEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const origin = e.currentTarget.querySelector(".dp-page")?.getBoundingClientRect();
+    setMenu({ x: pxToMm(e.clientX - (origin?.left ?? 0), zoom), y: pxToMm(e.clientY - (origin?.top ?? 0), zoom) });
+  };
+
   // 컴포넌트 편집 화면에서는 라이브러리 컴포넌트를 받지 않는다 (중첩 금지, 스펙 7.5)
-  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const onDragOver =(e: DragEvent<HTMLDivElement>) => {
     const types = Array.from(e.dataTransfer.types);
     if (types.includes(DRAG_MIME) || (!componentMode && types.includes(COMPONENT_MIME))) e.preventDefault();
   };
@@ -203,9 +223,10 @@ export function Canvas({ zoom }: { zoom: number }) {
   const shown = ghost ?? boxes;
   const templates = page.items.filter((i) => i.role === "template");
   return (
+    <>
     <div className="relative inline-block shadow-lg" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
       data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel} onDoubleClick={onDoubleClick}
-      onDragOver={onDragOver} onDrop={onDrop}>
+      onDragOver={onDragOver} onDrop={onDrop} onContextMenu={onContextMenu}>
       <style>{css}</style>
       <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
       <div className="absolute inset-0 pointer-events-none">
@@ -223,8 +244,19 @@ export function Canvas({ zoom }: { zoom: number }) {
             <div className="text-xs text-white bg-red-700 rounded px-3 py-2 max-w-full">레이아웃 오류: {error}</div>
           </div>
         )}
+        {menu && (
+          <div role="menu" data-testid="canvas-menu" className="absolute pointer-events-auto bg-white border rounded shadow text-xs py-1 min-w-32"
+            style={{ left: `${menu.x}mm`, top: `${menu.y}mm` }}
+            onPointerDown={(e) => e.stopPropagation()} onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+            <button role="menuitem" className="block w-full text-left px-3 py-1 hover:bg-neutral-100 disabled:opacity-50"
+              disabled={!makeCheck.ok} title={makeCheck.ok ? undefined : makeCheck.reason}
+              onClick={() => { setMenu(null); setMaking(true); }}>컴포넌트로 만들기</button>
+          </div>
+        )}
       </div>
     </div>
+    {making && <MakeComponentDialog onClose={() => setMaking(false)} />}
+    </>
   );
 }
 

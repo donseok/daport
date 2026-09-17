@@ -3,6 +3,7 @@ import { useContext, useEffect, useState } from "react";
 import { requestBody } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
 import { PageSelector } from "./PageSelector";
+import { MakeComponentDialog, makeComponentCheck } from "./library/MakeComponentDialog";
 
 /** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
 async function failureMessage(r: Response, label: string): Promise<string> {
@@ -26,6 +27,11 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const bitmapPreview = useEditor((s) => s.bitmapPreview);
   const setBitmapPreview = useEditor((s) => s.setBitmapPreview);
   const isLabel = report.output.kind === "label";
+  const selection = useEditor((s) => s.selection);
+  const componentMode = useEditor((s) => s.componentMode);
+  // 스펙 7.3: 조건이 안 맞으면 비활성, 사유는 툴팁
+  const makeCheck = makeComponentCheck(report, selection, !!componentMode);
+  const [making, setMaking] = useState(false);
   const [printers, setPrinters] = useState<string[]>([]);
   const [printer, setPrinter] = useState("");
   const [printing, setPrinting] = useState(false);
@@ -107,6 +113,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       <label className="text-xs ml-2">배율 <input type="range" min={0.25} max={3} step={0.25} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {Math.round(zoom * 100)}%</label>
       <PageSelector />
       <label className="text-xs flex items-center gap-1 ml-2"><input type="checkbox" aria-label="실데이터" checked={liveData} onChange={(e) => setLiveData(e.target.checked)} />실데이터</label>
+      <button className={btn} disabled={!makeCheck.ok} title={makeCheck.ok ? undefined : makeCheck.reason} onClick={() => setMaking(true)}>컴포넌트로 만들기</button>
+      {making && <MakeComponentDialog onClose={() => setMaking(false)} />}
       <div className="flex-1" />
       {isLabel && <>
         <label className="text-xs flex items-center gap-1"><input type="checkbox" aria-label="비트맵" checked={bitmapPreview} onChange={(e) => setBitmapPreview(e.target.checked)} />비트맵</label>
