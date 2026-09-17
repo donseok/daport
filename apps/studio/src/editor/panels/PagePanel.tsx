@@ -23,7 +23,8 @@ export function PagePanel() {
 
       <div className="text-xs font-semibold mt-2">반복</div>
       <CheckField label="레코드마다 한 부씩" value={!!repeat} onChange={(on) => setRepeat(on ? { source: defaultSource(report), as: "record" } : undefined)} />
-      {repeat && <TextField label="반복 소스" value={repeat.source} onChange={(source) => setRepeat({ ...repeat, source })} />}
+      {/* RepeatSchema.source는 min(1) — TablePanel·RepeaterPanel의 소스 필드와 같은 규칙으로 빈 값은 커밋하지 않는다 */}
+      {repeat && <TextField label="반복 소스" value={repeat.source} onChange={(v) => { if (v.trim() !== "") setRepeat({ ...repeat, source: v }); }} />}
     </div>
   );
 }

@@ -127,4 +127,17 @@ describe("page panel repeat switch", () => {
     fireEvent.click(getByLabelText("레코드마다 한 부씩"));
     expect(store.getState().report.repeat).toBeUndefined();
   });
+
+  it("ignores an empty or blank source instead of committing it (RepeatSchema.source는 min 1)", () => {
+    const store = createEditorStore(report);
+    const { getByLabelText } = render(<EditorContext.Provider value={store}><PagePanel /></EditorContext.Provider>);
+    fireEvent.click(getByLabelText("레코드마다 한 부씩"));
+    expect(store.getState().report.repeat).toEqual({ source: "items", as: "record" });
+    fireEvent.change(getByLabelText("반복 소스"), { target: { value: "" } });
+    expect(store.getState().report.repeat).toEqual({ source: "items", as: "record" });
+    fireEvent.change(getByLabelText("반복 소스"), { target: { value: "  " } });
+    expect(store.getState().report.repeat).toEqual({ source: "items", as: "record" });
+    fireEvent.change(getByLabelText("반복 소스"), { target: { value: "shipments" } });
+    expect(store.getState().report.repeat).toEqual({ source: "shipments", as: "record" });
+  });
 });
