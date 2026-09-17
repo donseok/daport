@@ -77,4 +77,21 @@ describe("Preview", () => {
     expect(container.querySelector("iframe")).toBeNull();
     expect(String(fetchMock.mock.calls[0][0])).toBe("/api/reports/r/label?preview=png");
   });
+
+  it("sends the sample props in component mode and none otherwise", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response("<p>ok</p>", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const cm = createEditorStore(report, { componentMode: { componentId: "hdr", version: 1,
+      props: [{ name: "title", type: "string", default: "기본" }, { name: "n", type: "number", default: 1 }], sampleProps: { title: "샘플", junk: 1 } } });
+    const { unmount } = render(<EditorContext.Provider value={cm}><Preview reportId="component-hdr" /></EditorContext.Provider>);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).props).toEqual({ title: "샘플", n: 1 });
+    act(() => cm.getState().setSampleProps({ title: "다시" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).props).toEqual({ title: "다시", n: 1 });
+    unmount();
+    render(<EditorContext.Provider value={createEditorStore(report)}><Preview reportId="r" /></EditorContext.Provider>);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect("props" in JSON.parse(String(fetchMock.mock.calls[2][1]?.body))).toBe(false);
+  });
 });

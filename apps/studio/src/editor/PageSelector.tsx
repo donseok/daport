@@ -3,6 +3,7 @@ import { useMemo } from "react";
 import { useEditor } from "./store";
 import { layoutFor } from "./canvas/layoutCache";
 import { clampView } from "./canvas/pages";
+import { samplePropsContext } from "@/lib/component-edit";
 
 const btn = "text-xs border rounded px-1 bg-white hover:bg-neutral-100 disabled:opacity-40";
 
@@ -11,7 +12,9 @@ export function PageSelector() {
   const report = useEditor((s) => s.report);
   const view = useEditor((s) => s.view);
   const setView = useEditor((s) => s.setView);
-  const pages = useMemo(() => layoutFor(report), [report]);
+  const componentMode = useEditor((s) => s.componentMode);
+  const sampleProps = componentMode ? samplePropsContext(componentMode) : undefined;
+  const pages = useMemo(() => layoutFor(report, sampleProps), [report, sampleProps]);
   const v = clampView(view, pages);
   const copies = pages.length ? pages[pages.length - 1].copyIndex + 1 : 1;
   const inCopy = pages.filter((p) => p.copyIndex === v.copyIndex).length || 1;
