@@ -1,0 +1,34 @@
+{
+  "id": "coil-tag", "name": "코일 Tag", "version": 1,
+  "page": { "width": 100, "height": 150, "margin": [3, 3, 3, 3] },
+  "output": { "kind": "label", "label": { "language": "zpl", "dpi": 203, "threshold": 128 } },
+  "datasets": [{ "name": "coils", "type": "static", "rows": [] }],
+  "repeat": { "source": "coils", "as": "record" },
+  "sample": { "params": {}, "capturedAt": "2026-09-17T00:00:00.000Z", "data": { "coils": [
+    { "COIL_NO": "C2609170001", "PRODUCT": "SPCC", "THICK": 1.0, "WIDTH": 1219, "WEIGHT": 12480, "CUSTOMER": "대한정밀(주)", "GRADE": "1급", "DT": "2026-09-17" },
+    { "COIL_NO": "C2609170002", "PRODUCT": "SPCC", "THICK": 1.2, "WIDTH": 1219, "WEIGHT": 13020, "CUSTOMER": "세명산업", "GRADE": "1급", "DT": "2026-09-17" },
+    { "COIL_NO": "C2609170003", "PRODUCT": "SPHC", "THICK": 2.3, "WIDTH": 1000, "WEIGHT": 9850, "CUSTOMER": "한빛금속", "GRADE": "2급", "DT": "2026-09-17" }
+  ]}},
+  "elements": [
+    { "id": "frame", "type": "rect", "x": 3, "y": 3, "w": 94, "h": 144, "style": { "stroke": "#000", "strokeWidth": 0.5 } },
+    { "id": "title", "type": "text", "x": 5, "y": 5, "w": 90, "h": 10, "value": "COIL TAG", "style": { "fontSize": 18, "bold": true, "align": "center", "valign": "middle" } },
+    { "id": "coil-no", "type": "text", "x": 5, "y": 16, "w": 90, "h": 12, "value": "{{ record.COIL_NO }}", "style": { "fontSize": 24, "bold": true, "align": "center", "valign": "middle" } },
+    { "id": "bc", "type": "barcode", "x": 8, "y": 30, "w": 84, "h": 22, "format": "code128", "value": "{{ record.COIL_NO }}", "showText": false },
+    { "id": "spec", "type": "group", "x": 5, "y": 56, "w": 90, "h": 60, "children": [
+      { "id": "l1", "type": "text", "x": 0, "y": 0, "w": 28, "h": 10, "value": "품종", "style": { "fontSize": 10, "bold": true, "fill": "#eee", "padding": 2, "valign": "middle" } },
+      { "id": "v1", "type": "text", "x": 28, "y": 0, "w": 62, "h": 10, "value": "{{ record.PRODUCT }}", "style": { "fontSize": 14, "bold": true, "padding": 2, "valign": "middle" } },
+      { "id": "l2", "type": "text", "x": 0, "y": 10, "w": 28, "h": 10, "value": "두께×폭", "style": { "fontSize": 10, "bold": true, "fill": "#eee", "padding": 2, "valign": "middle" } },
+      { "id": "v2", "type": "text", "x": 28, "y": 10, "w": 62, "h": 10, "value": "{{ formatNumber(record.THICK, '0.00') }} × {{ record.WIDTH }}", "style": { "fontSize": 14, "bold": true, "padding": 2, "valign": "middle" } },
+      { "id": "l3", "type": "text", "x": 0, "y": 20, "w": 28, "h": 10, "value": "중량(kg)", "style": { "fontSize": 10, "bold": true, "fill": "#eee", "padding": 2, "valign": "middle" } },
+      { "id": "v3", "type": "text", "x": 28, "y": 20, "w": 62, "h": 10, "value": "{{ formatNumber(record.WEIGHT) }}", "style": { "fontSize": 14, "bold": true, "padding": 2, "valign": "middle" } },
+      { "id": "l4", "type": "text", "x": 0, "y": 30, "w": 28, "h": 10, "value": "고객사", "style": { "fontSize": 10, "bold": true, "fill": "#eee", "padding": 2, "valign": "middle" } },
+      { "id": "v4", "type": "text", "x": 28, "y": 30, "w": 62, "h": 10, "value": "{{ record.CUSTOMER }}", "style": { "fontSize": 12, "padding": 2, "valign": "middle" } },
+      { "id": "l5", "type": "text", "x": 0, "y": 40, "w": 28, "h": 10, "value": "등급", "style": { "fontSize": 10, "bold": true, "fill": "#eee", "padding": 2, "valign": "middle" } },
+      { "id": "v5", "type": "text", "x": 28, "y": 40, "w": 62, "h": 10, "value": "{{ record.GRADE }}", "style": { "fontSize": 14, "bold": true, "padding": 2, "valign": "middle" } },
+      { "id": "spec-box", "type": "rect", "x": 0, "y": 0, "w": 90, "h": 50, "style": { "stroke": "#000", "strokeWidth": 0.3 } }
+    ]},
+    { "id": "qr", "type": "barcode", "x": 65, "y": 112, "w": 30, "h": 30, "format": "qr", "value": "{{ record.COIL_NO }}|{{ record.PRODUCT }}|{{ record.WEIGHT }}", "showText": false },
+    { "id": "dt", "type": "text", "x": 5, "y": 118, "w": 55, "h": 8, "value": "{{ formatDate(record.DT, 'yyyy-MM-dd') }}", "style": { "fontSize": 10 } },
+    { "id": "copy", "type": "text", "x": 5, "y": 128, "w": 55, "h": 8, "value": "{{ copy }} / {{ copies }}", "style": { "fontSize": 9, "color": "#444" } }
+  ]
+}

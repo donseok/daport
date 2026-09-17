@@ -1,0 +1,17 @@
+{
+  "id": "product-label", "name": "제품 라벨", "version": 1,
+  "page": { "width": 60, "height": 40, "margin": [2, 2, 2, 2] },
+  "output": { "kind": "label", "label": { "language": "zpl", "dpi": 203, "threshold": 128 } },
+  "datasets": [{ "name": "items", "type": "static", "rows": [] }],
+  "repeat": { "source": "items", "as": "record" },
+  "sample": { "params": {}, "capturedAt": "2026-09-17T00:00:00.000Z", "data": { "items": [
+    { "ITEM_NO": "SPCC-10-1219", "NAME": "냉연강판 SPCC 1.0t", "QTY": 120, "LOT_NO": "L2609-0142" },
+    { "ITEM_NO": "SPCC-12-1219", "NAME": "냉연강판 SPCC 1.2t", "QTY": 80, "LOT_NO": "L2609-0143" }
+  ]}},
+  "elements": [
+    { "id": "name", "type": "text", "x": 2, "y": 2, "w": 56, "h": 7, "value": "{{ record.NAME }}", "style": { "fontSize": 11, "bold": true, "valign": "middle" } },
+    { "id": "bc", "type": "barcode", "x": 2, "y": 10, "w": 56, "h": 16, "format": "code128", "value": "{{ record.ITEM_NO }}", "showText": true, "style": { "fontSize": 8 } },
+    { "id": "qty", "type": "text", "x": 2, "y": 28, "w": 27, "h": 8, "value": "수량 {{ formatNumber(record.QTY) }}", "style": { "fontSize": 10, "valign": "middle" } },
+    { "id": "lot", "type": "text", "x": 30, "y": 28, "w": 28, "h": 8, "value": "LOT {{ record.LOT_NO }}", "style": { "fontSize": 9, "align": "right", "valign": "middle" } }
+  ]
+}
