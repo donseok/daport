@@ -31,6 +31,7 @@ function place(el: FlatElement, ctx: DataContext): PlacedItem | null {
     case "table": return { ...base, kind: "placeholder", label: `table:${el.source}` };
     case "ref": return { ...base, kind: "placeholder", label: `ref:${el.ref}` };
   }
+  return null;
 }
 
 export function layout(report: Report, data: DataContext): Page[] {
@@ -48,5 +49,5 @@ export function layout(report: Report, data: DataContext): Page[] {
         lines: ["#ERR"], lineHeight: lineHeightMm(el.style.fontSize, el.style.lineHeight), overflow: false, error: msg });
     }
   }
-  return [{ index: 0, width: report.page.width, height: report.page.height, items }];
+  return [{ index: 0, width: report.page.width, height: report.page.height, items, copyIndex: 0, pageInCopy: 0 }];
 }

@@ -3,6 +3,7 @@
 exports[`golden: quality-cert > layout matches snapshot 1`] = `
 [
   {
+    "copyIndex": 0,
     "height": 297,
     "index": 0,
     "items": [
@@ -567,6 +568,7 @@ exports[`golden: quality-cert > layout matches snapshot 1`] = `
         "y": 278,
       },
     ],
+    "pageInCopy": 0,
     "width": 210,
   },
 ]

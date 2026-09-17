@@ -85,7 +85,7 @@ describe("paint", () => {
       { kind: "text", elementId: "t", x: 0, y: 0, w: 20, h: 10, style, lines: ["x"], lineHeight: 4, overflow: false },
       { kind: "rect", elementId: "r", x: 0, y: 10, w: 20, h: 10, style },
       { kind: "line", elementId: "l", x: 0, y: 30, w: 20, h: 0, x2: 20, y2: 30, style },
-    ]}];
+    ], copyIndex: 0, pageInCopy: 0 }];
     const html = renderToStaticMarkup(<PaintPages pages={pages} />);
     expect(html).toContain('data-element-id="t"');
     expect(html).not.toContain("url(");
