@@ -106,7 +106,7 @@ export function pickRows(json: unknown, rowsPath: string | undefined): Record<st
   let v: unknown = json;
   for (const seg of (rowsPath ?? "").split(".")) {
     if (seg === "") continue;
-    if (!isObject(v)) throw new DatasetFailure("ROWS_PATH", `no rows at "${rowsPath}"`);
+    if (!isObject(v) || !Object.hasOwn(v, seg)) throw new DatasetFailure("ROWS_PATH", `no rows at "${rowsPath}"`);   // 상속 속성(__proto__ 등)은 따라가지 않는다
     v = v[seg];
   }
   if (Array.isArray(v)) {

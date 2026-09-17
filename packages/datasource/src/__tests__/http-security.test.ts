@@ -105,3 +105,12 @@ describe("JSON body", () => {
     expect(code(() => buildHttpRequest(ds({ method: "POST", body: '{"qty": {{ params.no }}}' }), { no: 1 }, secrets))).toBe("BAD_PARAM");
   });
 });
+
+describe("rowsPath", () => {
+  it("follows only own properties", async () => {
+    const { pickRows } = await import("../index");
+    expect(code(() => pickRows({ data: {} }, "data.__proto__"))).toBe("ROWS_PATH");
+    expect(code(() => pickRows({ data: [] }, "data.constructor"))).toBe("ROWS_PATH");
+    expect(pickRows({ data: { items: [{ a: 1 }] } }, "data.items")).toEqual([{ a: 1 }]);
+  });
+});
