@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ElementSchema } from "./elements";
-import { walkElements } from "./tree";
+import { ComponentBodySchema, COMPONENT_KEY_RE, checkElementTree, componentKey, hasFlowElement } from "./component";
 import { OutputSchema } from "./output";
 
 export const PageSchema = z.object({
@@ -12,7 +12,7 @@ export const PageSchema = z.object({
 
 /** 표현식 컨텍스트가 쓰는 이름. 데이터셋 이름·repeat.as로 쓰면 데이터가 가려지므로 금지한다 */
 export const RESERVED_CONTEXT_NAMES: readonly string[] = [
-  "params", "secrets", "record", "row", "item", "index", "group", "rows", "pageRows", "page", "total", "sheet", "sheets", "copy", "copies",
+  "params", "secrets", "record", "row", "item", "index", "group", "rows", "pageRows", "page", "total", "sheet", "sheets", "copy", "copies", "props",
 ];
 
 // repeat.as를 위한 예약어 (record는 기본값이므로 제외)
@@ -69,15 +69,27 @@ export const ReportSchema = z.object({
   repeat: RepeatSchema.optional(),
   sample: SampleSchema.optional(),
   output: OutputSchema.default({ kind: "pdf" }),
+  /** 이 레포트가 쓰는 컴포넌트 버전의 내용. 키 "<컴포넌트id>@<버전>" */
+  components: z.record(z.string().regex(COMPONENT_KEY_RE, "components 키는 <컴포넌트id>@<버전> 형식이어야 합니다"), ComponentBodySchema).default({}),
 }).superRefine((r, ctx) => {
-  const seen = new Set<string>();
-  walkElements(r.elements, (el, _parent, _i, ancestors) => {
-    if (seen.has(el.id)) ctx.addIssue({ code: "custom", message: `duplicate element id: ${el.id}`, path: ["elements"] });
-    seen.add(el.id);
-    const inTemplate = ancestors.some((a) => a.type === "repeater");
-    if (inTemplate && el.type === "repeater") ctx.addIssue({ code: "custom", message: `repeater inside repeater template: ${el.id}`, path: ["elements"] });
-    if (inTemplate && el.type === "table" && el.overflow !== "clip") {
-      ctx.addIssue({ code: "custom", message: `table inside repeater template must be overflow "clip": ${el.id}`, path: ["elements"] });
+  // 같은 컴포넌트를 여러 번 참조해도 내용 트리는 키마다 한 번만 훑는다
+  const flowByKey = new Map<string, boolean>();
+  checkElementTree(r.elements, ctx, (el, inTemplate) => {
+    if (el.type !== "ref") return;
+    const key = componentKey(el.ref, el.version);
+    const body = Object.hasOwn(r.components, key) ? r.components[key] : undefined;
+    if (!body) {
+      ctx.addIssue({ code: "custom", message: `missing component ${key}: ${el.id}`, path: ["elements"] });
+      return;
+    }
+    if (Math.abs(el.w - body.w) > 1e-6 || Math.abs(el.h - body.h) > 1e-6) {
+      ctx.addIssue({ code: "custom", message: `ref size differs from component ${key}: ${el.id}`, path: ["elements"] });
+    }
+    if (!inTemplate) return;
+    let flow = flowByKey.get(key);
+    if (flow === undefined) { flow = hasFlowElement(body.elements); flowByKey.set(key, flow); }
+    if (flow) {
+      ctx.addIssue({ code: "custom", message: `component with continue table or repeater inside repeater template: ${el.id}`, path: ["elements"] });
     }
   });
   const names = new Set<string>();

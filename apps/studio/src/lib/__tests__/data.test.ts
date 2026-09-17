@@ -53,3 +53,17 @@ describe("requestBody", () => {
     expect(requestBody(plain, false)).toEqual({ report: plain, params: { lot: "{lot}" } });
   });
 });
+
+describe("sample props (컴포넌트 모드)", () => {
+  it("puts props into the canvas context and does not let sample data override it", () => {
+    const r = parseReport({ ...base, sample: { params: {}, data: { props: [{ title: "data" }] }, capturedAt: "2026-09-17T00:00:00.000Z" } });
+    const ctx = sampleContext(r, { title: "샘플" });
+    expect(ctx.props).toEqual({ title: "샘플" });
+    expect(Object.hasOwn(sampleContext(r), "props")).toBe(false);
+  });
+  it("adds props to the request body only when given", () => {
+    const r = parseReport(base);
+    expect(requestBody(r, false, { title: "샘플" })).toEqual({ report: r, params: {}, props: { title: "샘플" } });
+    expect("props" in requestBody(r, false)).toBe(false);
+  });
+});

@@ -44,3 +44,16 @@ describe("POST /api/reports/[id]/label", () => {
     expect((await call({ report: label, params: {} })).status).toBe(500);
   });
 });
+
+describe("POST /api/reports/[id]/label props field", () => {
+  it("passes body props into the context for the label download and the bitmap preview, and omits a non-object props", async () => {
+    renderLabel.mockResolvedValue({ language: "zpl", dpi: 203, pages: 1, data: Buffer.from("^XA^XZ\n"), mime: "text/plain", filename: "lb.zpl" });
+    rasterizePages.mockResolvedValue([{ width: 8, height: 1, bits: new Uint8Array([0xf0]) }]);
+    expect((await call({ report: label, params: {}, props: { code: "P-1" } })).status).toBe(200);
+    expect((renderLabel.mock.calls[0][1] as Record<string, unknown>).props).toEqual({ code: "P-1" });
+    expect((await call({ report: label, params: {}, props: { code: "P-2" } }, "?preview=png")).status).toBe(200);
+    expect((rasterizePages.mock.calls[0][1] as Record<string, unknown>).props).toEqual({ code: "P-2" });
+    await call({ report: label, params: {}, props: "P-3" });
+    expect(Object.hasOwn(renderLabel.mock.calls[1][1] as object, "props")).toBe(false);
+  });
+});

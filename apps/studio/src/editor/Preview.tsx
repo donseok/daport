@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { requestBody } from "@/lib/data";
 import { useEditor } from "./store";
+import { samplePropsContext } from "@/lib/component-edit";
 
 const DEBOUNCE_MS = 150;   // 스펙 5.5
 
@@ -9,6 +10,8 @@ export function Preview({ reportId }: { reportId: string }) {
   const report = useEditor((s) => s.report);
   const liveData = useEditor((s) => s.liveData);
   const bitmapPreview = useEditor((s) => s.bitmapPreview);
+  const componentMode = useEditor((s) => s.componentMode);
+  const sampleProps = componentMode ? samplePropsContext(componentMode) : undefined;
   const [html, setHtml] = useState("");
   const [bitmapUrl, setBitmapUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,7 +22,7 @@ export function Preview({ reportId }: { reportId: string }) {
     const timer = setTimeout(() => {
       if (isLabel && bitmapPreview) {
         fetch(`/api/reports/${encodeURIComponent(reportId)}/label?preview=png`, { method: "POST", headers: { "content-type": "application/json" },
-          body: JSON.stringify(requestBody(report, liveData)), signal: ctrl.signal })
+          body: JSON.stringify(requestBody(report, liveData, sampleProps)), signal: ctrl.signal })
           .then(async (r) => {
             if (r.ok) return r.blob();
             const body = await r.json().catch(() => ({}));
@@ -34,7 +37,7 @@ export function Preview({ reportId }: { reportId: string }) {
         return;
       }
       fetch(`/api/reports/${encodeURIComponent(reportId)}/preview`, { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(requestBody(report, liveData)), signal: ctrl.signal })
+        body: JSON.stringify(requestBody(report, liveData, sampleProps)), signal: ctrl.signal })
         .then(async (r) => {
           if (r.ok) return r.text();
           const body = await r.json().catch(() => ({}));
@@ -45,7 +48,7 @@ export function Preview({ reportId }: { reportId: string }) {
         .catch((e) => { if (!ctrl.signal.aborted) setError(e.message); });
     }, DEBOUNCE_MS);
     return () => { clearTimeout(timer); ctrl.abort(); };
-  }, [report, reportId, liveData, isLabel, bitmapPreview]);
+  }, [report, reportId, liveData, isLabel, bitmapPreview, sampleProps]);
   useEffect(() => () => { if (bitmapUrl) URL.revokeObjectURL(bitmapUrl); }, [bitmapUrl]);
   if (error) return <div className="p-4 text-red-700 text-sm whitespace-pre-wrap">{error}</div>;
   if (isLabel && bitmapPreview) {

@@ -32,10 +32,10 @@ describe("ReportSchema", () => {
     expect(r.elements[0].type).toBe("group");
   });
   it("accepts table/barcode/ref/pageNumber types (declared only)", () => {
-    const r = parseReport({ ...base, elements: [
+    const r = parseReport({ ...base, components: { "hdr@1": { name: "hdr", w: 40, h: 5 } }, elements: [
       { id: "b", type: "barcode", x: 0, y: 0, w: 40, h: 15, format: "qr", value: "{{ params.lot }}" },
       { id: "p", type: "pageNumber", x: 0, y: 280, w: 40, h: 5 },
-      { id: "c", type: "ref", x: 0, y: 0, w: 40, h: 5, ref: "hdr" },
+      { id: "c", type: "ref", x: 0, y: 0, w: 40, h: 5, ref: "hdr", version: 1 },
       { id: "t", type: "table", x: 0, y: 0, w: 100, h: 100, source: "items", columns: [] },
     ]});
     expect(r.elements).toHaveLength(4);

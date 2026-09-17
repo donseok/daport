@@ -11,6 +11,7 @@ import inspection from "../../../renderer/src/__tests__/fixtures/inspection-cert
 import invoice from "../../../renderer/src/__tests__/fixtures/invoice.report.json";
 import shipping from "../../../renderer/src/__tests__/fixtures/shipping-order.report.json";
 import badges from "../../../renderer/src/__tests__/fixtures/badge-sheet.report.json";
+import componentDemo from "../../../renderer/src/__tests__/fixtures/component-demo.report.json";
 
 /**
  * ±1px 세로 정렬 오차를 허용하는 shiftTolerantDiffRatio로 측정한 기준선 (표 테두리의 래스터 서브픽셀 드리프트를 뺀 값):
@@ -68,7 +69,7 @@ function lineRunStarts(png: PNG, xPx: number): number {
 afterAll(closePool);
 
 describe("multi-page PDF", () => {
-  it.each([["inspection-cert", inspection], ["invoice", invoice], ["shipping-order", shipping], ["badge-sheet", badges]])(
+  it.each([["inspection-cert", inspection], ["invoice", invoice], ["shipping-order", shipping], ["badge-sheet", badges], ["component-demo", componentDemo]])(
     "%s: PDF page count equals layout page count and every page matches its HTML screenshot", async (_name, fixture) => {
       const report = parseReport(fixture);
       const data = fixtureContext(report);

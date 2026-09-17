@@ -1,6 +1,7 @@
 import { interpolate, evaluate, evaluateSource, usesPageVars, mergeStyle, StyleSchema, ExpressionError,
   type DataContext, type Style, type TableElement, type TableCell } from "@daport/core";
 import { lineHeightMm } from "../text/measure";
+import { refPropsUsePageVars, repaintProps } from "../layout/props";
 import type { PlacedItem, PlacedLine, PlacedRect, PlacedText } from "../layout/types";
 import type { Block, BlockKind, FlowInput, FlowOptions } from "./types";
 import { computeGroupRuns, runsByRow, groupContext, type GroupRun } from "./groups";
@@ -62,12 +63,14 @@ const borderStyle = (el: TableElement): Style => ({ ...DEFAULT_STYLE, stroke: el
 
 /**
  * 셀 행 하나를 조각으로 만든다. 높이 = max(minHeight, 셀별 줄 수 × 줄 높이 + padding × 2)로 생성 시 확정한다.
- * 페이지 의존 변수를 쓰지 않는 셀은 여기서 잰 줄을 paint에서 그대로 쓴다(스펙 R6)
+ * 페이지 의존 변수를 쓰지 않는 셀은 여기서 잰 줄을 paint에서 그대로 쓴다(스펙 R6).
+ * 인스턴스 입력값이 페이지 값을 쓰면 입력값이 페이지마다 달라지므로 모든 셀을 그리는 시점에 다시 잰다(3b 스펙 5.2)
  */
 function makeBlock(el: TableElement, kind: BlockKind, cells: Cell[], ctx: DataContext, minHeight: number, keepWithNext: boolean,
   rows: unknown[], opts: FlowOptions, instance: string): Block {
   const measured = cells.map((c) => measureCell(c, ctx, opts));
-  const dynamic = cells.map((c) => usesPageVars(c.value));
+  const refDynamic = refPropsUsePageVars(opts.ref);
+  const dynamic = cells.map((c) => refDynamic || usesPageVars(c.value));
   let height = minHeight;
   cells.forEach((c, i) => { height = Math.max(height, measured[i].lines.length * lineHeightMm(c.style.fontSize, c.style.lineHeight) + c.style.padding * 2); });
   const width = tableWidth(el);
@@ -76,7 +79,7 @@ function makeBlock(el: TableElement, kind: BlockKind, cells: Cell[], ctx: DataCo
     kind, height, keepWithNext, rows,
     paint(origin, pageCtx) {
       const items: PlacedItem[] = [];
-      const pctx = dynamic.some(Boolean) ? { ...ctx, ...pageCtx } : null;
+      const pctx = dynamic.some(Boolean) ? repaintProps({ ...ctx, ...pageCtx }, opts.ref, opts.onExpressionError) : null;
       cells.forEach((c, i) => {
         const m = pctx && dynamic[i] ? measureCell(c, pctx, opts) : measured[i];
         const x = origin.x + c.x, y = origin.y;

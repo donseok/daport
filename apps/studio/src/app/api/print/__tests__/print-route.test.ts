@@ -44,3 +44,13 @@ describe("POST /api/print", () => {
     expect(renderLabel).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("POST /api/print props field", () => {
+  it("passes body props into the label render context", async () => {
+    const res = await call({ printer: "가짜", report: label, params: {}, props: { code: "P-1" } });
+    expect(res.status).toBe(200);
+    expect((renderLabel.mock.calls[0][1] as Record<string, unknown>).props).toEqual({ code: "P-1" });
+    await call({ printer: "가짜", report: label, params: {} });
+    expect(Object.hasOwn(renderLabel.mock.calls[1][1] as object, "props")).toBe(false);
+  });
+});

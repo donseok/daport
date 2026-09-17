@@ -62,3 +62,17 @@ describe("POST /api/reports/[id]/pdf", () => {
     expect((await res.json()).code).toBe("LAYOUT_LIMIT");
   });
 });
+
+describe("POST /api/reports/[id]/pdf props field", () => {
+  it("passes body props to the renderer context next to params, and omits props when the field is missing or not an object", async () => {
+    renderPdf.mockResolvedValue(Buffer.from("%PDF-"));
+    expect((await call({ report, params: { lot: "L1" }, props: { title: "T", n: 2 } })).status).toBe(200);
+    const ctx = renderPdf.mock.calls[0][1] as Record<string, unknown>;
+    expect(ctx.props).toEqual({ title: "T", n: 2 });
+    expect((ctx.params as { lot: string }).lot).toBe("L1");
+    await call({ report, params: { lot: "L1" } });
+    expect(Object.hasOwn(renderPdf.mock.calls[1][1] as object, "props")).toBe(false);
+    await call({ report, params: { lot: "L1" }, props: ["T"] });
+    expect(Object.hasOwn(renderPdf.mock.calls[2][1] as object, "props")).toBe(false);
+  });
+});

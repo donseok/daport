@@ -3,7 +3,7 @@ import { parseReport } from "@daport/core";
 import { renderToHtml, LayoutLimitError } from "@daport/renderer";
 import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
-import { readJsonBody, objectField, MAX_BODY_BYTES } from "@/lib/body";
+import { readJsonBody, objectField, propsField, MAX_BODY_BYTES } from "@/lib/body";
 import { runDatasets } from "@/lib/datasets";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -19,7 +19,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     // 요청 data가 있으면 그 데이터셋은 실행하지 않는다 (편집 중 미리보기는 sample.data를 보낸다)
     const { context, errors } = await runDatasets(report, { params: objectField(body, "params"), data: objectField(body, "data") });
     if (errors.length) return NextResponse.json({ error: "데이터셋 실행 실패", datasetErrors: errors }, { status: 400 });
-    const html = renderToHtml(resolveAssetUrls(report, origin), context, { fontBaseUrl: `${origin}/fonts` });
+    const props = propsField(body);
+    const html = renderToHtml(resolveAssetUrls(report, origin), props ? { ...context, props } : context, { fontBaseUrl: `${origin}/fonts` });
     return new NextResponse(html, { headers: { "content-type": "text/html; charset=utf-8" } });
   } catch (e) {
     if (e instanceof LayoutLimitError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });

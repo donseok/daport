@@ -8,7 +8,7 @@ const flat = (els: unknown[]) => flatten(parseReport({ id: "r", version: 1, page
 const ctx = { params: {}, order: { NAME: "ACME", HIDE: true } };
 
 describe("placeStatic", () => {
-  it("places text, pageNumber, image, line, rect, barcode and ref like layout did, with an instance", () => {
+  it("places text, pageNumber, image, line, rect and barcode like layout did, with an instance", () => {
     const els = flat([
       { id: "t", type: "text", x: 1, y: 2, w: 40, h: 8, value: "{{ order.NAME }}" },
       { id: "p", type: "pageNumber", x: 0, y: 0, w: 10, h: 5 },
@@ -16,10 +16,9 @@ describe("placeStatic", () => {
       { id: "l", type: "line", x: 0, y: 0, w: 5, h: 0, x2: 5, y2: 0 },
       { id: "r", type: "rect", x: 0, y: 0, w: 5, h: 5 },
       { id: "b", type: "barcode", x: 0, y: 0, w: 5, h: 5, format: "qr", value: "x" },
-      { id: "c", type: "ref", x: 0, y: 0, w: 5, h: 5, ref: "hdr" },
     ]);
     const items = els.flatMap((el) => placeStatic(el, { ...ctx, page: 2, total: 3 }, { onExpressionError: "blank", instance: "cards#1" }));
-    expect(items.map((i) => i.kind)).toEqual(["text", "text", "image", "line", "rect", "svg", "placeholder"]);
+    expect(items.map((i) => i.kind)).toEqual(["text", "text", "image", "line", "rect", "svg"]);
     expect(items[0]).toMatchObject({ lines: ["ACME"], instance: "cards#1", x: 1, y: 2 });
     expect(items[1]).toMatchObject({ lines: ["2 / 3"] });
     expect(items[2]).toMatchObject({ src: "asset://ACME" });

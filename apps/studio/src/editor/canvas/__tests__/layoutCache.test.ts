@@ -29,3 +29,22 @@ describe("layoutFor (스펙: 캔버스 밖 레이아웃 오류는 에디터 전�
     expect(second).toBe(first);
   });
 });
+
+describe("layoutFor with sample props", () => {
+  const titled = parseReport({ id: "r3", version: 1, page: { width: 100, height: 20, margin: [0, 0, 0, 0] },
+    elements: [{ id: "t", type: "text", x: 0, y: 0, w: 50, h: 5, value: "{{ props.title }}" }] });
+  const lines = (pages: ReturnType<typeof layoutFor>) => {
+    const it = pages[0].items.find((i) => i.elementId === "t");
+    return it?.kind === "text" ? it.lines : [];
+  };
+  it("lays out with the given props and caches per (report, props) reference", () => {
+    const a = { title: "A" }, b = { title: "B" };
+    const first = layoutFor(titled, a);
+    expect(lines(first)).toEqual(["A"]);
+    expect(layoutFor(titled, a)).toBe(first);
+    const second = layoutFor(titled, b);
+    expect(lines(second)).toEqual(["B"]);
+    expect(second).not.toBe(first);
+    expect(layoutError(titled, b)).toBeUndefined();
+  });
+});

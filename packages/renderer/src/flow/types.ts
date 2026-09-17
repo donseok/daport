@@ -1,3 +1,5 @@
+import type { ComponentBody } from "@daport/core";
+import type { RefPaint } from "../layout/props";
 import type { PlacedItem } from "../layout/types";
 import type { MeasureCache } from "../text/cache";
 
@@ -15,4 +17,9 @@ export type Block = {
 export type FlowInput = { header?: Block; pageFooter?: Block; body: Block[]; footer?: Block };
 export type FlowPlacement = { block: Block; y: number; overflow: boolean };   // y는 영역 상단 기준
 export type FlowPage = { placements: FlowPlacement[]; pageRows: unknown[]; overflow: boolean; truncated: boolean };
-export type FlowOptions = { measure: MeasureCache; onExpressionError: "blank" | "fail"; instancePrefix?: string };
+/**
+ * components: 레포트가 품은 컴포넌트 내용. 반복 영역 항목·밴드의 ref를 펼칠 때 쓴다.
+ * ref: 이 흐름 요소가 컴포넌트 인스턴스 안이면 그 인스턴스. 조각을 그릴 때 그 페이지 값으로 입력값을 다시 평가한다(3b 스펙 5.2)
+ */
+export type FlowOptions = { measure: MeasureCache; onExpressionError: "blank" | "fail"; instancePrefix?: string;
+  components?: Record<string, ComponentBody>; ref?: RefPaint };

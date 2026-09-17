@@ -114,3 +114,41 @@ describe("useKeyboard", () => {
     expect(store.getState().findElement("a")).toMatchObject({ x: 10 });
   });
 });
+
+describe("useKeyboard: group and ungroup", () => {
+  it("groups the selection with cmd/ctrl+g and ungroups with shift, each one undo step", () => {
+    const { store } = setup(["a", "b"]);
+    expect(press("g", { metaKey: true })).toBe(true);
+    expect(store.getState().report.elements.map((e) => e.id)).toEqual(["group-1"]);
+    expect(store.getState().selection).toEqual(["group-1"]);
+    expect(press("G", { ctrlKey: true, shiftKey: true })).toBe(true);
+    expect(store.getState().report.elements.map((e) => e.id)).toEqual(["a", "b"]);
+    expect(store.getState().selection).toEqual(["a", "b"]);
+    press("z", { metaKey: true });
+    expect(store.getState().report.elements.map((e) => e.id)).toEqual(["group-1"]);
+    press("z", { metaKey: true });
+    expect(store.getState().report).toEqual(report);
+  });
+
+  it("alerts the reason when the action is refused", () => {
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { store } = setup(["a"]);
+    expect(press("G", { metaKey: true, shiftKey: true })).toBe(true);
+    expect(alert).toHaveBeenCalledWith("해제할 그룹을 선택하세요");
+    expect(store.getState().report).toEqual(report);
+    alert.mockRestore();
+  });
+
+  it("does nothing without a selection, in preview mode, or inside form controls", () => {
+    const alert = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const { store, getByLabelText } = setup([]);
+    expect(press("g", { metaKey: true })).toBe(false);
+    store.getState().select(["a", "b"]);
+    expect(press("g", { metaKey: true }, getByLabelText("field"))).toBe(false);
+    store.getState().setMode("preview");
+    expect(press("g", { metaKey: true })).toBe(false);
+    expect(store.getState().report).toEqual(report);
+    expect(alert).not.toHaveBeenCalled();
+    alert.mockRestore();
+  });
+});

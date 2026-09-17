@@ -5,7 +5,7 @@ import { LayoutLimitError } from "@daport/renderer";
 import { renderLabel, LabelTooLargeError } from "@daport/label";
 import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
-import { readJsonBody, objectField, MAX_BODY_BYTES } from "@/lib/body";
+import { readJsonBody, objectField, propsField, MAX_BODY_BYTES } from "@/lib/body";
 import { runDatasets } from "@/lib/datasets";
 import { parsePrinters, sendRaw } from "@/lib/printers";
 
@@ -29,7 +29,8 @@ export async function POST(req: Request) {
   try {
     const { context, errors } = await runDatasets(report, { params: objectField(body, "params"), data: objectField(body, "data") });
     if (errors.length) return NextResponse.json({ error: "데이터셋 실행 실패", datasetErrors: errors }, { status: 400 });
-    const res = await renderLabel(resolveAssetUrls(report, new URL(req.url).origin), context);
+    const props = propsField(body);
+    const res = await renderLabel(resolveAssetUrls(report, new URL(req.url).origin), props ? { ...context, props } : context);
     try {
       const bytes = await sendRaw(printer, res.data);
       return NextResponse.json({ printer: printer.name, bytes, pages: res.pages });

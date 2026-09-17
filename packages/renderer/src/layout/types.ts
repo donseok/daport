@@ -6,8 +6,8 @@ type PlacedBase = {
   instance?: string;
   /** clip으로 잘린 흐름 요소의 flowBox에 표시 */
   clipped?: boolean;
-  /** flowBox: 표·반복 영역 전체 영역(선택·히트용). cell: 표 셀 텍스트. border: 표 테두리. template: 반복 영역 첫 항목 자리 */
-  role?: "flowBox" | "cell" | "border" | "template";
+  /** flowBox: 표·반복 영역 전체 영역(선택·히트용). cell: 표 셀 텍스트. border: 표 테두리. template: 반복 영역 첫 항목 자리. refBox: 컴포넌트 인스턴스 상자(선택·히트용) */
+  role?: "flowBox" | "cell" | "border" | "template" | "refBox";
   /** 빈 페이지보다 큰 조각을 잘라 단독 배치했을 때 flowBox에 표시 */
   overflow?: boolean;
 };
