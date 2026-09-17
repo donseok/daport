@@ -46,3 +46,13 @@ export const componentVersions = pgTable("component_versions", {
   hash: text("hash").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [primaryKey({ columns: [t.componentId, t.version] })]);
+
+/** MES용 API 키 (4단계 스펙 4.3). 원문은 저장하지 않고 sha256만 둔다. allowed_report_ids가 null이면 전체 허용 */
+export const apiKeys = pgTable("api_keys", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  keyHash: text("key_hash").notNull(),
+  allowedReportIds: text("allowed_report_ids").array(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+});

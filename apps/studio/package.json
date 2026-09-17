@@ -12,6 +12,7 @@
     "e2e": "playwright test",
     "db:push": "drizzle-kit push",
     "db:seed": "tsx scripts/seed.ts",
+    "keys": "tsx scripts/keys.ts",
     "postinstall": "node scripts/copy-fonts.mjs"
   },
   "dependencies": {
