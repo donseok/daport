@@ -3,7 +3,7 @@ import { useMemo, useState, type PointerEvent } from "react";
 import { layout } from "@daport/renderer/layout";
 import type { PlacedItem } from "@daport/renderer";
 import { PaintPage, pageCss, fontFaceCss } from "@daport/renderer/paint";   // 패키지 루트는 react-dom/server를 쓰는 html.ts까지 끌어온다
-import { resolveDataSync } from "@/lib/data";
+import { sampleContext } from "@/lib/data";
 import { resolveAssetUrls } from "@/lib/assets";
 import { useEditor, lineBox } from "../store";
 import { useDrag, type Box, type Handle } from "./useDrag";
@@ -26,7 +26,7 @@ export function Canvas({ zoom }: { zoom: number }) {
   const resizeElement = useEditor((s) => s.resizeElement);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
 
-  const data = useMemo(() => resolveDataSync(report), [report]);
+  const data = useMemo(() => sampleContext(report), [report]);
   // 미리보기·PDF와 같게 asset://을 /api/assets/{id}로 바꾼다 (상대 URL이라 studio 출처 기준으로 해석된다).
   // 스펙 10: 디자이너는 표현식 오류를 요소마다 #ERR로 보인다. onExpressionError("fail")는 미리보기·PDF 렌더만 따른다
   const pages = useMemo(() => layout({ ...resolveAssetUrls(report, ""), onExpressionError: "blank" }, data), [report, data]);

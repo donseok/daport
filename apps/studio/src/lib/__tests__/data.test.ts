@@ -1,24 +1,36 @@
 import { describe, it, expect } from "vitest";
-import { parseReport, resolveData } from "@daport/core";
-import { sampleParams, resolveDataSync } from "../data";
+import { parseReport } from "@daport/core";
+import { sampleParams, sampleContext } from "../data";
 
-const report = parseReport({ id: "r", version: 1, page: { width: 10, height: 10 }, params: [
+const base = { id: "r", version: 1, page: { width: 10, height: 10 } };
+const report = parseReport({ ...base, params: [
   { name: "lot", type: "string", required: true },
   { name: "qty", type: "number" },
   { name: "dt", type: "date", default: "2026-09-16" },
 ]});
 
 describe("sampleParams", () => {
-  it("uses the default, 0 for numbers and {name} otherwise, the same values the canvas binds", () => {
+  it("uses the default, 0 for numbers and {name} otherwise", () => {
     expect(sampleParams(report)).toEqual({ lot: "{lot}", qty: 0, dt: "2026-09-16" });
-    expect(resolveDataSync(report).params).toEqual(sampleParams(report));
   });
-  it("converts number params like preview and PDF do, so `params.qty + 1` is the same on the canvas", async () => {
-    const r = parseReport({ id: "r", version: 1, page: { width: 10, height: 10 }, params: [
-      { name: "qty", type: "number", default: "5" },
-      { name: "lot", type: "string", required: true, default: "" },   // 미리보기는 오류를 보이지만 캔버스는 그린다
-    ]});
-    expect(resolveDataSync(r).params).toEqual({ qty: 5, lot: "" });
-    expect((await resolveData({ ...r, params: [r.params[0]] }, sampleParams(r))).params).toEqual({ qty: 5 });
+});
+
+describe("sampleContext", () => {
+  it("falls back to sampleParams and static rows without a sample", () => {
+    const r = parseReport({ ...base, params: [{ name: "qty", type: "number", default: "5" }], datasets: [
+      { name: "s", type: "static", rows: [{ A: 1 }] }, { name: "h", type: "http", url: "https://x" }] });
+    const ctx = sampleContext(r);
+    expect(ctx.params).toEqual({ qty: 5 });
+    expect((ctx.s as { A: number }).A).toBe(1);
+    expect(ctx.h).toEqual([]);
+  });
+  it("prefers sample params (merged over placeholders) and sample data, and includes data-only names", () => {
+    const r = parseReport({ ...base, params: [{ name: "lot" }, { name: "qty", type: "number" }], datasets: [{ name: "s", type: "static", rows: [{ A: 1 }] }],
+      sample: { params: { lot: "L9" }, data: { s: [{ A: 2 }], extra: { X: 1 }, junk: "x" }, capturedAt: "2026-09-17T00:00:00.000Z" } });
+    const ctx = sampleContext(r);
+    expect(ctx.params).toEqual({ lot: "L9", qty: 0 });
+    expect((ctx.s as { A: number }).A).toBe(2);
+    expect(ctx.extra).toEqual([{ X: 1 }]);
+    expect(ctx.junk).toEqual([]);
   });
 });

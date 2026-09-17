@@ -1,10 +1,12 @@
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { createContext, useContext } from "react";
-import { safeParseReport, type Report, type Element, type Page } from "@daport/core";
+import { safeParseReport, walkElements, childArrays, collectIds, type Report, type Element, type Page } from "@daport/core";
 import { createHistory, commit, undo, redo, type History } from "./history";
 
 export type Problem = { path: string; message: string };
+export type View = { copyIndex: number; pageInCopy: number };
+export type BandTarget = { repeaterId: string; band: "item" | "groupHeader" | "groupFooter"; groupIndex?: number };
 
 export type EditorState = {
   history: History<Report>;
@@ -13,16 +15,21 @@ export type EditorState = {
   problems: Problem[];
   dirty: boolean;
   mode: "design" | "preview";
+  /** 캔버스가 보이는 부·페이지. 히스토리 밖 */
+  view: View;
+  /** 미리보기·PDF에 sample.data를 보내지 않고 서버 데이터셋을 실행한다. 히스토리 밖 */
+  liveData: boolean;
   // queries
   findElement(id: string): Element | undefined;
   allocateId(base: string): string;   // 트리 전체에서 비어 있는 `${base}-n`
+  findParentRepeater(id: string): string | undefined;   // id가 어떤 repeater 템플릿(항목·그룹 밴드) 안에 있으면 그 repeater id
   // mutations
   select(ids: string[]): void;
   toggleSelect(id: string): void;
   updateElement(id: string, patch: Partial<Element>): void;
   moveSelected(dx: number, dy: number): void;
   resizeElement(id: string, box: { x: number; y: number; w: number; h: number }): void;
-  addElement(el: Element): void;
+  addElement(el: Element, opts?: { into?: BandTarget }): void;
   duplicateSelected(): void;
   deleteSelected(): void;
   updatePage(patch: Partial<Page>): void;
@@ -32,20 +39,16 @@ export type EditorState = {
   setMode(m: "design" | "preview"): void;
   /** saved는 저장 요청에 실어 보낸 모델이다. 요청 중에 편집이 있었으면(참조가 다르면) dirty로 남긴다 */
   markSaved(saved: Report): void;
+  setView(v: Partial<View>): void;
+  setLiveData(v: boolean): void;
+  setSample(sample: Report["sample"]): void;
+  setDatasets(datasets: Report["datasets"]): void;
+  setParams(params: Report["params"]): void;
+  setRepeat(repeat: Report["repeat"] | undefined): void;
 };
 
-function walk(els: Element[], fn: (el: Element, parent: Element[] , idx: number) => boolean | void): boolean {
-  for (let i = 0; i < els.length; i++) {
-    const el = els[i];
-    if (fn(el, els, i)) return true;
-    if (el.type === "group" && walk(el.children, fn)) return true;
-  }
-  return false;
-}
-
 function newId(base: string, report: Report): string {
-  const ids = new Set<string>();
-  walk(report.elements, (el) => { ids.add(el.id); });
+  const ids = collectIds(report.elements);
   let n = 1; let id = `${base}-${n}`;
   while (ids.has(id)) { n++; id = `${base}-${n}`; }
   return id;
@@ -70,13 +73,25 @@ function mapAxis(p: number, from: number, size: number, to: number, nsize: numbe
   return size === 0 ? Math.min(Math.max(p, to), to + nsize) : to + ((p - from) / size) * nsize;
 }
 
+/** repeater 밴드의 자식 배열. 없으면 최상위 elements (잘못된 대상이면 조용히 최상위에 넣는다) */
+function bandOf(r: Report, into: BandTarget): Element[] {
+  let found: Element[] | undefined;
+  walkElements(r.elements, (el) => {
+    if (el.id !== into.repeaterId || el.type !== "repeater") return;
+    const g = el.groups[into.groupIndex ?? 0];
+    found = into.band === "item" ? el.item.children : into.band === "groupHeader" ? g?.header?.children : g?.footer?.children;
+    return true;
+  });
+  return found ?? r.elements;
+}
+
 export function createEditorStore(initial: Report) {
   return createStore<EditorState>((set, get) => {
     const apply = (mutate: (r: Report) => void) => {
       // 선의 w/h는 끝점에서 정해진다. X2·Y2 편집(패널·JSON)이나 추가·교체 뒤에도 선택 상자와 그린 선이 어긋나지 않게 모든 편집 뒤에 맞춘다
       const h = commit(get().history, (r) => {
         mutate(r);
-        walk(r.elements, (el) => { if (el.type === "line") { const b = lineBox(el); el.w = round(b.w); el.h = round(b.h); } });
+        walkElements(r.elements, (el) => { if (el.type === "line") { const b = lineBox(el); el.w = round(b.w); el.h = round(b.h); } });
       });
       if (h !== get().history) set({ history: h, report: h.present, dirty: true, problems: [] });
     };
@@ -90,15 +105,21 @@ export function createEditorStore(initial: Report) {
     };
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
-      findElement: (id) => { let found: Element | undefined; walk(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
+      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false,
+      findElement: (id) => { let found: Element | undefined; walkElements(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
       allocateId: (base) => newId(base, get().report),
+      findParentRepeater: (id) => {
+        let found: string | undefined;
+        walkElements(get().report.elements, (el, _p, _i, ancestors) => { if (el.id === id) { found = ancestors.find((a) => a.type === "repeater")?.id; return true; } });
+        return found;
+      },
       select: (ids) => set({ selection: ids }),
       toggleSelect: (id) => set((s) => ({ selection: s.selection.includes(id) ? s.selection.filter((x) => x !== id) : [...s.selection, id] })),
-      updateElement: (id, patch) => apply((r) => { walk(r.elements, (el) => { if (el.id === id) { Object.assign(el, patch); return true; } }); }),
-      moveSelected: (dx, dy) => apply((r) => { const sel = new Set(get().selection); walk(r.elements, (el) => {
+      updateElement: (id, patch) => apply((r) => { walkElements(r.elements, (el) => { if (el.id === id) { Object.assign(el, patch); return true; } }); }),
+      moveSelected: (dx, dy) => apply((r) => { const sel = new Set(get().selection); walkElements(r.elements, (el) => {
         if (sel.has(el.id)) { el.x = round(el.x + dx); el.y = round(el.y + dy); if (el.type === "line") { el.x2 = round(el.x2 + dx); el.y2 = round(el.y2 + dy); } } }); }),
       // box는 새 경계 상자다. 선은 두 끝점을 옛 상자에서 새 상자로 옮기고 w/h는 apply가 끝점에서 다시 계산한다
-      resizeElement: (id, box) => apply((r) => { walk(r.elements, (el) => { if (el.id !== id) return;
+      resizeElement: (id, box) => apply((r) => { walkElements(r.elements, (el) => { if (el.id !== id) return;
         if (el.type === "line") {
           const old = lineBox(el);
           el.x = round(mapAxis(el.x, old.x, old.w, box.x, box.w)); el.x2 = round(mapAxis(el.x2, old.x, old.w, box.x, box.w));
@@ -106,21 +127,21 @@ export function createEditorStore(initial: Report) {
           return true;
         }
         el.x = round(box.x); el.y = round(box.y); el.w = round(box.w); el.h = round(box.h); return true; }); }),
-      addElement: (el) => { apply((r) => { r.elements.push(el); }); set({ selection: [el.id] }); },
+      addElement: (el, opts) => { apply((r) => { (opts?.into ? bandOf(r, opts.into) : r.elements).push(el); }); set({ selection: [el.id] }); },
       duplicateSelected: () => {
         const ids: string[] = [];
         apply((r) => {
           const sel = new Set(get().selection);
-          const used = new Set<string>(); walk(r.elements, (el) => { used.add(el.id); });
+          const used = collectIds(r.elements);
           const alloc = (base: string) => { let n = 1; while (used.has(`${base}-${n}`)) n++; used.add(`${base}-${n}`); return `${base}-${n}`; };
-          // 복사본은 원본과 같은 부모 배열의 바로 뒤에 넣는다. 그룹 자식의 x/y는 그룹 기준이라 최상위로 옮기면 위치가 틀어진다
+          // 복사본은 원본과 같은 부모 배열(그룹 자식·반복 영역 템플릿 포함)의 바로 뒤에 넣는다. 자식의 x/y는 부모 기준이라 최상위로 옮기면 위치가 틀어진다
           const inserts: { parent: Element[]; idx: number; copy: Element }[] = [];
-          walk(r.elements, (el, parent, idx) => {
+          walkElements(r.elements, (el, parent, idx) => {
             if (!sel.has(el.id)) return;
             const c = structuredClone(el) as Element;
             c.id = alloc(el.id); c.x = round(c.x + 5); c.y = round(c.y + 5);
             if (c.type === "line") { c.x2 = round(c.x2 + 5); c.y2 = round(c.y2 + 5); }
-            if (c.type === "group") walk(c.children, (d) => { d.id = alloc(d.id); });   // 복사한 그룹의 자식도 새 id (중복 id는 검증 실패)
+            for (const arr of childArrays(c)) walkElements(arr, (d) => { d.id = alloc(d.id); });   // 복사한 자손도 새 id (중복 id는 검증 실패)
             ids.push(c.id); inserts.push({ parent, idx, copy: c });
           });
           // 같은 부모 안에서는 뒤쪽 인덱스부터 넣어야 앞쪽 인덱스가 밀리지 않는다 (walk는 부모마다 인덱스 오름차순으로 방문)
@@ -128,7 +149,14 @@ export function createEditorStore(initial: Report) {
         });
         set({ selection: ids });
       },
-      deleteSelected: () => { apply((r) => { const sel = new Set(get().selection); const prune = (els: Element[]) => { for (let i = els.length - 1; i >= 0; i--) { if (sel.has(els[i].id)) els.splice(i, 1); else if (els[i].type === "group") prune((els[i] as any).children); } }; prune(r.elements); }); set({ selection: [] }); },
+      deleteSelected: () => {
+        apply((r) => {
+          const sel = new Set(get().selection);
+          const prune = (els: Element[]) => { for (let i = els.length - 1; i >= 0; i--) { if (sel.has(els[i].id)) els.splice(i, 1); else for (const arr of childArrays(els[i])) prune(arr); } };
+          prune(r.elements);
+        });
+        set({ selection: [] });
+      },
       updatePage: (patch) => apply((r) => { Object.assign(r.page, patch); }),
       replaceReport: (candidate) => {
         const res = safeParseReport(candidate);
@@ -145,6 +173,12 @@ export function createEditorStore(initial: Report) {
       redo: () => travel(redo),
       setMode: (mode) => set({ mode }),
       markSaved: (saved) => set({ dirty: get().report !== saved }),   // 커밋·undo·redo는 늘 새 객체를 만든다
+      setView: (v) => set((s) => ({ view: { ...s.view, ...v } })),
+      setLiveData: (liveData) => set({ liveData }),
+      setSample: (sample) => apply((r) => { if (sample) r.sample = sample; else delete r.sample; }),
+      setDatasets: (datasets) => apply((r) => { r.datasets = datasets; }),
+      setParams: (params) => apply((r) => { r.params = params; }),
+      setRepeat: (repeat) => apply((r) => { if (repeat) r.repeat = repeat; else delete r.repeat; }),
     };
   });
 }
