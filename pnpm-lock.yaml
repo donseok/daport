@@ -104,6 +104,12 @@ importers:
         specifier: ^2.3.4
         version: 2.3.4
 
+  packages/datasource:
+    dependencies:
+      '@daport/core':
+        specifier: workspace:*
+        version: link:../core
+
   packages/pdf:
     dependencies:
       '@daport/renderer':
