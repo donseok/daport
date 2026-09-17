@@ -94,6 +94,12 @@ importers:
         specifier: ^4.19.0
         version: 4.23.13
 
+  packages/browser:
+    dependencies:
+      playwright:
+        specifier: ^1.55.0
+        version: 1.63.0
+
   packages/core:
     dependencies:
       jexl:
@@ -112,6 +118,34 @@ importers:
       '@daport/core':
         specifier: workspace:*
         version: link:../core
+
+  packages/label:
+    dependencies:
+      '@daport/browser':
+        specifier: workspace:*
+        version: link:../browser
+      '@daport/renderer':
+        specifier: workspace:*
+        version: link:../renderer
+      pngjs:
+        specifier: ^7.0.0
+        version: 7.0.0
+    devDependencies:
+      '@daport/core':
+        specifier: workspace:*
+        version: link:../core
+      '@daport/pdf':
+        specifier: workspace:*
+        version: link:../pdf
+      '@types/pngjs':
+        specifier: ^6.0.5
+        version: 6.0.5
+      pdf-to-img:
+        specifier: ^4.4.0
+        version: 4.5.0
+      pixelmatch:
+        specifier: ^7.1.0
+        version: 7.2.0
 
   packages/pdf:
     dependencies:
