@@ -149,6 +149,9 @@ importers:
 
   packages/pdf:
     dependencies:
+      '@daport/browser':
+        specifier: workspace:*
+        version: link:../browser
       '@daport/renderer':
         specifier: workspace:*
         version: link:../renderer
