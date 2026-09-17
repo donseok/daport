@@ -1,6 +1,7 @@
 import { resolveParams, rowsProxy, RESERVED_CONTEXT_NAMES, type Report, type DataContext, type Dataset } from "@daport/core";
 import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver } from "./types";
 import { runSql } from "./sql";
+import { runHttp } from "./http";
 
 export type ExecuteOptions = {
   params: Record<string, unknown>;
@@ -24,16 +25,16 @@ function checkRows(rows: Record<string, unknown>[], limits: Limits): Record<stri
   return rows;
 }
 
-/** 데이터셋 정의 하나를 실행한다. http·sql은 T12·T9가 채운다 */
+/** 데이터셋 정의 하나를 실행한다 */
 async function runDataset(ds: Dataset, params: Record<string, unknown>, opts: ExecuteOptions, limits: Limits): Promise<Record<string, unknown>[]> {
   switch (ds.type) {
     case "static": return ds.rows;
-    case "http": throw new DatasetFailure("HOST_NOT_ALLOWED", "http connector not configured");
+    case "http": return runHttp(ds, params, opts.connectors, opts.secrets, limits);
     case "sql": return runSql(ds, params, opts.connectors, limits);
   }
 }
 
-/** 실패 → errors 항목. 비밀값 마스킹은 T12가 http 분기에 더한다 */
+/** 실패 → errors 항목. http는 runHttp가 비밀값을 이미 마스킹한 메시지를 던진다 */
 function toError(dataset: string, e: unknown, fallback: DatasetError["code"]): DatasetError {
   if (e instanceof DatasetFailure) return { dataset, code: e.code, message: e.message };
   return { dataset, code: fallback, message: e instanceof Error ? e.message : String(e) };
