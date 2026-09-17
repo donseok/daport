@@ -62,4 +62,19 @@ describe("Preview", () => {
     await waitFor(() => expect(container.textContent).toContain("h: HOST_NOT_ALLOWED"), { timeout: 3000 });
     expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).data).toEqual({ h: [{ A: 1 }] });
   });
+
+  it("shows the bitmap PNG instead of the iframe when bitmap preview is on for a label report", async () => {
+    const fetchMock = vi.fn(async (url: string) => url.includes("preview=png")
+      ? new Response(new Uint8Array([137, 80, 78, 71]), { status: 200, headers: { "content-type": "image/png" } })
+      : new Response("<p>html</p>", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:png", revokeObjectURL: () => {} }));
+    const store = createEditorStore(parseReport({ ...report, output: { kind: "label", label: { language: "zpl", dpi: 203 } } }));
+    store.getState().setBitmapPreview(true);
+    const { container, findByTestId } = render(<EditorContext.Provider value={store}><Preview reportId="r" /></EditorContext.Provider>);
+    const img = await findByTestId("bitmap-preview");
+    expect(img.getAttribute("src")).toBe("blob:png");
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(String(fetchMock.mock.calls[0][0])).toBe("/api/reports/r/label?preview=png");
+  });
 });

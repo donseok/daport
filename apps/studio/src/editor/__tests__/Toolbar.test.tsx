@@ -172,3 +172,49 @@ describe("Toolbar", () => {
     expect(screen.getByTestId("page-indicator").textContent).toBe("1 / 1");
   });
 });
+
+describe("Toolbar label actions", () => {
+  const labelReport = parseReport({ id: "r", name: "R", version: 1, page: { width: 60, height: 40 }, output: { kind: "label", label: { language: "zpl", dpi: 203 } } });
+
+  it("hides label actions for a pdf report and shows download + bitmap toggle for a label report; printers only when listed", async () => {
+    const fetchMock = vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/api/printers") ? [] : {}), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const pdfStore = createEditorStore(report);
+    const { unmount } = render(<EditorContext.Provider value={pdfStore}><Toolbar reportId="r" zoom={1} setZoom={() => {}} /></EditorContext.Provider>);
+    expect(screen.queryByTestId("label-download")).toBeNull();
+    unmount();
+    const store = createEditorStore(labelReport);
+    render(<EditorContext.Provider value={store}><Toolbar reportId="r" zoom={1} setZoom={() => {}} /></EditorContext.Provider>);
+    expect(screen.getByTestId("label-download")).toBeTruthy();
+    expect(screen.getByLabelText("비트맵")).toBeTruthy();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/api/printers", expect.anything()));
+    expect(screen.queryByLabelText("프린터")).toBeNull();
+    fireEvent.click(screen.getByLabelText("비트맵"));
+    expect(store.getState().bitmapPreview).toBe(true);
+  });
+
+  it("downloads the label from the label route with the sample body and sends to a listed printer", async () => {
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.endsWith("/api/printers")) return new Response(JSON.stringify([{ name: "라인1" }]), { status: 200 });
+      if (url.endsWith("/label")) return new Response("^XA^XZ", { status: 200, headers: { "content-type": "text/plain", "content-disposition": 'attachment; filename="r.zpl"' } });
+      if (url.endsWith("/api/print")) return new Response(JSON.stringify({ printer: JSON.parse(String(init?.body)).printer, bytes: 6, pages: 1 }), { status: 200 });
+      return new Response("{}", { status: 200 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const alertMock = vi.spyOn(window, "alert").mockImplementation(() => {});
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    const store = createEditorStore(labelReport);
+    render(<EditorContext.Provider value={store}><Toolbar reportId="r" zoom={1} setZoom={() => {}} /></EditorContext.Provider>);
+    fireEvent.click(screen.getByTestId("label-download"));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    const labelCall = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/label"))!;
+    expect(labelCall[0]).toBe("/api/reports/r/label");
+    expect(JSON.parse(String(labelCall[1]?.body)).report.id).toBe("r");
+    await waitFor(() => expect(screen.getByLabelText("프린터")).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("프린터"), { target: { value: "라인1" } });
+    fireEvent.click(screen.getByRole("button", { name: "프린터로 보내기" }));
+    await waitFor(() => expect(alertMock).toHaveBeenCalledWith(expect.stringContaining("라인1")));
+    const printCall = fetchMock.mock.calls.find(([u]) => String(u).endsWith("/api/print"))!;
+    expect(JSON.parse(String(printCall[1]?.body))).toMatchObject({ printer: "라인1", report: { id: "r" } });
+  });
+});

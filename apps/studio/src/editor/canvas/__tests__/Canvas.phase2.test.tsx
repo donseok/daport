@@ -99,3 +99,13 @@ describe("Canvas (레이아웃 오류가 나도 편집기 전체를 내리지 �
     expect(getByTestId("page-indicator").textContent).toBe("1 / 1");
   });
 });
+
+describe("Canvas label badge", () => {
+  it("shows the label language and dpi for a label report only", () => {
+    const store = createEditorStore(parseReport({ id: "l", version: 1, page: { width: 60, height: 40 }, output: { kind: "label", label: { language: "tspl", dpi: 300 } } }));
+    const { q } = mount(store);
+    expect(q('[data-testid="label-badge"]')?.textContent).toBe("라벨 · TSPL · 300dpi");
+    cleanup();
+    expect(mount(createEditorStore(report)).q('[data-testid="label-badge"]')).toBeNull();
+  });
+});
