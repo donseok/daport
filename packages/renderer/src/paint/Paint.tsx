@@ -49,6 +49,9 @@ function Item({ item }: { item: PlacedItem }) {
       return <img {...common} src={item.src || undefined} alt="" style={{ ...box(item), objectFit: item.fit === "stretch" ? "fill" : item.fit, ...dimStyle }} />;
     case "placeholder":
       return <div {...common} className={cls + " dp-ph"} style={{ ...box(item), ...dimStyle }}>{item.label}</div>;
+    case "svg":
+      // bwip-js가 만든 SVG만 들어온다(값은 글리프 경로로 그려져 마크업이 아니다)
+      return <div {...common} className={cls + " dp-svg"} style={{ ...box(item), ...dimStyle }} dangerouslySetInnerHTML={{ __html: item.svg }} />;
   }
 }
 

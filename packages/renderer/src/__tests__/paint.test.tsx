@@ -23,8 +23,8 @@ describe("paint", () => {
     expect(html).toContain("font-weight:700");
     expect(html).toContain("text-align:center");
     expect(html).toContain('src="https://example.com/a.png"');
-    expect(html).toContain("barcode:qr");
-    expect(html).toContain("<svg");           // line은 svg
+    expect(html).toMatch(/<div[^>]*class="dp-el dp-svg"[^>]*data-element-id="b"[^>]*><svg/);
+    expect(html).toContain("<svg");           // line·barcode 모두 svg
   });
   it("gives a horizontal or vertical line an SVG box at least as thick as its stroke (mm, not screen px)", () => {
     const r = parseReport({ id: "r5", version: 1, page: { width: 60, height: 40 }, elements: [
@@ -116,5 +116,11 @@ describe("paint", () => {
     } finally {
       warn.mockRestore();
     }
+  });
+  it("inlines a barcode svg inside its box", () => {
+    const r = parseReport({ id: "bc", version: 1, page: { width: 60, height: 40 }, elements: [{ id: "b", type: "barcode", x: 5, y: 5, w: 40, h: 15, format: "qr", value: "hello" }] });
+    const html = renderToStaticMarkup(<PaintPages pages={layout(r, { params: {} })} />);
+    expect(html).toMatch(/<div[^>]*class="dp-el dp-svg"[^>]*data-element-id="b"[^>]*><svg/);
+    expect(html).toContain("left:5mm;top:5mm;width:40mm;height:15mm");
   });
 });

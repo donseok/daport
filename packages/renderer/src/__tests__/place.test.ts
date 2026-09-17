@@ -19,11 +19,11 @@ describe("placeStatic", () => {
       { id: "c", type: "ref", x: 0, y: 0, w: 5, h: 5, ref: "hdr" },
     ]);
     const items = els.flatMap((el) => placeStatic(el, { ...ctx, page: 2, total: 3 }, { onExpressionError: "blank", instance: "cards#1" }));
-    expect(items.map((i) => i.kind)).toEqual(["text", "text", "image", "line", "rect", "placeholder", "placeholder"]);
+    expect(items.map((i) => i.kind)).toEqual(["text", "text", "image", "line", "rect", "svg", "placeholder"]);
     expect(items[0]).toMatchObject({ lines: ["ACME"], instance: "cards#1", x: 1, y: 2 });
     expect(items[1]).toMatchObject({ lines: ["2 / 3"] });
     expect(items[2]).toMatchObject({ src: "asset://ACME" });
-    expect(items[5]).toMatchObject({ label: "barcode:qr" });
+    expect((items[5] as { svg: string }).svg).toContain("<svg");
   });
   it("returns [] for hidden elements and #ERR for expression errors in blank mode, throws in fail mode", () => {
     const [hidden, bad] = flat([

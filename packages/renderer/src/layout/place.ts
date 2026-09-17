@@ -2,6 +2,7 @@ import { interpolate, evaluate, evaluateTemplateValue, hasTemplate, ExpressionEr
 import type { FlatElement } from "./flatten";
 import { wrapText, lineHeightMm } from "../text/measure";
 import type { PlacedItem, PlacedText } from "./types";
+import { renderBarcode, BarcodeError } from "../barcode/render";
 
 type Box = { id: string; x: number; y: number; w: number; h: number; style: Style };
 
@@ -46,12 +47,12 @@ export function placeStatic(el: FlatElement, ctx: DataContext, opts: { onExpress
       case "image": return [{ ...base, kind: "image", src: interpolate(el.src, ctx), fit: el.fit }];
       case "line": return [{ ...base, kind: "line", x2: el.x2, y2: el.y2 }];
       case "rect": return [base];
-      case "barcode": return [{ ...base, kind: "placeholder", label: `barcode:${el.format}` }];
+      case "barcode": return [{ ...base, kind: "svg", svg: renderBarcode(el.format, interpolate(el.value, ctx), { showText: el.showText, fontSize: el.style.fontSize }) }];
       case "ref": return [{ ...base, kind: "placeholder", label: `ref:${el.ref}` }];
     }
   } catch (e) {
-    // 표현식 오류만 요소 단위로 격리한다. 렌더러 자체 오류는 모드와 무관하게 그대로 던진다
-    if (!(e instanceof ExpressionError) || opts.onExpressionError === "fail") throw e;
+    // 표현식 오류와 바코드 오류만 요소 단위로 격리한다. 렌더러 자체 오류는 모드와 무관하게 그대로 던진다
+    if (!(e instanceof ExpressionError || e instanceof BarcodeError) || opts.onExpressionError === "fail") throw e;
     return [errorItem(el, e.message, opts.instance)];
   }
 }
