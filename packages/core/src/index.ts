@@ -10,3 +10,4 @@ export * from "./expression/engine";
 export * from "./expression/template";
 export * from "./expression/source";
 export * from "./data/resolve";
+export * from "./data/infer";
