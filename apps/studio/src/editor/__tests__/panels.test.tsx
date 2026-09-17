@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { parseReport, ElementSchema, type Element } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../store";
 import { ElementPalette } from "../panels/ElementPalette";
@@ -47,37 +47,44 @@ describe("ElementPalette", () => {
   });
 });
 
-describe("PagePanel", () => {
-  it("applies a preset and reflects it in the select", () => {
-    const store = createEditorStore(report);
-    mount(store, <PagePanel />);
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("사용자 정의");
-    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "A4 가로" } });
-    expect(store.getState().report.page).toMatchObject({ width: 297, height: 210 });
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("A4 가로");
-    // "사용자 정의"를 고르면 크기는 그대로 둔다
-    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "사용자 정의" } });
-    expect(store.getState().report.page).toMatchObject({ width: 297, height: 210 });
-  });
+describe("PagePanel presets", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }))); });
+  afterEach(() => vi.unstubAllGlobals());
 
-  it("edits width and height in mm", () => {
+  it("shows custom for an unknown size, applies a builtin preset (page + output) and returns to custom", async () => {
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
-    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "60" } });
-    fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "40" } });
-    expect(store.getState().report.page).toMatchObject({ width: 60, height: 40 });
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("Tag 60×40");
+    const select = () => screen.getByLabelText("프리셋") as HTMLSelectElement;
+    expect(select().value).toBe("custom");
+    fireEvent.change(select(), { target: { value: "coil-tag-100x150" } });
+    expect(store.getState().report.page).toMatchObject({ width: 100, height: 150 });
+    expect(store.getState().report.output.kind).toBe("label");
+    expect(select().value).toBe("coil-tag-100x150");
+    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "99" } });
+    expect(select().value).toBe("custom");
   });
-
-  it("ignores empty or non-positive size input instead of committing it", () => {
+  it("lists user presets from the API, saves the current settings as a preset and deletes it", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    let list = [{ id: "my-tag", name: "내 Tag", page: { width: 80, height: 50, margin: [1, 1, 1, 1], unit: "mm" }, output: { kind: "pdf" }, builtin: false }];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (init?.method === "POST") { list = [...list, { ...JSON.parse(String(init.body)), builtin: false, output: { kind: "pdf" } }]; return new Response(JSON.stringify(list.at(-1)), { status: 201 }); }
+      if (init?.method === "DELETE") { list = list.filter((p) => !url.endsWith(p.id)); return new Response(null, { status: 204 }); }
+      return new Response(JSON.stringify(list), { status: 200 });
+    }));
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
-    const before = store.getState().history.past.length;
-    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "" } });
-    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "0" } });
-    fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "-5" } });
-    expect(store.getState().report.page).toMatchObject({ width: 100, height: 100 });
-    expect(store.getState().history.past.length).toBe(before);
+    await waitFor(() => expect(screen.getByRole("option", { name: "내 Tag" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "my-tag" } });
+    expect(store.getState().report.page).toMatchObject({ width: 80, height: 50, margin: [1, 1, 1, 1] });
+    fireEvent.click(screen.getByRole("button", { name: "프리셋 삭제" }));
+    await waitFor(() => expect(screen.queryByRole("option", { name: "내 Tag" })).toBeNull());
+    fireEvent.change(screen.getByLabelText("새 프리셋 id"), { target: { value: "saved-one" } });
+    fireEvent.change(screen.getByLabelText("새 프리셋 이름"), { target: { value: "저장한 것" } });
+    fireEvent.click(screen.getByRole("button", { name: "프리셋으로 저장" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: "저장한 것" })).toBeTruthy());
+    const post = calls.find((c) => c.init?.method === "POST")!;
+    expect(JSON.parse(String(post.init!.body))).toMatchObject({ id: "saved-one", name: "저장한 것", page: { width: 80, height: 50 } });
   });
 });
 

@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { createContext, useContext } from "react";
-import { safeParseReport, walkElements, childArrays, collectIds, type Report, type Element, type Page } from "@daport/core";
+import { safeParseReport, walkElements, childArrays, collectIds, type Report, type Element, type Page, type Preset } from "@daport/core";
 import { createHistory, commit, undo, redo, type History } from "./history";
 
 export type Problem = { path: string; message: string };
@@ -45,6 +45,10 @@ export type EditorState = {
   setDatasets(datasets: Report["datasets"]): void;
   setParams(params: Report["params"]): void;
   setRepeat(repeat: Report["repeat"] | undefined): void;
+  bitmapPreview: boolean;                     // 라벨 미리보기에서 이진화 PNG를 보인다. 히스토리 밖
+  setBitmapPreview(v: boolean): void;
+  setOutput(output: Report["output"]): void;
+  applyPreset(preset: Preset): void;          // page + output을 한 커밋으로
 };
 
 function newId(base: string, report: Report): string {
@@ -105,7 +109,7 @@ export function createEditorStore(initial: Report) {
     };
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
-      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false,
+      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false, bitmapPreview: false,
       findElement: (id) => { let found: Element | undefined; walkElements(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
       allocateId: (base) => newId(base, get().report),
       findParentRepeater: (id) => {
@@ -179,6 +183,9 @@ export function createEditorStore(initial: Report) {
       setDatasets: (datasets) => apply((r) => { r.datasets = datasets; }),
       setParams: (params) => apply((r) => { r.params = params; }),
       setRepeat: (repeat) => apply((r) => { if (repeat) r.repeat = repeat; else delete r.repeat; }),
+      setBitmapPreview: (bitmapPreview) => set({ bitmapPreview }),
+      setOutput: (output) => apply((r) => { r.output = output; }),
+      applyPreset: (preset) => apply((r) => { r.page = { ...preset.page }; r.output = structuredClone(preset.output); }),
     };
   });
 }

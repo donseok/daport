@@ -256,3 +256,26 @@ describe("editor store (phase 2)", () => {
     expect(store.getState().view.pageInCopy).toBe(2);
   });
 });
+
+describe("editor store (phase 3)", () => {
+  const rep = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } });
+  it("setOutput is undoable and applyPreset changes page and output in one step", () => {
+    const store = createEditorStore(rep);
+    store.getState().setOutput({ kind: "label", label: { language: "tspl", dpi: 300, threshold: 100, copies: 2 } });
+    expect(store.getState().report.output).toMatchObject({ kind: "label", label: { language: "tspl", dpi: 300 } });
+    store.getState().applyPreset({ id: "p", name: "P", builtin: false, page: { width: 60, height: 40, margin: [2, 2, 2, 2], unit: "mm" }, output: { kind: "label", label: { language: "zpl", dpi: 203, threshold: 128, copies: 1 } } });
+    expect(store.getState().report.page).toMatchObject({ width: 60, height: 40, margin: [2, 2, 2, 2] });
+    expect(store.getState().report.output).toMatchObject({ kind: "label", label: { language: "zpl" } });
+    store.getState().undo();
+    expect(store.getState().report.page.width).toBe(100);
+    expect(store.getState().report.output).toMatchObject({ kind: "label", label: { language: "tspl" } });
+    store.getState().undo();
+    expect(store.getState().report.output).toEqual({ kind: "pdf" });
+  });
+  it("keeps bitmapPreview outside history", () => {
+    const store = createEditorStore(rep);
+    store.getState().setBitmapPreview(true);
+    expect(store.getState().bitmapPreview).toBe(true);
+    expect(store.getState().dirty).toBe(false);
+  });
+});

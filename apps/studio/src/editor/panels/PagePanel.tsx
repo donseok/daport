@@ -1,25 +1,80 @@
 "use client";
+import { useEffect, useState } from "react";
+import type { Preset } from "@daport/core";
 import { useEditor } from "../store";
-import { NumberField, SelectField, TextField, CheckField } from "./Field";
+import { NumberField, TextField, CheckField, Field } from "./Field";
 import { defaultSource } from "./ElementPalette";
+import { OutputPanel } from "./OutputPanel";
+import { BUILTIN_PRESETS } from "@/lib/presets";
 
-const PRESETS: Record<string, [number, number]> = {
-  "A4 세로": [210, 297], "A4 가로": [297, 210], "A3 세로": [297, 420], "A3 가로": [420, 297], "Letter": [215.9, 279.4], "Tag 60×40": [60, 40], "사용자 정의": [0, 0],
-};
+const samePage = (a: Preset["page"], b: Preset["page"]) => a.width === b.width && a.height === b.height && a.margin.every((m, i) => m === b.margin[i]);
 
+/** 페이지 크기·프리셋·반복·출력 설정 (스펙 4.3, 7.1, 7.2). 프리셋 목록 = 내장(동기) + 사용자 정의(API) */
 export function PagePanel() {
-  const page = useEditor((s) => s.report.page);
-  const updatePage = useEditor((s) => s.updatePage);
   const report = useEditor((s) => s.report);
+  const page = report.page;
+  const updatePage = useEditor((s) => s.updatePage);
+  const applyPreset = useEditor((s) => s.applyPreset);
   const repeat = useEditor((s) => s.report.repeat);
   const setRepeat = useEditor((s) => s.setRepeat);
-  const current = Object.entries(PRESETS).find(([, [w, h]]) => w === page.width && h === page.height)?.[0] ?? "사용자 정의";
+  const [userPresets, setUserPresets] = useState<Preset[]>([]);
+  const [newId, setNewId] = useState("");
+  const [newName, setNewName] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = async () => {
+    try {
+      const r = await fetch("/api/presets");
+      if (!r.ok) return;
+      const list = (await r.json()) as Preset[];
+      setUserPresets(list.filter((p) => !p.builtin));
+    } catch { /* 목록을 못 받아도 내장 프리셋은 쓸 수 있다 */ }
+  };
+  useEffect(() => { void refresh(); }, []);
+
+  const presets = [...BUILTIN_PRESETS, ...userPresets];
+  // 크기·여백·출력이 모두 같은 프리셋만 "선택됨"으로 본다
+  const current = presets.find((p) => samePage(p.page, page) && JSON.stringify(p.output) === JSON.stringify(report.output))?.id ?? "custom";
+  const options = ["custom", ...presets.map((p) => p.id)];
+  const labelOf = (id: string) => (id === "custom" ? "사용자 정의" : presets.find((p) => p.id === id)!.name);
+
+  const save = async () => {
+    setError(null);
+    const r = await fetch("/api/presets", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: newId, name: newName, page, output: report.output }) });
+    if (!r.ok) { setError(((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? `저장 실패 (HTTP ${r.status})`); return; }
+    setNewId(""); setNewName("");
+    await refresh();
+  };
+  const remove = async () => {
+    const r = await fetch(`/api/presets/${encodeURIComponent(current)}`, { method: "DELETE" });
+    if (!r.ok) { setError(`삭제 실패 (HTTP ${r.status})`); return; }
+    await refresh();
+  };
+  const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
+
   return (
     <div className="p-3 flex flex-col gap-2">
       <div className="text-xs font-semibold">페이지</div>
-      <SelectField label="프리셋" value={current} options={Object.keys(PRESETS)} onChange={(k) => { const [w, h] = PRESETS[k]; if (w) updatePage({ width: w, height: h }); }} />
+      <Field label="프리셋">
+        <select aria-label="프리셋" value={current} className="w-full border rounded px-1 py-0.5"
+          onChange={(e) => { const p = presets.find((x) => x.id === e.target.value); if (p) applyPreset(p); }}>
+          {options.map((id) => <option key={id} value={id}>{labelOf(id)}</option>)}
+        </select>
+      </Field>
+      {userPresets.some((p) => p.id === current) && <button className={btn + " self-start"} onClick={remove}>프리셋 삭제</button>}
       <NumberField label="너비(mm)" value={page.width} onChange={(width) => { if (width > 0) updatePage({ width }); }} />
       <NumberField label="높이(mm)" value={page.height} onChange={(height) => { if (height > 0) updatePage({ height }); }} />
+      <details className="text-xs">
+        <summary className="cursor-pointer text-neutral-600">현재 설정을 프리셋으로 저장</summary>
+        <div className="flex flex-col gap-1 mt-1">
+          <TextField label="새 프리셋 id" value={newId} onChange={setNewId} />
+          <TextField label="새 프리셋 이름" value={newName} onChange={setNewName} />
+          <button className={btn + " self-start"} disabled={!newId || !newName} onClick={save}>프리셋으로 저장</button>
+          {error && <div className="text-red-700">{error}</div>}
+        </div>
+      </details>
+
+      <OutputPanel />
 
       <div className="text-xs font-semibold mt-2">반복</div>
       <CheckField label="레코드마다 한 부씩" value={!!repeat} onChange={(on) => setRepeat(on ? { source: defaultSource(report), as: "record" } : undefined)} />
