@@ -42,6 +42,12 @@ describe("executeDatasets", () => {
     const { errors } = await run({ data: { items: [{ A: 1 }, { A: 2 }], orders: [], lines: [] }, limits: { maxRows: 1 } });
     expect(errors).toEqual([{ dataset: "items", code: "TOO_MANY_ROWS", message: "2 rows, more than the limit of 1" }]);
   });
+  it("refuses request data whose name is a reserved context name and keeps params intact", async () => {
+    const { context, errors } = await run({ data: { params: [{ hack: 1 }], page: { x: 1 }, orders: [], lines: [] } });
+    expect(context.params).toEqual({ no: "A", qty: 3 });
+    expect(context.page).toBeUndefined();
+    expect(errors.map((e) => [e.dataset, e.code, e.message])).toEqual([["params", "BAD_DATA", "reserved name: params"], ["page", "BAD_DATA", "reserved name: page"]]);
+  });
 });
 
 describe("toRows", () => {

@@ -1,4 +1,4 @@
-import { resolveParams, rowsProxy, type Report, type DataContext, type Dataset } from "@daport/core";
+import { resolveParams, rowsProxy, RESERVED_CONTEXT_NAMES, type Report, type DataContext, type Dataset } from "@daport/core";
 import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver } from "./types";
 import { runSql } from "./sql";
 
@@ -59,6 +59,11 @@ export async function executeDatasets(report: Report, opts: ExecuteOptions): Pro
   }
   for (const [name, value] of Object.entries(data)) {
     if (report.datasets.some((ds) => ds.name === name)) continue;
+    // 예약어 이름은 거부 — 요청에서 컨텍스트 변수 덮어쓰기 방지
+    if (RESERVED_CONTEXT_NAMES.includes(name)) {
+      errors.push({ dataset: name, code: "BAD_DATA", message: `reserved name: ${name}` });
+      continue;
+    }
     try { context[name] = rowsProxy(checkRows(toRows(value), limits)); }
     catch (e) { errors.push(toError(name, e, "BAD_DATA")); }
   }
