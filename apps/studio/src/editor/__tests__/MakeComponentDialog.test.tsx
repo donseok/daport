@@ -36,10 +36,10 @@ describe("suggestComponentId", () => {
     expect(suggestComponentId("회사 Header")).toBe("header");
     expect(suggestComponentId("Café Sign")).toBe("cafe-sign");
   });
-  it("falls back to component when nothing usable remains", () => {
-    expect(suggestComponentId("회사 헤더")).toBe("component");
-    expect(suggestComponentId("")).toBe("component");
-    expect(suggestComponentId("---")).toBe("component");
+  it("suggests nothing when no usable slug remains (사용자가 직접 입력한다)", () => {
+    expect(suggestComponentId("회사 헤더")).toBe("");
+    expect(suggestComponentId("")).toBe("");
+    expect(suggestComponentId("---")).toBe("");
   });
 });
 
@@ -77,7 +77,7 @@ describe("MakeComponentDialog", () => {
     fireEvent.change(input("이름"), { target: { value: "Company Header" } });
     expect(input("id").value).toBe("company-header");
     fireEvent.change(input("이름"), { target: { value: "회사 헤더" } });
-    expect(input("id").value).toBe("component");
+    expect(input("id").value).toBe("");
     fireEvent.change(input("id"), { target: { value: "my-hdr" } });
     fireEvent.change(input("이름"), { target: { value: "Other" } });
     expect(input("id").value).toBe("my-hdr");
@@ -97,6 +97,21 @@ describe("MakeComponentDialog", () => {
     expect(makeButton().disabled).toBe(true);
     fireEvent.change(input("id"), { target: { value: "hdr-1" } });
     expect(screen.queryByText(/이름을 입력하세요|id는 영문/)).toBeNull();
+    expect(makeButton().disabled).toBe(false);
+  });
+
+  it("leaves the id empty for a name with no usable slug and blocks 만들기 until one is typed", () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    open(["a", "b"]);
+    fireEvent.change(input("이름"), { target: { value: "회사 헤더" } });
+    expect(input("id").value).toBe("");
+    expect(screen.getByText("id를 입력하세요")).toBeTruthy();
+    expect(makeButton().disabled).toBe(true);
+    fireEvent.click(makeButton());
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.change(input("id"), { target: { value: "hoesa-header" } });
+    expect(screen.queryByText("id를 입력하세요")).toBeNull();
     expect(makeButton().disabled).toBe(false);
   });
 

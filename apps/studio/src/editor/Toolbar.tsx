@@ -1,5 +1,5 @@
 "use client";
-import { useContext, useEffect, useState } from "react";
+import { useContext, useEffect, useMemo, useState } from "react";
 import { requestBody } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
 import { PageSelector } from "./PageSelector";
@@ -39,6 +39,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const mode = useEditor((s) => s.mode);
   const setMode = useEditor((s) => s.setMode);
   const markSaved = useEditor((s) => s.markSaved);
+  const pruneUnusedComponents = useEditor((s) => s.pruneUnusedComponents);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
   const liveData = useEditor((s) => s.liveData);
@@ -50,8 +51,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   // 컴포넌트 편집 화면에서는 라벨·PDF 동작을 두지 않는다 (편집용 레포트의 출력 설정은 저장되지 않는다)
   const isLabel = report.output.kind === "label" && !componentMode;
   const sampleProps = componentMode ? samplePropsContext(componentMode) : undefined;
-  // 스펙 7.3: 조건이 안 맞으면 비활성, 사유는 툴팁
-  const makeCheck = makeComponentCheck(report, selection, !!componentMode);
+  // 스펙 7.3: 조건이 안 맞으면 비활성, 사유는 툴팁. 트리 전체를 훑으므로 관련 상태가 바뀔 때만 다시 검사한다
+  const makeCheck = useMemo(() => makeComponentCheck(report, selection, !!componentMode), [report, selection, componentMode]);
   const [making, setMaking] = useState(false);
   /** 컴포넌트 저장 결과("v6 저장됨"·"변경 없음")와 저장 뒤 사용처 (스펙 7.5) */
   const [componentStatus, setComponentStatus] = useState<string | null>(null);
@@ -76,6 +77,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const save = async () => {
+    // 스펙 7.2: 저장 전에 쓰이지 않는 컴포넌트 항목을 지운다(되돌리기 1단위). 서버도 같은 정리를 하므로, 여기서 안 지우면 클라이언트 모델만 달라진다
+    pruneUnusedComponents();
     // 보낸 모델을 기억해 두고, 요청이 끝났을 때 그 사이 편집이 있으면 저장 안 됨(*)으로 남긴다
     const saved = store.getState().report;
     setSaving(true);

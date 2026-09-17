@@ -1,20 +1,24 @@
 "use client";
 import { useContext, useState } from "react";
 import { COMPONENT_ID_RE, sameParent, extractComponent, type Report } from "@daport/core";
-import { EditorContext, useEditor } from "../store";
+import { EditorContext } from "../store";
 import { createComponent } from "./api";
 
 export const EMPTY_SELECTION_REASON = "컴포넌트로 만들 요소를 선택하세요";
 export const COMPONENT_MODE_REASON = "컴포넌트 편집 화면에서는 컴포넌트를 만들 수 없습니다";
 const NAME_REQUIRED = "이름을 입력하세요";
+const ID_REQUIRED = "id를 입력하세요";
 const ID_INVALID = "id는 영문 소문자·숫자로 시작하고 영문 소문자·숫자·-만 쓸 수 있습니다";
 /** 스펙 7.3 조건: 같은 부모 배열, ref 없음, 반복 영역 템플릿·밴드 밖 */
 const MAKE_OPTS = { allowInTemplate: false, allowRefs: false } as const;
 
-/** 이름에서 컴포넌트 id를 제안한다. 악센트는 떼고, 영문 소문자·숫자가 아닌 연속 구간은 -, 앞뒤 -는 버린다. 남는 것이 없으면 "component" */
+/**
+ * 이름에서 컴포넌트 id를 제안한다. 악센트는 떼고, 영문 소문자·숫자가 아닌 연속 구간은 -, 앞뒤 -는 버린다.
+ * 남는 것이 없으면(한글만 쓴 이름 등) 빈 문자열을 돌려줘 사용자가 직접 입력하게 한다 — 고정된 이름으로 제안하면 두 번째부터 id가 겹친다
+ */
 export function suggestComponentId(name: string): string {
   const slug = name.normalize("NFKD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug && COMPONENT_ID_RE.test(slug) ? slug : "component";
+  return COMPONENT_ID_RE.test(slug) ? slug : "";
 }
 
 /** 툴바 버튼·우클릭 메뉴의 활성 여부와 비활성 사유(툴팁) */
@@ -32,15 +36,14 @@ export function makeComponentCheck(report: Report, selection: string[], componen
 export function MakeComponentDialog({ onClose }: { onClose: () => void }) {
   const store = useContext(EditorContext)!;
   const [name, setName] = useState("");
-  const [id, setId] = useState(suggestComponentId(""));
+  const [id, setId] = useState("");   // 이름에서 제안하고, 제안할 것이 없으면 비워 둔다
   const [idEdited, setIdEdited] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // 대화상자가 열린 동안에도 선택이 바뀔 수 있어 구독한다(제출 시 다시 검사)
-  useEditor((s) => s.selection);
 
+  // 대화상자가 열린 동안 선택이 바뀔 수 있지만, 그 값은 제출할 때 스토어에서 다시 읽어 검사하므로 여기서 구독하지 않는다
   const nameError = name.trim() === "" ? NAME_REQUIRED : null;
-  const idError = COMPONENT_ID_RE.test(id) ? null : ID_INVALID;
+  const idError = id === "" ? ID_REQUIRED : COMPONENT_ID_RE.test(id) ? null : ID_INVALID;
 
   const onName = (v: string) => { setName(v); if (!idEdited) setId(suggestComponentId(v)); };
   const onId = (v: string) => { setId(v); setIdEdited(true); };

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi, type Mock } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
-import { parseReport } from "@daport/core";
+import { parseReport, type ComponentBody } from "@daport/core";
 import { createEditorStore, EditorContext } from "../store";
 import { Toolbar } from "../Toolbar";
 import { sampleParams } from "@/lib/data";
@@ -269,5 +269,42 @@ describe("Toolbar save warnings", () => {
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith("component hdr@1 differs from the library"));
     expect(store.getState().dirty).toBe(true);
     expect(screen.queryByTestId("save-warnings")).toBeNull();
+  });
+});
+
+describe("Toolbar 저장 전 컴포넌트 정리 (스펙 7.2)", () => {
+  const hdr: ComponentBody = { name: "H", w: 10, h: 5, props: [], elements: [] };
+
+  it("prunes components no instance uses, in the request body and in the model left after saving", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(report);
+    render(<EditorContext.Provider value={store}><Toolbar reportId="r" zoom={1} setZoom={() => {}} /></EditorContext.Provider>);
+    act(() => {
+      store.getState().insertComponent("hdr", 1, hdr, 0, 0);
+      store.getState().deleteSelected();                      // insertComponent가 새 인스턴스를 선택해 둔다
+    });
+    expect(store.getState().report.components["hdr@1"]).toEqual(hdr);
+
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(store.getState().dirty).toBe(false));
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).components).toEqual({});
+    expect(store.getState().report.components).toEqual({});
+  });
+
+  it("leaves a report whose components are all in use untouched (no extra undo step)", async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response("{}", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(report);
+    render(<EditorContext.Provider value={store}><Toolbar reportId="r" zoom={1} setZoom={() => {}} /></EditorContext.Provider>);
+    act(() => store.getState().insertComponent("hdr", 1, hdr, 0, 0));
+    const past = store.getState().history.past.length;
+    const before = store.getState().report;
+
+    fireEvent.click(screen.getByTestId("save"));
+    await waitFor(() => expect(store.getState().dirty).toBe(false));
+    expect(store.getState().report).toBe(before);
+    expect(store.getState().history.past).toHaveLength(past);
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).components).toEqual({ "hdr@1": hdr });
   });
 });

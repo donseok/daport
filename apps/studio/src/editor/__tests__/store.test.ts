@@ -389,6 +389,29 @@ describe("editor store (phase 3b: components)", () => {
     expect(t.getState().selection).toEqual(["a"]);
   });
 
+  it("replaceWithComponent rounds the ref box like insertComponent", () => {
+    const s = createEditorStore(rep);
+    const { body } = extractComponent(s.getState().report.elements, ["l", "a"], "머리");
+    s.getState().replaceWithComponent(["l", "a"], "head", 1, body, { x: 12.345, y: 9.876, w: 40, h: 20 });
+    expect(refOf(s, "head-1")).toMatchObject({ x: 12.35, y: 9.88 });
+  });
+
+  it("pruneUnusedComponents drops entries no instance uses, as one undo step, and commits nothing when all are used", () => {
+    const s = createEditorStore(rep);
+    s.getState().insertComponent("hdr", 1, hdr, 0, 0);
+    s.getState().select(["hdr-1"]);
+    s.getState().deleteSelected();
+    expect(s.getState().report.components["hdr@1"]).toEqual(hdr);   // 인스턴스를 지워도 내용은 남는다
+    const past = s.getState().history.past.length;
+    s.getState().pruneUnusedComponents();
+    expect(s.getState().report.components).toEqual({});
+    expect(s.getState().history.past).toHaveLength(past + 1);
+    s.getState().pruneUnusedComponents();
+    expect(s.getState().history.past).toHaveLength(past + 1);       // 정리할 것이 없으면 커밋하지 않는다
+    s.getState().undo();
+    expect(s.getState().report.components["hdr@1"]).toEqual(hdr);   // 되돌리기 1단위
+  });
+
   it("resizeElement leaves a ref's box unchanged", () => {
     const s = createEditorStore(rep);
     s.getState().insertComponent("hdr", 1, hdr, 5, 5);

@@ -40,7 +40,8 @@ export function Canvas({ zoom }: { zoom: number }) {
   /** 우클릭 메뉴 위치(페이지 기준 mm). 캔버스 div가 scale로 확대되므로 mm로 두면 배율과 함께 따라간다 */
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [making, setMaking] = useState(false);
-  const makeCheck = makeComponentCheck(report, selection, !!componentMode);
+  // 트리 전체를 훑는 검사다. 드래그 중에는 프레임마다 다시 그리므로 관련 상태가 바뀔 때만 계산한다
+  const makeCheck = useMemo(() => makeComponentCheck(report, selection, !!componentMode), [report, selection, componentMode]);
   useEffect(() => {
     if (!menu) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setMenu(null); };

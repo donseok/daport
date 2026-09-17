@@ -2,7 +2,7 @@ import { createStore } from "zustand/vanilla";
 import { useStore } from "zustand";
 import { createContext, useContext } from "react";
 import {
-  safeParseReport, walkElements, childArrays, collectIds, ElementSchema, componentKey, upgradeRefs, sameParent, groupElements, ungroupElement,
+  safeParseReport, walkElements, childArrays, collectIds, ElementSchema, componentKey, upgradeRefs, pruneComponents, sameParent, groupElements, ungroupElement,
   type Report, type Element, type Page, type Preset, type ComponentBody, type ComponentProp, type Box,
 } from "@daport/core";
 import { createHistory, commit, undo, redo, type History } from "./history";
@@ -63,6 +63,8 @@ export type EditorState = {
   insertComponent(id: string, version: number, body: ComponentBody, x: number, y: number): void;
   /** 이 레포트의 인스턴스를 모두 version으로 올린다(core upgradeRefs, 스펙 7.2) */
   updateInstances(id: string, version: number, body: ComponentBody): void;
+  /** 어떤 인스턴스도 가리키지 않는 components 항목을 지운다(core pruneComponents, 스펙 7.2의 저장 전 정리). 지울 것이 없으면 커밋하지 않는다 */
+  pruneUnusedComponents(): void;
   /**
    * 선택 요소들을 부모 배열에서 지우고 첫 선택 자리에 ref(box 위치)를 넣는다(스펙 7.3의 4).
    * 조건이 안 맞으면 아무것도 하지 않고 사유를 돌려준다 — 호출자(대화상자)는 이미 라이브러리에 등록한 뒤라 실패를 알아야 한다
@@ -222,6 +224,8 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         const next = upgradeRefs(r, id, version, body);
         r.elements = next.elements; r.components = next.components;
       }),
+      // 내용이 그대로면 commit이 패치를 만들지 않으므로 되돌리기 단계가 쌓이지 않는다
+      pruneUnusedComponents: () => apply((r) => { r.components = pruneComponents(r).components; }),
       replaceWithComponent: (ids, id, version, body, box) => {
         // 스펙 4.1·7.5: 중첩 컴포넌트 금지
         if (get().componentMode) return { ok: false, error: "컴포넌트 편집 화면에서는 컴포넌트를 만들 수 없습니다" };
@@ -233,7 +237,7 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         apply((r) => {
           const info = sameParent(r.elements, ids, opts);
           if ("error" in info) return;
-          const ref = ElementSchema.parse({ id: refId, type: "ref", ref: id, version, x: box.x, y: box.y, w: body.w, h: body.h, flow: "once", props: {} });
+          const ref = ElementSchema.parse({ id: refId, type: "ref", ref: id, version, x: round(box.x), y: round(box.y), w: body.w, h: body.h, flow: "once", props: {} });
           for (const i of [...info.indices].reverse()) info.parent.splice(i, 1);
           info.parent.splice(info.indices[0], 0, ref);
           r.components[componentKey(id, version)] = structuredClone(body);
