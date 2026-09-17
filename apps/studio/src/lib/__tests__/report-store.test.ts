@@ -58,7 +58,7 @@ describe("getStore", () => {
     expect((await store.get("quality-cert"))?.name).toBe("품질보증서");
     expect((await store.list()).map((r) => r.id)).toContain("quality-cert");
   });
-  it("seeds all five example fixtures, including inspection-cert's repeat source", async () => {
+  it("seeds all seven example fixtures, including inspection-cert's repeat source", async () => {
     delete process.env.DATABASE_URL;
     vi.resetModules();
     delete (globalThis as any).__daportReportStore;
@@ -68,6 +68,9 @@ describe("getStore", () => {
     await mod.ready();
     const cert = await store.get("inspection-cert");
     expect(cert?.repeat?.source).toBe("lots");
+    const ids = (await store.list()).map((r) => r.id);
+    expect(ids).toHaveLength(7);
+    expect(ids).toEqual(expect.arrayContaining(["coil-tag", "product-label"]));
   });
   it("does not wedge ready() forever when one fixture fails to seed — the other fixtures still land", async () => {
     delete process.env.DATABASE_URL;
