@@ -59,3 +59,27 @@ describe("Editor", () => {
     expect(leavePage()).toBe(false);                                             // 에디터를 떠나면 리스너도 사라진다
   });
 });
+
+describe("Editor 컴포넌트 탭", () => {
+  const summary = { id: "hdr", name: "회사 헤더", latestVersion: 2, w: 180, h: 24, updatedAt: "2026-09-17T00:00:00.000Z" };
+  const stubFetch = () => vi.stubGlobal("fetch", vi.fn(async (url: string) =>
+    new Response(JSON.stringify(url === "/api/components" ? [summary] : []), { status: 200 })));
+
+  it("shows the component library in a third left tab", async () => {
+    stubFetch();
+    render(<Editor initial={report} />);
+    expect(screen.getByRole("button", { name: "요소" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "데이터" })).toBeTruthy();
+    expect(screen.queryByText("회사 헤더")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "컴포넌트" }));
+    expect(await screen.findByText("회사 헤더")).toBeTruthy();
+    expect(screen.queryByText("+ 텍스트")).toBeNull();               // 팔레트 대신 라이브러리
+  });
+
+  it("hides the component tab in component mode (no nested components)", () => {
+    stubFetch();
+    render(<Editor initial={report} componentMode={{ componentId: "hdr", version: 2, props: [], sampleProps: {} }} />);
+    expect(screen.getByRole("button", { name: "요소" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "컴포넌트" })).toBeNull();
+  });
+});

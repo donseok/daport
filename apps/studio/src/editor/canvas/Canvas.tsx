@@ -9,6 +9,7 @@ import { pxToMm, snapMm } from "./snap";
 import { clampView, currentPage, primaryItem, isOtherInstance } from "./pages";
 import { layoutFor, layoutError } from "./layoutCache";
 import { resolveDrop, DRAG_MIME, type DragField, type DropTarget } from "../data/bindings";
+import { COMPONENT_MIME, fetchComponent } from "../library/api";
 
 /** 채우기 없는 사각형은 선에서 이 화면 거리(px) 안쪽일 때만 고른다 */
 const STROKE_HIT_PX = 3;
@@ -30,6 +31,8 @@ export function Canvas({ zoom }: { zoom: number }) {
   const updateElement = useEditor((s) => s.updateElement);
   const allocateId = useEditor((s) => s.allocateId);
   const findParentRepeater = useEditor((s) => s.findParentRepeater);
+  const insertComponent = useEditor((s) => s.insertComponent);
+  const componentMode = useEditor((s) => s.componentMode);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
 
@@ -149,14 +152,40 @@ export function Canvas({ zoom }: { zoom: number }) {
     }
     return { kind: "canvas", x, y };
   };
-  const onDragOver = (e: DragEvent<HTMLDivElement>) => { if (Array.from(e.dataTransfer.types).includes(DRAG_MIME)) e.preventDefault(); };
+  // 컴포넌트 편집 화면에서는 라이브러리 컴포넌트를 받지 않는다 (중첩 금지, 스펙 7.5)
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => {
+    const types = Array.from(e.dataTransfer.types);
+    if (types.includes(DRAG_MIME) || (!componentMode && types.includes(COMPONENT_MIME))) e.preventDefault();
+  };
+  /** 놓인 자리(페이지 좌상단 기준 mm, 0.5mm 스냅) */
+  const dropPoint = (e: DragEvent<HTMLDivElement>) => {
+    const origin = e.currentTarget.querySelector(".dp-page")?.getBoundingClientRect();
+    return { x: snapMm(pxToMm(e.clientX - (origin?.left ?? 0), zoom)), y: snapMm(pxToMm(e.clientY - (origin?.top ?? 0), zoom)) };
+  };
+  /** 라이브러리 최신 버전 내용을 받아 놓은 자리에 인스턴스로 넣는다 (스펙 7.1). 인스턴스는 늘 최상위에 들어간다 */
+  const dropComponent = async (id: string, x: number, y: number) => {
+    try {
+      const detail = await fetchComponent(id);
+      insertComponent(id, detail.summary.latestVersion, detail.latest, x, y);
+      setWarning(null);
+    } catch (err) {
+      setWarning(`컴포넌트를 넣지 못했습니다: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  };
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    const componentId = e.dataTransfer.getData(COMPONENT_MIME);
+    if (componentId) {
+      e.preventDefault();
+      if (componentMode) { setWarning("컴포넌트 안에는 컴포넌트를 넣을 수 없습니다"); return; }
+      const { x, y } = dropPoint(e);
+      void dropComponent(componentId, x, y);
+      return;
+    }
     const raw = e.dataTransfer.getData(DRAG_MIME);
     if (!raw) return;
     e.preventDefault();
     const field = JSON.parse(raw) as DragField;
-    const origin = e.currentTarget.querySelector(".dp-page")?.getBoundingClientRect();
-    const x = snapMm(pxToMm(e.clientX - (origin?.left ?? 0), zoom)), y = snapMm(pxToMm(e.clientY - (origin?.top ?? 0), zoom));
+    const { x, y } = dropPoint(e);
     const result = resolveDrop(field, dropTargetAt(e, x, y), report, allocateId);
     if (result.action === "addElement") addElement(result.element, result.into ? { into: result.into } : undefined);
     else if (result.action === "addColumn") { const t = findElement(result.tableId); if (t?.type === "table") updateElement(t.id, { columns: [...t.columns, result.column] }); }
