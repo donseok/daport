@@ -29,6 +29,14 @@ export function rgbaToGray(rgba: Uint8Array, width: number, height: number): Uin
   return out;
 }
 
+/** 스크린샷 픽셀 수는 CSS 픽셀 × 배율의 반올림이라 목표 크기와 1px 다를 수 있다. 목표 크기로 자르거나 흰색으로 채운다 */
+export function fitGray(gray: Uint8Array, sw: number, sh: number, w: number, h: number): Uint8Array {
+  if (sw === w && sh === h) return gray;
+  const out = new Uint8Array(w * h).fill(255);
+  for (let y = 0; y < Math.min(sh, h); y++) out.set(gray.subarray(y * sw, y * sw + Math.min(sw, w)), y * w);
+  return out;
+}
+
 /** 검정 0, 흰 255의 회색 PNG (미리보기·테스트용) */
 export function bitmapToPng(bitmap: Bitmap): Buffer {
   const png = new PNG({ width: bitmap.width, height: bitmap.height });

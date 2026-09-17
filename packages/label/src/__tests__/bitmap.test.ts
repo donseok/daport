@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PNG } from "pngjs";
-import { rowBytes, packGray, rgbaToGray, bitmapToPng, pxOf } from "../bitmap";
+import { rowBytes, packGray, rgbaToGray, bitmapToPng, pxOf, fitGray } from "../bitmap";
 
 describe("bitmap", () => {
   it("pxOf rounds mm at the given dpi", () => {
@@ -26,5 +26,10 @@ describe("bitmap", () => {
     const png = PNG.sync.read(bitmapToPng({ width: 9, height: 2, bits: new Uint8Array([0xff, 0x00, 0x00, 0x80]) }));
     expect([png.width, png.height]).toEqual([9, 2]);
     expect([png.data[0], png.data[(8) * 4], png.data[(9 + 8) * 4]]).toEqual([0, 255, 0]);
+  });
+  it("fitGray crops or pads (white) a gray buffer to the target size", () => {
+    const src = new Uint8Array([0, 0, 0, 0, 0, 0]);   // 3×2 전부 검정
+    expect(Array.from(fitGray(src, 3, 2, 2, 3))).toEqual([0, 0, 0, 0, 255, 255]);   // 폭은 자르고 높이는 흰색으로 채움
+    expect(Array.from(fitGray(src, 3, 2, 3, 2))).toEqual(Array.from(src));
   });
 });
