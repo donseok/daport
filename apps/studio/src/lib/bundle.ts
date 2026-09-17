@@ -43,6 +43,33 @@ export function collectAssetIds(report: Report): string[] {
 
 const ext = (name: string) => name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
 
+/** 압축 해제 후 항목 하나의 크기 상한. 20MB 업로드 상한 안에서도 극단적 압축비로 부풀릴 수 있어 별도로 막는다 */
+export const MAX_ENTRY_BYTES = 50 * 1024 * 1024;
+/** 압축 해제 후 전체 항목 합계 상한 (압축 폭탄 방지) */
+export const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+
+/**
+ * unzipSync를 감싸 압축 폭탄을 막는다. fflate의 filter는 central directory의 선언된 크기(originalSize)로
+ * 판단하고, false를 돌려주면 그 항목은 실제로 압축 해제하지 않는다 — 그래서 필터 단계에서 걸러야 메모리를 아낀다.
+ * 초과가 발견되면 filter 안에서 바로 던지지 않고 플래그만 세운다(그 항목만 건너뛰고 나머지 스캔은 계속하되
+ * unzipSync가 끝난 뒤 한 번에 BundleInvalidError로 던져, 아래 catch가 "zip 파일이 아닙니다"로 덮어쓰지 않게 한다)
+ */
+function unzipGuarded(zip: Uint8Array): Record<string, Uint8Array> {
+  let total = 0;
+  let oversized = false;
+  const files = unzipSync(zip, {
+    filter: (file) => {
+      if (oversized) return false;
+      if (file.originalSize > MAX_ENTRY_BYTES) { oversized = true; return false; }
+      total += file.originalSize;
+      if (total > MAX_TOTAL_BYTES) { oversized = true; return false; }
+      return true;
+    },
+  });
+  if (oversized) throw new BundleInvalidError(`번들 항목이 너무 큽니다 (개별 ${MAX_ENTRY_BYTES}바이트, 전체 ${MAX_TOTAL_BYTES}바이트 상한을 넘었습니다)`);
+  return files;
+}
+
 export function buildBundle(entries: { report: Report; source: BundleSource }[], assets: BundleAsset[], warnings: string[]): Uint8Array {
   const manifest: BundleManifest = {
     format: "daport-bundle", version: 1, exportedAt: new Date().toISOString(),
@@ -64,7 +91,8 @@ function parseJson(bytes: Uint8Array | undefined, what: string): unknown {
 
 export function readBundle(zip: Uint8Array): { manifest: BundleManifest; reports: unknown[]; assets: BundleAsset[] } {
   let files: Record<string, Uint8Array>;
-  try { files = unzipSync(zip); } catch { throw new BundleInvalidError("zip 파일이 아닙니다"); }
+  try { files = unzipGuarded(zip); }
+  catch (e) { if (e instanceof BundleInvalidError) throw e; throw new BundleInvalidError("zip 파일이 아닙니다"); }
   const manifest = parseJson(files["manifest.json"], "manifest.json") as Partial<BundleManifest>;
   if (manifest.format !== "daport-bundle") throw new BundleInvalidError("daport 번들이 아닙니다");
   if (manifest.version !== 1) throw new BundleInvalidError(`지원하지 않는 번들 version: ${String(manifest.version)}`);

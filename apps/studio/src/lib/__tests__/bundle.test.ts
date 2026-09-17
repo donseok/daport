@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { unzipSync, strFromU8, zipSync, strToU8 } from "fflate";
 import { parseReport } from "@daport/core";
-import { buildBundle, readBundle, collectConnections, collectAssetIds, applyConnectionMap, BundleInvalidError } from "../bundle";
+import { buildBundle, readBundle, collectConnections, collectAssetIds, applyConnectionMap, BundleInvalidError, MAX_ENTRY_BYTES } from "../bundle";
 
 const r1 = parseReport({ id: "a", name: "A", version: 1, page: { width: 100, height: 100 },
   datasets: [{ name: "s", type: "sql", connection: "mes", query: "select 1" }, { name: "h", type: "http", url: "https://mes.example.com/api/x" }],
@@ -36,5 +36,14 @@ describe("bundle", () => {
     const files = unzipSync(noManifest); delete files["manifest.json"];
     expect(() => readBundle(zipSync(files))).toThrow(BundleInvalidError);
     expect(() => readBundle(zipSync({ "manifest.json": strToU8(JSON.stringify({ format: "daport-bundle", version: 2, reports: [] })) }))).toThrow(/version/);
+  });
+  it("rejects a bundle whose entry inflates past the per-entry size cap (zip-bomb guard)", () => {
+    // 0으로 채운 버퍼는 압축률이 극단적으로 높아 zip 자체는 몇 KB지만 해제하면 상한을 넘는다
+    const files = {
+      "manifest.json": strToU8(JSON.stringify({ format: "daport-bundle", version: 1, reports: [] })),
+      "assets/bomb.bin": new Uint8Array(MAX_ENTRY_BYTES + 1),
+    };
+    const zip = zipSync(files, { level: 9 });
+    expect(() => readBundle(zip)).toThrow(BundleInvalidError);
   });
 });
