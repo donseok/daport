@@ -27,7 +27,7 @@ export const RectElementSchema = Base.extend({ type: z.literal("rect") });
 
 export const BarcodeElementSchema = Base.extend({
   type: z.literal("barcode"),
-  format: z.enum(["code128", "ean13", "qr"]),
+  format: z.enum(["code128", "ean13", "qr", "code39", "datamatrix"]),
   value: z.string().default(""),
   showText: z.boolean().default(true),
 });
@@ -133,4 +133,6 @@ export type TextElement = z.infer<typeof TextElementSchema>;
 export type ImageElement = z.infer<typeof ImageElementSchema>;
 export type LineElement = z.infer<typeof LineElementSchema>;
 export type RectElement = z.infer<typeof RectElementSchema>;
+export type BarcodeElement = z.infer<typeof BarcodeElementSchema>;
+export type BarcodeFormat = BarcodeElement["format"];
 export type ElementType = Element["type"];
