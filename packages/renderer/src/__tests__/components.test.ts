@@ -18,7 +18,21 @@ const std: ComponentBody = { name: "표", w: 80, h: 30, props: [{ name: "label",
   { id: "cap", type: "text", x: 0, y: 0, w: 80, h: 6, value: "{{ props.label }}" },
   { id: "t", type: "table", x: 0, y: 6, w: 80, h: 24, source: "items", columns: [{ header: "N", value: "{{ props.label }}{{ row.N }}", w: 40 }] },
 ] as unknown as ComponentBody["elements"] };
-const components = { "hdr@1": hdr, "std@2": std };
+const pgc: ComponentBody = { name: "쪽표", w: 80, h: 30, props: [{ name: "cap", type: "string", default: "" }], elements: [
+  { id: "t", type: "table", x: 0, y: 0, w: 80, h: 24, source: "items", columns: [{ header: "N", value: "{{ props.cap }}", w: 40 }] },
+] as unknown as ComponentBody["elements"] };
+const cards: ComponentBody = { name: "카드", w: 80, h: 30, props: [{ name: "cap", type: "string", default: "" }], elements: [
+  { id: "rep", type: "repeater", x: 0, y: 0, w: 80, h: 30, source: "items", overflow: "clip", item: { w: 80, h: 10, children: [
+    { id: "n", type: "text", x: 0, y: 0, w: 30, h: 6, value: "{{ item.N }}" },
+    { id: "c", type: "text", x: 30, y: 0, w: 40, h: 6, value: "{{ props.cap }}" },
+  ] } },
+] as unknown as ComponentBody["elements"] };
+const deck: ComponentBody = { name: "덱", w: 80, h: 30, props: [{ name: "cap", type: "string", default: "" }], elements: [
+  { id: "rep", type: "repeater", x: 0, y: 0, w: 80, h: 30, source: "items", item: { w: 80, h: 10, children: [
+    { id: "c", type: "text", x: 0, y: 0, w: 40, h: 6, value: "{{ props.cap }}" },
+  ] } },
+] as unknown as ComponentBody["elements"] };
+const components = { "hdr@1": hdr, "std@2": std, "pgc@1": pgc, "cards@1": cards, "deck@1": deck };
 const ref = (id: string, extra: Record<string, unknown> = {}) => ({ id, type: "ref", ref: "hdr", version: 1, x: 10, y: 20, w: 60, h: 20, ...extra });
 const mk = (elements: unknown[], extra: Record<string, unknown> = {}) => parseReport({ id: "r", version: 1, page, components, elements, ...extra });
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ N: i }));
@@ -139,6 +153,40 @@ describe("layout: flow elements inside a component", () => {
     const keys = items.filter((i) => i.role !== "border").map((i) => `${i.elementId}|${i.instance}|${i.role}`);
     expect(new Set(keys).size).toBe(keys.length);
     expect(items.filter((i) => i.role === "cell" && i.instance?.endsWith("t#0")).map((i) => [i.elementId, lines(i)])).toEqual([["s1", "A0"], ["s2", "B0"]]);
+  });
+  it("a clip repeater in a component appends the element id so item children stay unique", () => {
+    const r = mk([{ id: "c1", type: "ref", ref: "cards", version: 1, x: 10, y: 20, w: 80, h: 30, props: { cap: "C" } }]);
+    const items = layout(r, { params: {}, items: rows(2) })[0].items;
+    expect(items.map((i) => [i.elementId, i.role, i.instance])).toEqual([
+      ["c1", "refBox", undefined], ["c1", "flowBox", "c1/rep"],
+      ["c1", "template", "c1/rep/rep#0"], ["c1", undefined, "c1/rep/rep#0/n"], ["c1", undefined, "c1/rep/rep#0/c"],
+      ["c1", undefined, "c1/rep/rep#1/n"], ["c1", undefined, "c1/rep/rep#1/c"],
+    ]);
+    const keys = items.map((i) => `${i.elementId}|${i.instance}|${i.role}`);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(items.filter((i) => i.kind === "text").map(lines)).toEqual(["0", "C", "1", "C"]);
+  });
+  it("re-evaluates props with the real page context when painting a continue table fragment", () => {
+    const r = mk([
+      { id: "p1", type: "ref", ref: "pgc", version: 1, x: 10, y: 20, w: 80, h: 30, props: { cap: "{{ page }}쪽" } },
+      { id: "out", type: "text", x: 10, y: 8, w: 40, h: 6, value: "{{ page }}쪽", flow: "every" },
+    ]);
+    const pages = layout(r, { params: {}, items: rows(10) });
+    expect(pages).toHaveLength(2);
+    const caps = (p: number) => pages[p].items.filter((i) => i.role === "cell" && !i.instance?.endsWith("#h")).map(lines);
+    const outside = (p: number) => lines(pages[p].items.find((i) => i.elementId === "out")!);
+    expect(new Set(caps(0))).toEqual(new Set(["1쪽"]));
+    expect(new Set(caps(1))).toEqual(new Set(["2쪽"]));
+    expect([outside(0), outside(1)]).toEqual(["1쪽", "2쪽"]);
+    expect([caps(0).length, caps(1).length]).toEqual([2, 8]);
+  });
+  it("re-evaluates props per page for a continue repeater's item children too", () => {
+    const r = mk([{ id: "d1", type: "ref", ref: "deck", version: 1, x: 10, y: 20, w: 80, h: 30, props: { cap: "{{ page }}쪽" } }]);
+    const pages = layout(r, { params: {}, items: rows(10) });
+    expect(pages).toHaveLength(2);
+    const caps = (p: number) => pages[p].items.filter((i) => i.kind === "text").map(lines);
+    expect(caps(0)).toEqual(["1쪽", "1쪽", "1쪽"]);
+    expect(caps(1)).toEqual(Array.from({ length: 7 }, () => "2쪽"));
   });
   it("a props error on a component with a continue table gives one #ERR on the first page only", () => {
     const pages = layout(mk([sref("s1", { props: { label: "{{ params. }}" } })]), { params: {}, items: rows(10) });

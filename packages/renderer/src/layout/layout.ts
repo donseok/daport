@@ -26,9 +26,12 @@ function flowVisible(flow: "once" | "every" | "last", p: number, n: number): boo
   return flow === "every" || (flow === "once" ? p === 0 : p === n - 1);
 }
 
-/** 인스턴스 요소의 흐름 옵션: 인스턴스 접두사 `<refId>/<path>/` */
-function ownedOpts(fopts: FlowOptions, owner: RefOwner | undefined): FlowOptions {
-  return owner ? { ...fopts, instancePrefix: `${ownedInstance(owner)}/` } : fopts;
+/**
+ * 인스턴스 요소의 흐름 옵션: 인스턴스 접두사 `<refId>/<path>/`와, 조각을 그릴 때 입력값을 그 페이지 값으로 다시 평가할 ref.
+ * 캐시는 2단계(칠하기) 캐시다 — 조각은 1단계에서 만들지만 paint는 2단계에 페이지마다 불린다
+ */
+function ownedOpts(fopts: FlowOptions, owner: RefOwner | undefined, paintCache: PropsCache): FlowOptions {
+  return owner ? { ...fopts, instancePrefix: `${ownedInstance(owner)}/`, ref: { owner, cache: paintCache } } : fopts;
 }
 /** 인스턴스 요소의 항목을 id 규칙으로 바꾼다. owner가 없으면 그대로 */
 function own(items: PlacedItem[], el: FlatElement): PlacedItem[] {
@@ -93,6 +96,7 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
   const mode = report.onExpressionError;
   const fopts: FlowOptions = { measure: createMeasureCache(), onExpressionError: mode, components: report.components };
   const flat = flatten(report.elements, 0, 0, [], { components: report.components });
+  const paintCache: PropsCache = new Map();   // 2단계(칠하기) 입력값 캐시. 키에 페이지·부가 들어간다. 1단계에서 만든 조각의 paint도 이걸 쓴다
 
   // 부 목록: repeat 없으면 1부(record 없음), 0건이면 #NODATA 1부
   let records: unknown[] | undefined;
@@ -125,7 +129,7 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
       if (vis === false) continue;
       if (vis !== true) { flows.set(el, own([vis], el)[0]); continue; }
       try {
-        const eopts = ownedOpts(fopts, el.owner);
+        const eopts = ownedOpts(fopts, el.owner, paintCache);
         const input = el.type === "table" ? tableFlow(el, ectx, eopts) : repeaterFlow(el, ectx, eopts);
         const pages = paginate(input, { ...regions(el, report, flat), repeatHeader: el.type === "table" ? el.repeatHeader : false, clip: false });
         if (total + pages.length > maxPages) throw new LayoutLimitError(total + pages.length, maxPages);
@@ -146,7 +150,6 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
 
   // 2단계: sheets가 정해졌으니 칠한다
   const pages: Page[] = [];
-  const cache: PropsCache = new Map();   // layout 호출 하나: 키에 page·copy가 들어간다
   plans.forEach((plan, ci) => {
     for (let p = 0; p < plan.nPages; p++) {
       const pageCtx: PageFlowContext = { page: p + 1, total: plan.nPages, sheet: pages.length + 1, sheets: total, copy: ci + 1, copies: plans.length, pageRows: [] };
@@ -160,7 +163,7 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
         if (!owner) return ctx;
         if (broken.has(owner.refId)) return null;
         let ectx: DataContext;
-        try { ectx = withProps(ctx, owner, cache); }
+        try { ectx = withProps(ctx, owner, paintCache); }
         catch (e) {
           if (!(e instanceof ExpressionError) || mode === "fail") throw e;
           broken.add(owner.refId);
@@ -200,7 +203,7 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
           const vis = visibility(el, ectx, mode);
           if (vis === false) continue;
           if (vis !== true) { items.push(...own([vis], el)); continue; }
-          const eopts = ownedOpts(fopts, el.owner);
+          const eopts = ownedOpts(fopts, el.owner, paintCache);
           items.push(...own(el.type === "table" ? paintClipped(el, ectx, eopts, pageCtx) : paintClippedRepeater(el, ectx, eopts, pageCtx), el));
           continue;
         }

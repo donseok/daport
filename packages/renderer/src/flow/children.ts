@@ -1,7 +1,7 @@
 import { ExpressionError, type DataContext, type Element } from "@daport/core";
 import { flatten } from "../layout/flatten";
 import { placeStatic, refBoxItem, refErrorItem, ownedInstance, ownItems } from "../layout/place";
-import { withProps } from "../layout/props";
+import { repaintProps, withProps } from "../layout/props";
 import type { PlacedItem } from "../layout/types";
 import { paintClipped } from "./paint";
 import type { FlowOptions, PageFlowContext } from "./types";
@@ -14,7 +14,8 @@ import type { FlowOptions, PageFlowContext } from "./types";
  */
 export function paintChildren(children: Element[], origin: { x: number; y: number }, ctx: DataContext,
   opts: FlowOptions & { instance: string; pageCtx: PageFlowContext }): PlacedItem[] {
-  const full: DataContext = { ...ctx, ...opts.pageCtx };
+  // 이 반복 영역이 컴포넌트 안이면 그리는 시점의 페이지 값으로 인스턴스 입력값을 다시 평가한다(3b 스펙 5.2)
+  const full: DataContext = repaintProps({ ...ctx, ...opts.pageCtx }, opts.ref, opts.onExpressionError);
   const items: PlacedItem[] = [];
   const cache = new Map<string, Record<string, unknown>>();
   const boxed = new Set<string>(), broken = new Set<string>();
@@ -38,7 +39,7 @@ export function paintChildren(children: Element[], origin: { x: number; y: numbe
     if (!boxed.has(owner.refId)) { boxed.add(owner.refId); items.push(refBoxItem(owner, opts.instance)); }
     const base = ownedInstance(owner, opts.instance);
     const painted = el.type === "table"
-      ? paintClipped(el, ectx, opts, opts.pageCtx, base)
+      ? paintClipped(el, ectx, { ...opts, ref: { owner, cache } }, opts.pageCtx, base)
       : placeStatic(el, ectx, { onExpressionError: opts.onExpressionError, instance: base });
     items.push(...ownItems(painted, owner, el.id, base));
   }
