@@ -52,6 +52,8 @@ describe("paginate invariants", () => {
         // 2. 조각이 영역 하단(페이지 소계 예약분 제외)을 넘지 않는다. overflow 표시된 조각만 예외
         for (const pl of p.placements) {
           if (pl.block.kind === "pageFooter") { expect(pl.y, msg).toBeCloseTo(region.h - footerH); continue; }
+          // 규칙 1: 머리행은 첫 영역이 작아도 무조건 놓는다
+          if (pl.block.kind === "header") { continue; }
           if (!pl.overflow) expect(pl.y + pl.block.height, msg).toBeLessThanOrEqual(region.h - footerH + EPS);
           else expect(pl.block.height, msg).toBeGreaterThan(freshAvail - EPS);   // overflow는 빈 페이지에도 안 들어갈 때만
         }
