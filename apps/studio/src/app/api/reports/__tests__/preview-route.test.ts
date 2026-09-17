@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect, vi } from "vitest";
+import { parseReport } from "@daport/core";
 import { POST } from "../[id]/preview/route";
 
-const call = (body: unknown) => POST(new Request("http://localhost/api/reports/qc/preview", {
-  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { params: Promise.resolve({ id: "qc" }) });
+const call = (body: unknown, id = "qc") => POST(new Request(`http://localhost/api/reports/${id}/preview`, {
+  method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) }), { params: Promise.resolve({ id }) });
 
 describe("POST /api/reports/[id]/preview", () => {
   it("treats a JSON null body like an empty body and rejects a non-object body with a clean 400", async () => {
@@ -71,5 +72,24 @@ describe("POST /api/reports/[id]/preview props field", () => {
     const res = await call({ report, params: {}, data: { props: [{ title: "x" }] } });
     expect(res.status).toBe(400);
     expect((await res.json()).datasetErrors).toEqual([expect.objectContaining({ dataset: "props", code: "BAD_DATA" })]);
+  });
+});
+
+describe("POST /api/reports/:id/preview version", () => {
+  it("renders the given published version instead of the draft, 404 for a missing version", async () => {
+    const { getStore, ready } = await import("@/lib/report-store");
+    await ready();
+    const id = `pv-${Date.now()}`;
+    const base = { id, name: "V1", version: 1, page: { width: 100, height: 100 }, elements: [{ id: "t", type: "text", x: 0, y: 0, w: 50, h: 10, value: "first" }] };
+    await getStore().create(base);
+    await getStore().publish(id, parseReport(base));
+    await getStore().update(id, { ...base, elements: [{ ...base.elements[0], value: "second" }] });
+    const v1 = await call({ version: 1 }, id);
+    expect(v1.status).toBe(200);
+    expect(await v1.text()).toContain("first");
+    const draft = await call({}, id);
+    expect(await draft.text()).toContain("second");
+    expect((await call({ version: 9 }, id)).status).toBe(404);
+    expect((await call({ version: "1" }, id)).status).toBe(400);
   });
 });
