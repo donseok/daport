@@ -30,7 +30,10 @@ export function sendRaw(printer: Printer, data: Buffer, timeoutMs = 10_000): Pro
     sock.setTimeout(timeoutMs, () => fail(`프린터 "${printer.name}" 응답 시간 초과 (${timeoutMs}ms)`, new Error(`socket timeout after ${timeoutMs}ms`)));
     sock.on("error", (e) => fail(`프린터 "${printer.name}"에 연결하지 못했습니다`, e));
     sock.on("connect", () => {
-      sock.end(data, () => { sock.destroy(); resolve(data.length); });
+      // end()의 콜백에서 바로 destroy()하지 않는다 — 이 콜백은 데이터가 커널로 넘어간
+      // 시점에 불릴 뿐이라, 상대가 아직 안 읽은 데이터를 들고 있을 때 destroy()하면
+      // 정상 FIN 대신 RST가 나가 라벨이 잘릴 수 있다. 소켓이 스스로 닫히도록 둔다.
+      sock.end(data, () => resolve(data.length));
     });
   });
 }

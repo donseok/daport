@@ -34,4 +34,19 @@ describe("sendRaw", () => {
     expect(err.message).not.toMatch(/127\.0\.0\.1|:\d{4,5}/);
     expect(err.cause).toBeInstanceOf(Error);
   });
+  it("rejects with a sanitized timeout message and cause when the printer never responds", async () => {
+    // 연결은 받아주지만 아무것도 읽지 않는 서버. 커널 수신 버퍼보다 훨씬 큰 페이로드를 보내
+    // sock.end()의 flush가 절대 끝나지 않게 만든다 — 타임아웃만이 유일하게 가능한 결과라 레이스가 없다
+    let accepted: net.Socket | undefined;
+    const server = net.createServer((sock) => { accepted = sock; });
+    await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
+    const port = (server.address() as net.AddressInfo).port;
+    const bigPayload = Buffer.alloc(64 * 1024 * 1024);
+    const err = await sendRaw({ name: "t", host: "127.0.0.1", port }, bigPayload, 100).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toMatch(/응답 시간 초과/);
+    expect(err.cause).toBeInstanceOf(Error);
+    accepted?.destroy();   // 클라이언트가 destroy()로 RST를 보내도, 서버 쪽 소켓은 정리해야 close()가 끝난다
+    await new Promise<void>((r) => server.close(() => r()));
+  });
 });
