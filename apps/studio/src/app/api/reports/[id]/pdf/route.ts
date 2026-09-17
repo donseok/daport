@@ -1,9 +1,12 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
-import { resolveData, parseReport, ExpressionError, type Report, type DataContext } from "@daport/core";
+import { parseReport, ExpressionError, type Report, type DataContext } from "@daport/core";
+import { LayoutLimitError } from "@daport/renderer";
 import { renderPdf } from "@daport/pdf";
 import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
+import { readJsonBody, objectField, MAX_BODY_BYTES } from "@/lib/body";
+import { runDatasets } from "@/lib/datasets";
 
 export const maxDuration = 60;
 
@@ -18,11 +21,11 @@ function contentDisposition(report: Report): string {
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  // JSON null은 빈 본문과 같게 본다. 객체가 아닌 본문은 요청 오류다 (null.report를 읽어 500이 나지 않게)
-  const body = (await req.json().catch(() => null)) ?? {};
-  if (typeof body !== "object") return NextResponse.json({ error: "요청 본문은 JSON 객체여야 합니다" }, { status: 400 });
+  const parsed = await readJsonBody(req, MAX_BODY_BYTES);
+  if (!parsed.ok) return parsed.response;
+  const body = parsed.body;
 
-  // 스펙 10장: 모델 검증·파라미터·표현식 오류는 요청 문제(400), 렌더 실패(Chromium 크래시 1회 재시도 후)는 500
+  // 스펙 10장: 모델 검증·파라미터·표현식·데이터셋·페이지 상한 오류는 요청 문제(400), 렌더 실패(Chromium 크래시 1회 재시도 후)는 500
   let report: Report | null;
   try {
     await ready();
@@ -34,9 +37,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let data: DataContext;
   try {
-    data = await resolveData(report, body.params ?? {});   // 필수 파라미터 누락, 지원하지 않는 데이터셋
+    const { context, errors } = await runDatasets(report, { params: objectField(body, "params"), data: objectField(body, "data") });
+    if (errors.length) return NextResponse.json({ error: "데이터셋 실행 실패", datasetErrors: errors }, { status: 400 });
+    data = context;
   } catch (e) {
-    return fail(e, 400);
+    return fail(e, 400);   // 필수 파라미터 누락
   }
 
   try {
@@ -44,6 +49,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const pdf = await renderPdf(resolveAssetUrls(report, origin), data);
     return new NextResponse(new Uint8Array(pdf), { headers: { "content-type": "application/pdf", "content-disposition": contentDisposition(report) } });
   } catch (e) {
+    if (e instanceof LayoutLimitError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
     return fail(e, e instanceof ExpressionError ? 400 : 500);
   }
 }

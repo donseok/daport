@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@daport/core": "workspace:*",
+    "@daport/datasource": "workspace:*",
     "@daport/renderer": "workspace:*",
     "@daport/pdf": "workspace:*",
     "@neondatabase/serverless": "^1.0.0",
