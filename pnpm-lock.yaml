@@ -23,6 +23,9 @@ importers:
       '@daport/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@daport/datasource':
+        specifier: workspace:*
+        version: link:../../packages/datasource
       '@daport/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
@@ -103,6 +106,12 @@ importers:
       '@types/jexl':
         specifier: ^2.3.4
         version: 2.3.4
+
+  packages/datasource:
+    dependencies:
+      '@daport/core':
+        specifier: workspace:*
+        version: link:../core
 
   packages/pdf:
     dependencies:

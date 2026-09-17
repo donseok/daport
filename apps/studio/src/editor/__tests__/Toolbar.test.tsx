@@ -153,4 +153,22 @@ describe("Toolbar", () => {
     await waitFor(() => expect(alertMock).toHaveBeenCalledWith("저장 실패 (HTTP 500)"));
     expect(alertMock).toHaveBeenCalledTimes(2);   // "[object Object]"를 띄우지 않는다
   });
+
+  it("sends sample data with the PDF request unless live data is on, and renders the page selector", async () => {
+    const { store, fetchMock } = setup();
+    act(() => store.getState().setSample({ params: { lot: "L1", qty: 2 }, data: { s: [{ A: 1 }] }, capturedAt: "2026-09-17T00:00:00.000Z" }));
+    fetchMock.mockResolvedValue(new Response(new Blob(["%PDF-"]), { status: 200 }));
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body.params).toEqual({ lot: "L1", qty: 2 });
+    expect(body.data).toEqual({ s: [{ A: 1 }] });
+    fireEvent.click(screen.getByLabelText("실데이터"));
+    expect(store.getState().liveData).toBe(true);
+    await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).data).toBeUndefined();
+    expect(screen.getByTestId("page-indicator").textContent).toBe("1 / 1");
+  });
 });

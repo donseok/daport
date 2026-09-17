@@ -43,4 +43,22 @@ describe("POST /api/reports/[id]/pdf", () => {
     expect(res.status).toBe(500);
     expect((await res.json()).error).toContain("closed");
   });
+
+  it("passes request data to the renderer and returns 400 with datasetErrors when a dataset fails", async () => {
+    renderPdf.mockResolvedValue(Buffer.from("%PDF-"));
+    const withDs = { ...report, datasets: [{ name: "h", type: "http", url: "https://nope.example.com/x" }] };
+    expect((await call({ report: withDs, params: { lot: "L1" }, data: { h: [{ A: 1 }] } })).status).toBe(200);
+    expect((renderPdf.mock.calls[0][1] as { h: { A: number } }).h.A).toBe(1);
+    const bad = await call({ report: withDs, params: { lot: "L1" } });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).datasetErrors).toHaveLength(1);
+  });
+
+  it("maps LayoutLimitError to 400 LAYOUT_LIMIT", async () => {
+    const { LayoutLimitError } = await import("@daport/renderer");
+    renderPdf.mockRejectedValue(new LayoutLimitError(2001));
+    const res = await call({ report, params: { lot: "L1" } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("LAYOUT_LIMIT");
+  });
 });

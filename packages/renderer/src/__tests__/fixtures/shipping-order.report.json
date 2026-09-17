@@ -1,0 +1,25 @@
+{
+  "id": "shipping-order", "name": "출하지시서", "version": 1,
+  "page": { "width": 210, "height": 297, "margin": [12, 12, 12, 12] },
+  "datasets": [{ "name": "orders", "type": "static", "rows": [] }, { "name": "items", "type": "static", "rows": [] }],
+  "sample": { "params": {}, "capturedAt": "2026-09-17T00:00:00.000Z", "data": {
+    "orders": [ { "ORDER_NO": "O-1", "LINE": "1라인", "DEST": "한빛금속 안산공장" }, { "ORDER_NO": "O-2", "LINE": "1라인", "DEST": "세명산업 시화" }, { "ORDER_NO": "O-3", "LINE": "2라인", "DEST": "대한정밀 화성" } ],
+    "items": [ { "ORDER_NO": "O-1", "NAME": "SPCC 1.0t", "QTY": 120 }, { "ORDER_NO": "O-1", "NAME": "SPCC 1.2t", "QTY": 80 }, { "ORDER_NO": "O-2", "NAME": "SPHC 2.3t", "QTY": 200 },
+               { "ORDER_NO": "O-3", "NAME": "SPCC 1.6t", "QTY": 40 }, { "ORDER_NO": "O-3", "NAME": "SPCC 2.0t", "QTY": 60 }, { "ORDER_NO": "O-3", "NAME": "SPCC 2.3t", "QTY": 10 } ]
+  }},
+  "elements": [
+    { "id": "title", "type": "text", "x": 12, "y": 14, "w": 186, "h": 12, "value": "출하지시서", "style": { "fontSize": 20, "bold": true, "align": "center" } },
+    { "id": "cards", "type": "repeater", "x": 12, "y": 32, "w": 186, "h": 250, "source": "orders", "layout": "list", "gap": [0, 4],
+      "groups": [{ "by": "item.LINE", "header": { "h": 9, "children": [
+        { "id": "gh-bg", "type": "rect", "x": 0, "y": 0, "w": 186, "h": 8, "style": { "fill": "#e8eef8" } },
+        { "id": "gh-t", "type": "text", "x": 2, "y": 0, "w": 180, "h": 8, "value": "{{ group.key }} — 지시 {{ count(group.rows) }}건", "style": { "bold": true, "valign": "middle" } } ] } }],
+      "item": { "w": 186, "h": 44, "children": [
+        { "id": "card-box", "type": "rect", "x": 0, "y": 0, "w": 186, "h": 42, "style": { "stroke": "#333", "strokeWidth": 0.3, "radius": 1 } },
+        { "id": "card-no", "type": "text", "x": 3, "y": 2, "w": 60, "h": 7, "value": "지시번호 {{ item.ORDER_NO }}", "style": { "bold": true, "fontSize": 11 } },
+        { "id": "card-dest", "type": "text", "x": 70, "y": 2, "w": 110, "h": 7, "value": "납품처: {{ item.DEST }}", "style": { "align": "right" } },
+        { "id": "card-items", "type": "table", "x": 3, "y": 11, "w": 180, "h": 29, "overflow": "clip", "source": "items[.ORDER_NO == item.ORDER_NO]", "rowHeight": 6, "headerHeight": 6, "border": "rows",
+          "columns": [ { "header": "품명", "value": "{{ row.NAME }}", "w": 120, "style": { "padding": 1 } }, { "header": "수량", "value": "{{ formatNumber(row.QTY) }}", "w": 60, "align": "right", "style": { "padding": 1 } } ] }
+      ]} },
+    { "id": "pn", "type": "pageNumber", "x": 12, "y": 285, "w": 186, "h": 6, "flow": "every", "style": { "fontSize": 8, "align": "center", "color": "#666" } }
+  ]
+}

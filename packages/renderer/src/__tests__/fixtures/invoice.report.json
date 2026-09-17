@@ -1,0 +1,28 @@
+{
+  "id": "invoice", "name": "송장", "version": 1,
+  "page": { "width": 210, "height": 297, "margin": [12, 12, 12, 12] },
+  "datasets": [{ "name": "shipments", "type": "static", "rows": [] }],
+  "repeat": { "source": "shipments", "as": "record" },
+  "sample": { "params": {}, "capturedAt": "2026-09-17T00:00:00.000Z", "data": { "shipments": [
+    { "SHIP_NO": "S-1001", "CUSTOMER": "한빛금속", "DT": "2026-09-16", "items": [
+      { "NAME": "SPCC 1.0t × 1219 × 2438", "QTY": 120, "UNIT": 45000 }, { "NAME": "SPCC 1.2t × 1219 × 2438", "QTY": 80, "UNIT": 52000 }, { "NAME": "SPCC 1.6t × 1219 × 2438", "QTY": 40, "UNIT": 68000 }
+    ]},
+    { "SHIP_NO": "S-1002", "CUSTOMER": "세명산업", "DT": "2026-09-17", "items": [ { "NAME": "SPHC 2.3t × 1219 × 2438", "QTY": 200, "UNIT": 61000 } ] }
+  ]}},
+  "elements": [
+    { "id": "title", "type": "text", "x": 12, "y": 14, "w": 186, "h": 12, "value": "송  장", "style": { "fontSize": 22, "bold": true, "align": "center" } },
+    { "id": "meta", "type": "text", "x": 12, "y": 30, "w": 186, "h": 16, "value": "송장번호: {{ record.SHIP_NO }}\n고객사: {{ record.CUSTOMER }}   출하일: {{ formatDate(record.DT, 'yyyy.MM.dd') }}", "style": { "fontSize": 10 } },
+    { "id": "items", "type": "table", "x": 12, "y": 50, "w": 186, "h": 200, "source": "record.items", "border": "rows", "borderStyle": { "stroke": "#999", "strokeWidth": 0.2 }, "rowHeight": 7,
+      "headerStyle": { "bold": true, "fill": "#f0f0f0" },
+      "columns": [
+        { "header": "품명", "value": "{{ row.NAME }}", "w": 96, "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "수량", "value": "{{ formatNumber(row.QTY) }}", "w": 25, "align": "right", "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "단가", "value": "{{ formatNumber(row.UNIT) }}", "w": 30, "align": "right", "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "금액", "value": "{{ formatNumber(row.QTY * row.UNIT) }}", "w": 35, "align": "right", "style": { "padding": 1.5, "valign": "middle" } }
+      ],
+      "footer": [{ "value": "합계", "span": 1, "style": { "bold": true, "padding": 1.5 } }, { "value": "{{ formatNumber(sum(rows, 'QTY')) }}", "align": "right", "style": { "bold": true, "padding": 1.5 } }, { "value": "" },
+                 { "value": "{{ formatNumber(sum(rows, 'QTY') > 0 ? avg(rows, 'UNIT') * sum(rows, 'QTY') : 0) }}", "align": "right", "style": { "bold": true, "padding": 1.5 } }] },
+    { "id": "note", "type": "text", "x": 12, "y": 258, "w": 186, "h": 10, "value": "상기 물품을 정히 출하하였습니다.", "flow": "last", "style": { "align": "center" } },
+    { "id": "pn", "type": "pageNumber", "x": 12, "y": 280, "w": 186, "h": 6, "flow": "every", "style": { "fontSize": 8, "align": "center", "color": "#666" } }
+  ]
+}

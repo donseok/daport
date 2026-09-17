@@ -189,3 +189,70 @@ describe("editor store: line bounding box", () => {
     expect(s.getState().history.past).toHaveLength(0);
   });
 });
+
+describe("editor store (phase 2)", () => {
+  const rep = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, datasets: [{ name: "lots", type: "static", rows: [{ NAME: "L1" }] }], elements: [
+    { id: "a", type: "text", x: 10, y: 10, w: 20, h: 5, value: "A" },
+    { id: "cards", type: "repeater", x: 0, y: 20, w: 100, h: 80, source: "lots", item: { w: 50, h: 20, children: [{ id: "nm", type: "text", x: 1, y: 1, w: 20, h: 5, value: "{{ item.NAME }}" }] },
+      groups: [{ by: "item.LINE", header: { h: 5, children: [{ id: "gh", type: "rect", x: 0, y: 0, w: 5, h: 5 }] } }] },
+  ]});
+  let store: ReturnType<typeof createEditorStore>;
+  beforeEach(() => { store = createEditorStore(rep); });
+
+  it("finds and updates template children, and reports their parent repeater", () => {
+    expect(store.getState().findElement("nm")).toMatchObject({ type: "text" });
+    store.getState().updateElement("nm", { w: 30 });
+    expect(store.getState().findElement("nm")).toMatchObject({ w: 30 });
+    expect(store.getState().findParentRepeater("nm")).toBe("cards");
+    expect(store.getState().findParentRepeater("gh")).toBe("cards");
+    expect(store.getState().findParentRepeater("a")).toBeUndefined();
+    expect(store.getState().allocateId("nm")).toBe("nm-1");
+  });
+  it("adds into a repeater band, deletes and duplicates template children with fresh ids", () => {
+    const el = ElementSchema.parse({ id: "n2", type: "rect", x: 0, y: 0, w: 1, h: 1 });
+    store.getState().addElement(el, { into: { repeaterId: "cards", band: "item" } });
+    const cards = () => store.getState().findElement("cards") as Extract<Element, { type: "repeater" }>;
+    expect(cards().item.children.map((c) => c.id)).toEqual(["nm", "n2"]);
+    store.getState().addElement(ElementSchema.parse({ id: "n3", type: "rect", x: 0, y: 0, w: 1, h: 1 }), { into: { repeaterId: "cards", band: "groupHeader", groupIndex: 0 } });
+    expect(cards().groups[0].header?.children.map((c) => c.id)).toEqual(["gh", "n3"]);
+    store.getState().select(["nm"]);
+    store.getState().duplicateSelected();
+    expect(cards().item.children.map((c) => c.id)).toEqual(["nm", "nm-1", "n2"]);
+    store.getState().select(["nm-1", "n3"]);
+    store.getState().deleteSelected();
+    expect(cards().item.children.map((c) => c.id)).toEqual(["nm", "n2"]);
+    expect(cards().groups[0].header?.children.map((c) => c.id)).toEqual(["gh"]);
+    store.getState().select(["cards"]);
+    store.getState().duplicateSelected();
+    const copy = store.getState().findElement("cards-1") as Extract<Element, { type: "repeater" }>;
+    expect(copy.item.children.map((c) => c.id)).toEqual(["nm-1", "n2-1"]);
+    expect(store.getState().replaceReport(JSON.parse(JSON.stringify(store.getState().report)))).toBe(true);
+  });
+  it("sets sample, datasets, params and repeat as undoable edits", () => {
+    store.getState().setSample({ params: { no: "A" }, data: { lots: [{ NAME: "S" }] }, capturedAt: "2026-09-17T00:00:00.000Z" });
+    expect(store.getState().report.sample?.data).toEqual({ lots: [{ NAME: "S" }] });
+    expect(store.getState().dirty).toBe(true);
+    store.getState().setRepeat({ source: "lots", as: "record" });
+    expect(store.getState().report.repeat).toEqual({ source: "lots", as: "record" });
+    store.getState().setRepeat(undefined);
+    expect(store.getState().report.repeat).toBeUndefined();
+    store.getState().setDatasets([...store.getState().report.datasets, { name: "o", type: "http", url: "https://x", method: "GET", headers: {} }]);
+    expect(store.getState().report.datasets).toHaveLength(2);
+    store.getState().setParams([{ name: "no", type: "string", required: true }]);
+    expect(store.getState().report.params[0].name).toBe("no");
+    store.getState().undo(); store.getState().undo(); store.getState().undo(); store.getState().undo();
+    expect(store.getState().report.sample?.params).toEqual({ no: "A" });
+    store.getState().undo();
+    expect(store.getState().report.sample).toBeUndefined();
+  });
+  it("keeps view and liveData outside history", () => {
+    expect(store.getState().view).toEqual({ copyIndex: 0, pageInCopy: 0 });
+    store.getState().setView({ pageInCopy: 2 });
+    expect(store.getState().view).toEqual({ copyIndex: 0, pageInCopy: 2 });
+    store.getState().setLiveData(true);
+    expect(store.getState().liveData).toBe(true);
+    expect(store.getState().dirty).toBe(false);
+    store.getState().undo();
+    expect(store.getState().view.pageInCopy).toBe(2);
+  });
+});

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { StyleSchema } from "./style";
+import { StyleSchema, StyleOverrideSchema, color } from "./style";
 
 const Base = z.object({
   id: z.string().min(1),
@@ -40,22 +40,60 @@ export const RefElementSchema = Base.extend({
   ref: z.string().min(1),
   props: z.record(z.string(), z.unknown()).default({}),
 });
+export const CellAlignSchema = z.enum(["left", "center", "right"]);
+/** 머리행·그룹 행·소계 행의 셀. span은 차지하는 열 수("all"은 남은 열 전부). 스타일은 열·머리 스타일 위에 덮어쓸 값만 */
+export const TableCellSchema = z.object({
+  value: z.string().default(""),
+  span: z.union([z.number().int().positive(), z.literal("all")]).default(1),
+  align: CellAlignSchema.optional(),
+  style: StyleOverrideSchema.optional(),
+});
+export type TableCell = z.infer<typeof TableCellSchema>;
 export const TableColumnSchema = z.object({
   header: z.string().default(""),
   value: z.string().default(""),
   w: z.number().positive(),
+  align: CellAlignSchema.optional(),              // 없으면 style.align
   style: StyleSchema.prefault({}),
 });
+export type TableColumn = z.infer<typeof TableColumnSchema>;
+/** 그룹 경계는 데이터 순서대로 연속된 같은 key다. 앞 항목이 바깥 그룹 */
+export const TableGroupSchema = z.object({
+  by: z.string().min(1),                          // 표현식 (행 컨텍스트에서 평가)
+  header: z.array(TableCellSchema).default([]),
+  footer: z.array(TableCellSchema).default([]),
+  keepHeaderWithRows: z.boolean().default(true),
+});
+export type TableGroup = z.infer<typeof TableGroupSchema>;
 export const TableElementSchema = Base.extend({
   type: z.literal("table"),
-  source: z.string().min(1),
+  source: z.string().min(1),                      // 배열로 평가되는 표현식
   columns: z.array(TableColumnSchema),
   repeatHeader: z.boolean().default(true),
   overflow: z.enum(["continue", "clip"]).default("continue"),
-  keepTogether: z.enum(["none", "row"]).default("row"),
-  rowHeight: z.number().positive().default(6),
-  headerHeight: z.number().positive().default(7),
+  keepTogether: z.enum(["none", "row"]).default("row"),   // 2단계에서는 늘 row로 동작
+  rowHeight: z.number().positive().default(6),    // 최소 행 높이(mm)
+  headerHeight: z.number().positive().default(7), // 최소 머리행 높이(mm)
+  border: z.enum(["all", "rows", "none"]).default("all"),
+  borderStyle: z.object({ stroke: color().default("#000000"), strokeWidth: z.number().nonnegative().default(0.2) }).prefault({}),
+  headerStyle: StyleOverrideSchema.default({}),
+  groups: z.array(TableGroupSchema).default([]),
+  pageFooter: z.array(TableCellSchema).default([]),
+  footer: z.array(TableCellSchema).default([]),
 });
+export type TableElement = z.infer<typeof TableElementSchema>;
+
+export type RepeaterBand = { h: number; children: Element[] };
+export type RepeaterGroup = { by: string; header?: RepeaterBand; footer?: RepeaterBand };
+export type RepeaterElement = z.infer<typeof Base> & {
+  type: "repeater";
+  source: string;
+  layout: "list" | "grid";
+  gap: [number, number];
+  item: { w: number; h: number; children: Element[] };
+  groups: RepeaterGroup[];
+  overflow: "continue" | "clip";
+};
 
 type LeafElement =
   | z.infer<typeof TextElementSchema> | z.infer<typeof ImageElementSchema>
@@ -63,18 +101,31 @@ type LeafElement =
   | z.infer<typeof BarcodeElementSchema> | z.infer<typeof PageNumberElementSchema>
   | z.infer<typeof RefElementSchema> | z.infer<typeof TableElementSchema>;
 export type GroupElement = z.infer<typeof Base> & { type: "group"; children: Element[] };
-export type Element = LeafElement | GroupElement;
+export type Element = LeafElement | GroupElement | RepeaterElement;
 
 export const GroupElementSchema: z.ZodType<GroupElement> = Base.extend({
   type: z.literal("group"),
   children: z.lazy(() => z.array(ElementSchema)),
 }) as unknown as z.ZodType<GroupElement>;
 
+/** 반복 영역의 항목·그룹 머리·소계 템플릿. 자식 좌표는 밴드 좌상단 기준 */
+export const RepeaterBandSchema = z.object({ h: z.number().positive(), children: z.lazy(() => z.array(ElementSchema)) });
+export const RepeaterGroupSchema = z.object({ by: z.string().min(1), header: RepeaterBandSchema.optional(), footer: RepeaterBandSchema.optional() });
+export const RepeaterElementSchema: z.ZodType<RepeaterElement> = Base.extend({
+  type: z.literal("repeater"),
+  source: z.string().min(1),
+  layout: z.enum(["list", "grid"]).default("list"),
+  gap: z.tuple([z.number().nonnegative(), z.number().nonnegative()]).default([0, 0]),   // [가로, 세로] mm
+  item: z.object({ w: z.number().positive(), h: z.number().positive(), children: z.lazy(() => z.array(ElementSchema)) }),
+  groups: z.array(RepeaterGroupSchema).default([]),
+  overflow: z.enum(["continue", "clip"]).default("continue"),
+}) as unknown as z.ZodType<RepeaterElement>;
+
 export const ElementSchema: z.ZodType<Element> = z.lazy(() =>
   z.discriminatedUnion("type", [
     TextElementSchema, ImageElementSchema, LineElementSchema, RectElementSchema,
     BarcodeElementSchema, PageNumberElementSchema, RefElementSchema, TableElementSchema,
-    GroupElementSchema as any,
+    GroupElementSchema as any, RepeaterElementSchema as any,
   ])
 ) as unknown as z.ZodType<Element>;
 

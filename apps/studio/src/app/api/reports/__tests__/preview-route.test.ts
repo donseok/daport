@@ -34,4 +34,25 @@ describe("POST /api/reports/[id]/preview", () => {
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("L2609-0142");
   });
+
+  it("uses request data instead of running datasets, and reports dataset errors as 400 with datasetErrors", async () => {
+    const report = { id: "qc", version: 1, page: { width: 100, height: 100 }, datasets: [{ name: "h", type: "http", url: "https://nope.example.com/x" }],
+      elements: [{ id: "t", type: "text", x: 0, y: 0, w: 50, h: 5, value: "{{ h.NAME }}" }] };
+    const ok = await call({ report, params: {}, data: { h: [{ NAME: "from-data" }] } });
+    expect(ok.status).toBe(200);
+    expect(await ok.text()).toContain("from-data");
+    const bad = await call({ report, params: {} });
+    expect(bad.status).toBe(400);
+    expect((await bad.json()).datasetErrors[0]).toMatchObject({ dataset: "h", code: "HOST_NOT_ALLOWED" });
+  });
+
+  it("returns 400 LAYOUT_LIMIT above the page limit and 413 for an oversized body", async () => {
+    const report = { id: "qc", version: 1, page: { width: 100, height: 100 }, repeat: { source: "ships" } };
+    const limit = await call({ report, params: {}, data: { ships: Array.from({ length: 2001 }, () => ({})) } });
+    expect(limit.status).toBe(400);
+    expect((await limit.json()).code).toBe("LAYOUT_LIMIT");
+    // 실제 21MB 본문으로 읽은 바이트 검사를 지난다 (content-length 선검사는 body.test.ts가 본다)
+    const big = await POST(new Request("http://localhost/api/reports/qc/preview", { method: "POST", headers: { "content-type": "application/json" }, body: `{"pad":"${"x".repeat(21 * 1024 * 1024)}"}` }), { params: Promise.resolve({ id: "qc" }) });
+    expect(big.status).toBe(413);
+  });
 });

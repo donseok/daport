@@ -1,0 +1,26 @@
+{
+  "id": "badge-sheet", "name": "사원 명찰 시트", "version": 1,
+  "page": { "width": 210, "height": 297, "margin": [10, 10, 10, 10] },
+  "datasets": [{ "name": "people", "type": "static", "rows": [] }],
+  "sample": { "params": {}, "capturedAt": "2026-09-17T00:00:00.000Z", "data": { "people": [
+    { "NAME": "김민준", "DEPT": "품질보증", "NO": "E001" }, { "NAME": "이서연", "DEPT": "품질보증", "NO": "E002" }, { "NAME": "박지호", "DEPT": "생산1", "NO": "E003" },
+    { "NAME": "최수아", "DEPT": "생산1", "NO": "E004" }, { "NAME": "정우진", "DEPT": "생산1", "NO": "E005" }, { "NAME": "강하은", "DEPT": "생산2", "NO": "E006" },
+    { "NAME": "조예준", "DEPT": "생산2", "NO": "E007" }, { "NAME": "윤지우", "DEPT": "물류", "NO": "E008" }, { "NAME": "장도윤", "DEPT": "물류", "NO": "E009" },
+    { "NAME": "임서준", "DEPT": "물류", "NO": "E010" }, { "NAME": "한시우", "DEPT": "경영지원", "NO": "E011" }, { "NAME": "오하린", "DEPT": "경영지원", "NO": "E012" },
+    { "NAME": "신은우", "DEPT": "경영지원", "NO": "E013" }, { "NAME": "권지아", "DEPT": "연구소", "NO": "E014" }, { "NAME": "황현우", "DEPT": "연구소", "NO": "E015" },
+    { "NAME": "안수빈", "DEPT": "연구소", "NO": "E016" }, { "NAME": "송주원", "DEPT": "연구소", "NO": "E017" }, { "NAME": "류시아", "DEPT": "영업", "NO": "E018" },
+    { "NAME": "홍준서", "DEPT": "영업", "NO": "E019" }, { "NAME": "전아윤", "DEPT": "영업", "NO": "E020" }, { "NAME": "고건우", "DEPT": "영업", "NO": "E021" },
+    { "NAME": "문서윤", "DEPT": "구매", "NO": "E022" }, { "NAME": "양이준", "DEPT": "구매", "NO": "E023" }, { "NAME": "손채원", "DEPT": "구매", "NO": "E024" },
+    { "NAME": "배지훈", "DEPT": "안전", "NO": "E025" }, { "NAME": "백유나", "DEPT": "안전", "NO": "E026" }, { "NAME": "허민서", "DEPT": "안전", "NO": "E027" },
+    { "NAME": "남예원", "DEPT": "안전", "NO": "E028" }, { "NAME": "심태양", "DEPT": "설비", "NO": "E029" }, { "NAME": "노다은", "DEPT": "설비", "NO": "E030" }
+  ]}},
+  "elements": [
+    { "id": "grid", "type": "repeater", "x": 10, "y": 10, "w": 190, "h": 277, "source": "people", "layout": "grid", "gap": [5, 5],
+      "item": { "w": 60, "h": 35, "children": [
+        { "id": "b-box", "type": "rect", "x": 0, "y": 0, "w": 60, "h": 35, "style": { "stroke": "#000", "strokeWidth": 0.3, "radius": 2 } },
+        { "id": "b-name", "type": "text", "x": 2, "y": 6, "w": 56, "h": 12, "value": "{{ item.NAME }}", "style": { "fontSize": 18, "bold": true, "align": "center", "valign": "middle" } },
+        { "id": "b-dept", "type": "text", "x": 2, "y": 20, "w": 56, "h": 6, "value": "{{ item.DEPT }}", "style": { "fontSize": 10, "align": "center" } },
+        { "id": "b-no", "type": "text", "x": 2, "y": 27, "w": 56, "h": 5, "value": "{{ item.NO }} · {{ index + 1 }}/{{ count(rows) }}", "style": { "fontSize": 7, "align": "center", "color": "#666" } }
+      ]} }
+  ]
+}

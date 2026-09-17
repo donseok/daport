@@ -1,0 +1,55 @@
+{
+  "id": "inspection-cert", "name": "검사증명서", "version": 1,
+  "page": { "width": 210, "height": 297, "margin": [15, 15, 15, 15] },
+  "params": [{ "name": "orderNo", "type": "string", "required": true }],
+  "datasets": [{ "name": "lots", "type": "static", "rows": [] }],
+  "repeat": { "source": "lots", "as": "record" },
+  "sample": { "params": { "orderNo": "PO-2026-0917" }, "capturedAt": "2026-09-17T00:00:00.000Z", "data": { "lots": [
+    { "LOT_NO": "L-001", "PRODUCT": "냉연강판 SPCC 1.0t", "CUSTOMER": "대한정밀(주)", "results": [
+      { "CAT": "치수", "ITEM": "두께", "STD": "1.00 ±0.05", "VAL": 1.01, "JUDGE": "합격" }, { "CAT": "치수", "ITEM": "폭", "STD": "1219 ±1", "VAL": 1219.3, "JUDGE": "합격" },
+      { "CAT": "치수", "ITEM": "길이", "STD": "2438 ±2", "VAL": 2437.5, "JUDGE": "합격" },
+      { "CAT": "기계", "ITEM": "인장강도", "STD": "≥270", "VAL": 305, "JUDGE": "합격" }, { "CAT": "기계", "ITEM": "항복강도", "STD": "≥140", "VAL": 178, "JUDGE": "합격" },
+      { "CAT": "기계", "ITEM": "연신율", "STD": "≥28", "VAL": 41, "JUDGE": "합격" }, { "CAT": "기계", "ITEM": "경도", "STD": "HRB ≤65", "VAL": 52, "JUDGE": "합격" },
+      { "CAT": "외관", "ITEM": "표면", "STD": "결함 없음", "VAL": 0, "JUDGE": "합격" }, { "CAT": "외관", "ITEM": "에지", "STD": "버 없음", "VAL": 0, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "C", "STD": "≤0.15", "VAL": 0.04, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "Mn", "STD": "≤0.60", "VAL": 0.21, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "P", "STD": "≤0.100", "VAL": 0.012, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "S", "STD": "≤0.050", "VAL": 0.006, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "Si", "STD": "≤0.03", "VAL": 0.01, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "Al", "STD": "≥0.02", "VAL": 0.04, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "Cu", "STD": "≤0.20", "VAL": 0.02, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "Ni", "STD": "≤0.20", "VAL": 0.01, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "Cr", "STD": "≤0.20", "VAL": 0.02, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "Mo", "STD": "≤0.05", "VAL": 0.00, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "V", "STD": "≤0.01", "VAL": 0.00, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "Ti", "STD": "≤0.01", "VAL": 0.00, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "Nb", "STD": "≤0.01", "VAL": 0.00, "JUDGE": "합격" }, { "CAT": "성분", "ITEM": "B", "STD": "≤0.001", "VAL": 0.0002, "JUDGE": "합격" },
+      { "CAT": "성분", "ITEM": "N", "STD": "≤0.006", "VAL": 0.003, "JUDGE": "합격" }
+    ]},
+    { "LOT_NO": "L-002", "PRODUCT": "냉연강판 SPCC 1.2t", "CUSTOMER": "대한정밀(주)", "results": [
+      { "CAT": "치수", "ITEM": "두께", "STD": "1.20 ±0.05", "VAL": 1.19, "JUDGE": "합격" }, { "CAT": "기계", "ITEM": "인장강도", "STD": "≥270", "VAL": 298, "JUDGE": "합격" }
+    ]}
+  ]}},
+  "elements": [
+    { "id": "title", "type": "text", "x": 15, "y": 18, "w": 180, "h": 12, "value": "검 사 증 명 서", "style": { "fontSize": 22, "bold": true, "align": "center" } },
+    { "id": "hdr", "type": "group", "x": 15, "y": 34, "w": 180, "h": 24, "children": [
+      { "id": "l1", "type": "text", "x": 0, "y": 0, "w": 30, "h": 8, "value": "발주번호", "style": { "bold": true, "fill": "#f2f2f2", "padding": 2, "valign": "middle" } },
+      { "id": "v1", "type": "text", "x": 30, "y": 0, "w": 60, "h": 8, "value": "{{ params.orderNo }}", "style": { "padding": 2, "valign": "middle" } },
+      { "id": "l2", "type": "text", "x": 90, "y": 0, "w": 30, "h": 8, "value": "LOT", "style": { "bold": true, "fill": "#f2f2f2", "padding": 2, "valign": "middle" } },
+      { "id": "v2", "type": "text", "x": 120, "y": 0, "w": 60, "h": 8, "value": "{{ record.LOT_NO }}", "style": { "padding": 2, "valign": "middle" } },
+      { "id": "l3", "type": "text", "x": 0, "y": 8, "w": 30, "h": 8, "value": "품명", "style": { "bold": true, "fill": "#f2f2f2", "padding": 2, "valign": "middle" } },
+      { "id": "v3", "type": "text", "x": 30, "y": 8, "w": 150, "h": 8, "value": "{{ record.PRODUCT }}", "style": { "padding": 2, "valign": "middle" } },
+      { "id": "l4", "type": "text", "x": 0, "y": 16, "w": 30, "h": 8, "value": "고객사", "style": { "bold": true, "fill": "#f2f2f2", "padding": 2, "valign": "middle" } },
+      { "id": "v4", "type": "text", "x": 30, "y": 16, "w": 150, "h": 8, "value": "{{ record.CUSTOMER }}", "style": { "padding": 2, "valign": "middle" } },
+      { "id": "box", "type": "rect", "x": 0, "y": 0, "w": 180, "h": 24, "style": { "stroke": "#000", "strokeWidth": 0.3 } }
+    ]},
+    { "id": "results", "type": "table", "x": 15, "y": 64, "w": 180, "h": 90, "source": "record.results", "repeatHeader": true, "rowHeight": 6, "headerHeight": 7,
+      "border": "all", "headerStyle": { "bold": true, "fill": "#eeeeee", "align": "center" },
+      "columns": [
+        { "header": "검사항목", "value": "{{ row.ITEM }}", "w": 50, "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "규격", "value": "{{ row.STD }}", "w": 50, "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "측정값", "value": "{{ row.VAL }}", "w": 40, "align": "right", "style": { "padding": 1.5, "valign": "middle" } },
+        { "header": "판정", "value": "{{ row.JUDGE }}", "w": 40, "align": "center", "style": { "padding": 1.5, "valign": "middle" } }
+      ],
+      "groups": [{ "by": "row.CAT", "header": [{ "value": "■ {{ group.key }} ({{ count(group.rows) }}건)", "span": "all", "style": { "bold": true, "fill": "#f8f8f8", "padding": 1.5 } }],
+                  "footer": [{ "value": "소계", "span": 2, "align": "right", "style": { "padding": 1.5 } }, { "value": "{{ formatNumber(sum(group.rows, 'VAL'), '#,##0.00') }}", "align": "right", "style": { "padding": 1.5 } }, { "value": "" }] }],
+      "pageFooter": [{ "value": "페이지 {{ page }} / {{ total }} — 이 페이지 {{ count(pageRows) }}건", "span": "all", "align": "right", "style": { "padding": 1.5, "color": "#555" } }],
+      "footer": [{ "value": "합계 {{ count(rows) }}건", "span": "all", "align": "right", "style": { "bold": true, "padding": 1.5 } }] },
+    { "id": "sign", "type": "text", "x": 120, "y": 262, "w": 75, "h": 8, "value": "품질보증팀장 (인)", "flow": "last", "style": { "align": "right" } },
+    { "id": "pn", "type": "pageNumber", "x": 15, "y": 278, "w": 180, "h": 6, "flow": "every", "format": "LOT {{ record.LOT_NO }} · {{ page }}/{{ total }} · 전체 {{ sheet }}/{{ sheets }}", "style": { "fontSize": 8, "align": "center", "color": "#666" } }
+  ]
+}
