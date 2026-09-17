@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { parseReport, ElementSchema, extractComponent, type Element, type ComponentBody } from "@daport/core";
+import { parseReport, ElementSchema, extractComponent, parseComponentBody, type Element, type ComponentBody } from "@daport/core";
 import { createEditorStore } from "../store";
 
 const report = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
@@ -475,5 +475,22 @@ describe("editor store (phase 3b: group and ungroup)", () => {
     expect(store.getState().ungroupSelected()).toEqual({ ok: false, error: "해제할 그룹을 선택하세요" });
     expect(store.getState().history.past).toHaveLength(0);
     expect(store.getState().selection).toEqual(["a"]);
+  });
+});
+
+describe("component mode guards (중첩 금지, 스펙 4.1·7.5)", () => {
+  const body = parseComponentBody({ name: "H", w: 10, h: 5, elements: [{ id: "x", type: "rect", x: 0, y: 0, w: 10, h: 5 }] });
+  const mode = { componentId: "self", version: 1, props: [], sampleProps: {} };
+  it("ignores insertComponent and replaceWithComponent while editing a component", () => {
+    const s = createEditorStore(report, { componentMode: mode });
+    s.getState().insertComponent("hdr", 1, body, 10, 10);
+    s.getState().replaceWithComponent(["a"], "hdr", 1, body, { x: 10, y: 10, w: 20, h: 5 });
+    expect(s.getState().report).toBe(report);
+    expect(s.getState().history.past).toHaveLength(0);
+  });
+  it("still inserts components in a normal report", () => {
+    const s = createEditorStore(report);
+    s.getState().insertComponent("hdr", 1, body, 10, 10);
+    expect(s.getState().report.components["hdr@1"]).toBeDefined();
   });
 });

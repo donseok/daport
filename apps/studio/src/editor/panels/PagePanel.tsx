@@ -22,6 +22,7 @@ export function PagePanel() {
   const [newId, setNewId] = useState("");
   const [newName, setNewName] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const componentMode = useEditor((s) => s.componentMode);
 
   const refresh = async () => {
     try {
@@ -32,7 +33,9 @@ export function PagePanel() {
       setError(null);
     } catch { setError("프리셋 목록을 불러오지 못했습니다"); }   // 목록을 못 받아도 내장 프리셋은 쓸 수 있다
   };
-  useEffect(() => { void refresh(); }, []);
+  // 컴포넌트 편집 화면에는 프리셋 UI가 없으므로 목록을 요청하지 않는다
+  const inComponentMode = !!componentMode;   // 입력값을 고칠 때마다 componentMode 객체가 바뀌므로 모드 여부만 의존한다
+  useEffect(() => { if (!inComponentMode) void refresh(); }, [inComponentMode]);
 
   const presets = [...BUILTIN_PRESETS, ...userPresets];
   // 크기·여백·출력이 모두 같은 프리셋만 "선택됨"으로 본다.
@@ -55,6 +58,17 @@ export function PagePanel() {
     await refresh();
   };
   const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
+
+  // 스펙 7.5: 페이지 너비·높이가 곧 컴포넌트 w·h다. 여백·프리셋·출력·반복은 컴포넌트 내용에 저장되지 않으므로 보이지 않는다
+  if (componentMode) {
+    return (
+      <div className="p-3 flex flex-col gap-2">
+        <div className="text-xs font-semibold">컴포넌트 크기</div>
+        <NumberField label="너비(mm)" value={page.width} onChange={(width) => { if (width > 0) updatePage({ width }); }} />
+        <NumberField label="높이(mm)" value={page.height} onChange={(height) => { if (height > 0) updatePage({ height }); }} />
+      </div>
+    );
+  }
 
   return (
     <div className="p-3 flex flex-col gap-2">

@@ -14,6 +14,7 @@ import { JsonEditor } from "./json/JsonEditor";
 import { EditorErrorBoundary } from "./EditorErrorBoundary";
 import { DataPanel } from "./data/DataPanel";
 import { LibraryPanel } from "./library/LibraryPanel";
+import { PropsPanel } from "./panels/PropsPanel";
 
 function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   const mode = useEditor((s) => s.mode);
@@ -37,8 +38,8 @@ function useUnsavedChangesWarning(store: EditorStore) {
   }, [dirty]);
 }
 
-type Tab = "elements" | "data" | "components";
-const TAB_LABEL: Record<Tab, string> = { elements: "요소", data: "데이터", components: "컴포넌트" };
+type Tab = "elements" | "data" | "components" | "props";
+const TAB_LABEL: Record<Tab, string> = { elements: "요소", data: "데이터", components: "컴포넌트", props: "입력값" };
 
 /** componentMode가 있으면 컴포넌트 전용 편집 화면이다(스펙 7.5). 중첩 금지라 라이브러리 탭을 두지 않는다 */
 export function Editor({ initial, componentMode }: { initial: Report; componentMode?: EditorState["componentMode"] }) {
@@ -46,7 +47,7 @@ export function Editor({ initial, componentMode }: { initial: Report; componentM
   const report = useStore(store, (s) => s.report);
   const [zoom, setZoom] = useState(1);
   const [tab, setTab] = useState<Tab>("elements");
-  const tabs: Tab[] = componentMode ? ["elements", "data"] : ["elements", "data", "components"];
+  const tabs: Tab[] = componentMode ? ["elements", "props"] : ["elements", "data", "components"];
   useKeyboard(store);
   useUnsavedChangesWarning(store);
   return (
@@ -66,6 +67,7 @@ export function Editor({ initial, componentMode }: { initial: Report; componentM
             {tab === "elements" && <ElementPalette />}
             {tab === "data" && <DataPanel reportId={initial.id} />}
             {tab === "components" && <LibraryPanel />}
+            {tab === "props" && <PropsPanel />}
           </aside>
           <main className="min-w-0 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 overflow-auto"><Body reportId={initial.id} zoom={zoom} /></div>

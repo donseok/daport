@@ -220,6 +220,7 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         r.elements = next.elements; r.components = next.components;
       }),
       replaceWithComponent: (ids, id, version, body, box) => {
+        if (get().componentMode) return;   // 스펙 4.1·7.5: 중첩 컴포넌트 금지
         const refId = get().allocateId(id);
         let replaced = false;
         apply((r) => {

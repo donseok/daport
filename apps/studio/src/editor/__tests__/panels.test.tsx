@@ -207,3 +207,20 @@ describe("page panel repeat switch", () => {
     expect(store.getState().report.repeat).toEqual({ source: "shipments", as: "record" });
   });
 });
+
+describe("PagePanel in component mode", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("shows only the component size and does not load presets", () => {
+    const fetchMock = vi.fn(async () => new Response("[]", { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(parseReport({ id: "component-hdr", version: 1, page: { width: 180, height: 24, margin: [0, 0, 0, 0] } }),
+      { componentMode: { componentId: "hdr", version: 1, props: [], sampleProps: {} } });
+    mount(store, <PagePanel />);
+    expect(screen.getByText("컴포넌트 크기")).toBeTruthy();
+    expect(screen.queryByLabelText("프리셋")).toBeNull();
+    expect(screen.queryByText("반복")).toBeNull();
+    fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "30" } });
+    expect(store.getState().report.page).toMatchObject({ width: 180, height: 30 });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});

@@ -83,3 +83,35 @@ describe("Editor 컴포넌트 탭", () => {
     expect(screen.queryByRole("button", { name: "컴포넌트" })).toBeNull();
   });
 });
+
+describe("Editor component mode", () => {
+  const editReport = parseReport({ id: "component-hdr", name: "회사 헤더", version: 1, page: { width: 180, height: 24, margin: [0, 0, 0, 0] }, elements: [] });
+  const componentMode = { componentId: "hdr", version: 2, props: [{ name: "title", type: "string" as const, default: "기본" }], sampleProps: { title: "기본" } };
+  const tab = (name: string) => screen.queryByRole("button", { name });
+
+  it("shows 요소·입력값 tabs instead of 데이터·컴포넌트 and the component toolbar", () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
+    render(<Editor initial={editReport} componentMode={componentMode} />);
+    expect(tab("요소")).toBeTruthy();
+    expect(tab("입력값")).toBeTruthy();
+    expect(tab("데이터")).toBeNull();
+    expect(tab("컴포넌트")).toBeNull();
+    expect(screen.getByTestId("component-version").textContent).toBe("v2 (저장하면 v3)");
+    expect(screen.queryByRole("button", { name: "PDF" })).toBeNull();
+    fireEvent.click(tab("입력값")!);
+    expect(screen.getByRole("button", { name: "입력값 추가" })).toBeTruthy();
+    expect((screen.getByLabelText("이름") as HTMLInputElement).value).toBe("title");
+    fireEvent.click(tab("요소")!);
+    expect(screen.getByText("+ 텍스트")).toBeTruthy();
+    expect(screen.queryByText(/\+ 컴포넌트|\+ ref/)).toBeNull();                   // 팔레트에 ref 추가 항목이 없다
+  });
+
+  it("keeps 데이터·컴포넌트 tabs and no 입력값 tab for a normal report", () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("[]", { status: 200 })));
+    render(<Editor initial={report} />);
+    expect(tab("데이터")).toBeTruthy();
+    expect(tab("컴포넌트")).toBeTruthy();
+    expect(tab("입력값")).toBeNull();
+    expect(screen.queryByTestId("component-version")).toBeNull();
+  });
+});
