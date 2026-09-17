@@ -58,4 +58,31 @@ describe("getStore", () => {
     expect((await store.get("quality-cert"))?.name).toBe("품질보증서");
     expect((await store.list()).map((r) => r.id)).toContain("quality-cert");
   });
+  it("seeds all five example fixtures, including inspection-cert's repeat source", async () => {
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    delete (globalThis as any).__daportReportStore;
+    delete (globalThis as any).__daportSeeded;
+    const mod = await import("../report-store");
+    const store = mod.getStore();
+    await mod.ready();
+    const cert = await store.get("inspection-cert");
+    expect(cert?.repeat?.source).toBe("lots");
+  });
+  it("does not wedge ready() forever when one fixture fails to seed — the other fixtures still land", async () => {
+    delete process.env.DATABASE_URL;
+    vi.resetModules();
+    delete (globalThis as any).__daportReportStore;
+    delete (globalThis as any).__daportSeeded;
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mod = await import("../report-store");
+    const createSpy = vi.spyOn(mod.MemoryReportStore.prototype, "create").mockRejectedValueOnce(new Error("boom"));
+    const store = mod.getStore();
+    await expect(mod.ready()).resolves.toBeUndefined();
+    // 첫 번째(quality-cert) 시드만 실패시켰으므로 나머지 네 개는 정상적으로 들어온다
+    expect((await store.list()).map((r) => r.id)).toEqual(expect.arrayContaining(["inspection-cert", "invoice", "shipping-order", "badge-sheet"]));
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("seed failed: quality-cert"), "boom");
+    createSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
 });

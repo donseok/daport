@@ -86,7 +86,14 @@ export function getStore(): ReportStore {
     const store = process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
     holder.__daportReportStore = store;
     // 메모리 저장소는 프로세스마다 비므로 dev 서버 부팅 시 예제 픽스처를 넣는다 (DB는 scripts/seed.ts)
-    if (!process.env.DATABASE_URL) holder.__daportSeeded = Promise.all(SEED_FIXTURES.map((f) => store.create(f as ReportInput))).then(() => {});
+    // 픽스처 하나가 깨져도 그 실패를 __daportSeeded에 담아두면 이후 모든 ready() 호출이 dev 서버 수명 내내 reject된다 —
+    // allSettled로 개별 실패를 로그만 남기고 삼켜서 나머지 라우트가 항상 열리게 한다
+    if (!process.env.DATABASE_URL)
+      holder.__daportSeeded = Promise.allSettled(SEED_FIXTURES.map((f) => store.create(f as ReportInput))).then((rs) => {
+        rs.forEach((r, i) => {
+          if (r.status === "rejected") console.error(`seed failed: ${(SEED_FIXTURES[i] as { id?: string }).id}`, r.reason instanceof Error ? r.reason.message : r.reason);
+        });
+      });
   }
   return holder.__daportReportStore;
 }
