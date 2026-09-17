@@ -7,6 +7,7 @@ import { MakeComponentDialog, makeComponentCheck } from "./library/MakeComponent
 import { editReportToComponent, samplePropsContext } from "@/lib/component-edit";
 import { saveComponent, fetchUsage, applyLatest } from "./library/api";
 import type { Usage } from "@/lib/component-usage";
+import { PublishControls } from "./PublishControls";
 
 /** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
 async function failureMessage(r: Response, label: string): Promise<string> {
@@ -174,7 +175,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   };
   const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
   return (
-    <div className="flex items-center gap-2 px-3 py-2 border-b bg-white">
+    <div className="relative flex items-center gap-2 px-3 py-2 border-b bg-white">
       <span className="font-semibold text-sm">{report.name || report.id}{dirty ? " *" : ""}</span>
       {componentMode && <span data-testid="component-version" className="text-xs text-neutral-500">{`v${componentMode.version} (저장하면 v${componentMode.version + 1})`}</span>}
       <button className={btn} onClick={undo}>되돌리기</button>
@@ -195,6 +196,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
         <button className={btn} disabled={exporting} onClick={label} data-testid="label-download">라벨 다운로드</button>
       </>}
       {!componentMode && <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>}
+      {!componentMode && <PublishControls reportId={reportId} />}
       {componentMode && componentStatus && <span data-testid="component-status" className="text-xs text-neutral-600">{componentStatus}</span>}
       {componentMode && usage && <>
         <span data-testid="component-usage" className="text-xs text-neutral-600">사용하는 레포트 {usage.length}개</span>

@@ -40,9 +40,11 @@ describe("Toolbar", () => {
     const { store, fetchMock } = setup();
     fireEvent.click(screen.getByTestId("save"));
     await waitFor(() => expect(store.getState().dirty).toBe(false));
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r");
-    expect(fetchMock.mock.calls[0][1]?.method).toBe("PUT");
+    // PublishControls가 마운트 시 versions를 따로 조회하므로, 이 테스트의 의도(저장 요청 하나)는 그 호출을 제외하고 본다
+    const calls = fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    expect(calls).toHaveLength(1);
+    expect(calls[0][0]).toBe("/api/reports/r");
+    expect(calls[0][1]?.method).toBe("PUT");
   });
 
   it("keeps edits made while the save request is in flight marked unsaved", async () => {
@@ -51,8 +53,9 @@ describe("Toolbar", () => {
     fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { respond = resolve; }));
     const sent = store.getState().report;
     fireEvent.click(screen.getByTestId("save"));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual(sent);
+    const nonVersionCalls = () => fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    await waitFor(() => expect(nonVersionCalls()).toHaveLength(1));
+    expect(JSON.parse(String(nonVersionCalls()[0][1]?.body))).toEqual(sent);
 
     act(() => store.getState().updatePage({ width: 120 }));   // 요청이 진행 중일 때 편집
     await act(async () => { respond(new Response("{}", { status: 200 })); });
@@ -78,8 +81,9 @@ describe("Toolbar", () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/pdf");
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).params).toEqual(sampleParams(report));
+    const calls = fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    expect(calls[0][0]).toBe("/api/reports/r/pdf");
+    expect(JSON.parse(String(calls[0][1]?.body)).params).toEqual(sampleParams(report));
   });
 
   it("disables PDF while rendering and revokes the blob URL only after the download click", async () => {
@@ -95,7 +99,7 @@ describe("Toolbar", () => {
     fireEvent.click(pdfButton());
     await waitFor(() => expect(pdfButton().disabled).toBe(true));
     fireEvent.click(pdfButton());                                                   // 렌더 중 다시 눌러도 요청이 늘지 않는다
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"))).toHaveLength(1);
 
     await act(async () => { respond(new Response(new Blob(["%PDF-"]), { status: 200 })); });
     await waitFor(() => expect(click).toHaveBeenCalled());
@@ -116,7 +120,8 @@ describe("Toolbar", () => {
     expect(save.disabled).toBe(false);
     fireEvent.click(save);
     await waitFor(() => expect(store.getState().dirty).toBe(false));
-    expect(fetchMock.mock.calls[1][1]?.method).toBe("PUT");
+    const calls = fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    expect(calls[1][1]?.method).toBe("PUT");
     expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(true);   // 저장이 끝나도 PDF는 아직 렌더 중
     await act(async () => { respond(new Response(new Blob(["%PDF-"]), { status: 200 })); });
     await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(false));
@@ -159,16 +164,17 @@ describe("Toolbar", () => {
     act(() => store.getState().setSample({ params: { lot: "L1", qty: 2 }, data: { s: [{ A: 1 }] }, capturedAt: "2026-09-17T00:00:00.000Z" }));
     fetchMock.mockResolvedValue(new Response(new Blob(["%PDF-"]), { status: 200 }));
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
-    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    const nonVersionCalls = () => fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    await waitFor(() => expect(nonVersionCalls()).toHaveLength(1));
+    const body = JSON.parse(String(nonVersionCalls()[0][1]?.body));
     expect(body.params).toEqual({ lot: "L1", qty: 2 });
     expect(body.data).toEqual({ s: [{ A: 1 }] });
     fireEvent.click(screen.getByLabelText("실데이터"));
     expect(store.getState().liveData).toBe(true);
     await waitFor(() => expect((screen.getByRole("button", { name: "PDF" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "PDF" }));
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body)).data).toBeUndefined();
+    await waitFor(() => expect(nonVersionCalls()).toHaveLength(2));
+    expect(JSON.parse(String(nonVersionCalls()[1][1]?.body)).data).toBeUndefined();
     expect(screen.getByTestId("page-indicator").textContent).toBe("1 / 1");
   });
 });
@@ -288,7 +294,8 @@ describe("Toolbar 저장 전 컴포넌트 정리 (스펙 7.2)", () => {
 
     fireEvent.click(screen.getByTestId("save"));
     await waitFor(() => expect(store.getState().dirty).toBe(false));
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).components).toEqual({});
+    const calls = fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    expect(JSON.parse(String(calls[0][1]?.body)).components).toEqual({});
     expect(store.getState().report.components).toEqual({});
   });
 
@@ -305,6 +312,7 @@ describe("Toolbar 저장 전 컴포넌트 정리 (스펙 7.2)", () => {
     await waitFor(() => expect(store.getState().dirty).toBe(false));
     expect(store.getState().report).toBe(before);
     expect(store.getState().history.past).toHaveLength(past);
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).components).toEqual({ "hdr@1": hdr });
+    const calls = fetchMock.mock.calls.filter(([u]) => !String(u).endsWith("/versions"));
+    expect(JSON.parse(String(calls[0][1]?.body)).components).toEqual({ "hdr@1": hdr });
   });
 });
