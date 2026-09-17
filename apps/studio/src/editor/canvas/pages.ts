@@ -16,9 +16,13 @@ export function currentPage(pages: Page[], view: View): Page {
   return pages.find((p) => p.copyIndex === v.copyIndex && p.pageInCopy === v.pageInCopy) ?? pages[0];
 }
 
-/** 선택 상자로 쓰는 항목: 문서 순서 첫 항목, 표 셀·테두리는 제외 (표·반복 영역은 flowBox, 반복 자식은 첫 인스턴스) */
+/**
+ * 선택 상자로 쓰는 항목. 컴포넌트 인스턴스는 refBox(인스턴스 전체 상자, 스펙 5.3)를 먼저 고른다.
+ * 그 밖에는 문서 순서 첫 항목이며 표 셀·테두리는 제외한다 (표·반복 영역은 flowBox, 반복 자식은 첫 인스턴스)
+ */
 export function primaryItem(page: Page, elementId: string): PlacedItem | undefined {
-  return page.items.find((i) => i.elementId === elementId && i.role !== "cell" && i.role !== "border");
+  return page.items.find((i) => i.elementId === elementId && i.role === "refBox")
+    ?? page.items.find((i) => i.elementId === elementId && i.role !== "cell" && i.role !== "border");
 }
 
 /**

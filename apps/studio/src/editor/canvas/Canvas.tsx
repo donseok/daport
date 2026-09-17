@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useMemo, useState, type DragEvent, type PointerEvent } from "react";
+import { useEffect, useMemo, useState, type DragEvent, type MouseEvent, type PointerEvent } from "react";
 import type { PlacedItem } from "@daport/renderer";
 import { PaintPage, pageCss, fontFaceCss } from "@daport/renderer/paint";   // 패키지 루트는 react-dom/server를 쓰는 html.ts까지 끌어온다
 import { useEditor, lineBox } from "../store";
@@ -84,7 +84,7 @@ export function Canvas({ zoom }: { zoom: number }) {
    * 선 근처일 때만 고른다. 표 셀·테두리·반복 인스턴스는 그 요소 id(표 id·템플릿 자식 id)로 매핑된다.
    * elementsFromPoint가 없는 환경(jsdom)에서는 이벤트 대상만 본다.
    */
-  const pickElementId = (e: PointerEvent<HTMLDivElement>): string | null => {
+  const pickElementId = (e: MouseEvent<HTMLDivElement>): string | null => {
     const root = e.currentTarget;
     const stack = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target as Element];
     const origin = root.querySelector(".dp-page")?.getBoundingClientRect();
@@ -97,7 +97,9 @@ export function Canvas({ zoom }: { zoom: number }) {
       if (!id || seen.has(id)) continue;
       seen.add(id);
       const role = host?.getAttribute("data-role");
-      if (role === "flowBox" || role === "cell" || role === "border" || role === "template") return id;
+      if (role === "flowBox" || role === "cell" || role === "border" || role === "template" || role === "refBox") return id;
+      // 펼친 컴포넌트의 항목은 elementId가 인스턴스 id다. 안쪽 어디를 눌러도(빈 곳·틀 포함) 인스턴스를 고른다 (스펙 7.2)
+      if (findElement(id)?.type === "ref") return id;
       const it = primaryItem(page, id);
       if (!it) continue;
       if (it.kind === "rect" && !it.style.fill) {
@@ -121,6 +123,12 @@ export function Canvas({ zoom }: { zoom: number }) {
   };
   // 핸들은 단일 선택에만 보인다. 선은 크기 0이 정상이라 최소 크기를 0으로 둔다 (1이면 가로선의 n/s 핸들이 선을 1mm 기울인다)
   const onHandleDown = (e: PointerEvent, h: Handle) => { drag.begin(e, h, boxes, findElement(selection[0])?.type === "line" ? 0 : 1); };
+  /** 인스턴스를 더블클릭하면 컴포넌트 편집 화면을 새 탭으로 연다 (스펙 7.2) */
+  const onDoubleClick = (e: MouseEvent<HTMLDivElement>) => {
+    const id = pickElementId(e);
+    const el = id ? findElement(id) : undefined;
+    if (el?.type === "ref") window.open(`/components/${encodeURIComponent(el.ref)}`, "_blank", "noopener");
+  };
 
   /** 놓인 자리의 대상: 표(셀·테두리·flowBox), 반복 영역 템플릿(템플릿 자리·어느 인스턴스든), 그 밖은 빈 캔버스 */
   const dropTargetAt = (e: DragEvent<HTMLDivElement>, x: number, y: number): DropTarget => {
@@ -196,7 +204,7 @@ export function Canvas({ zoom }: { zoom: number }) {
   const templates = page.items.filter((i) => i.role === "template");
   return (
     <div className="relative inline-block shadow-lg" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
-      data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel}
+      data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel} onDoubleClick={onDoubleClick}
       onDragOver={onDragOver} onDrop={onDrop}>
       <style>{css}</style>
       <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
@@ -208,7 +216,7 @@ export function Canvas({ zoom }: { zoom: number }) {
           <div key={`${t.elementId}|${t.instance}`} data-testid="template-outline" className="absolute border border-dashed border-blue-400"
             style={{ left: `${t.x}mm`, top: `${t.y}mm`, width: `${t.w}mm`, height: `${t.h}mm` }} />
         ))}
-        {Object.entries(shown).map(([id, b]) => <SelectionBox key={id} box={b} single={selection.length === 1} onHandleDown={onHandleDown} />)}
+        {Object.entries(shown).map(([id, b]) => <SelectionBox key={id} box={b} single={selection.length === 1 && findElement(id)?.type !== "ref"} onHandleDown={onHandleDown} />)}
         {warning && <div data-testid="drop-warning" role="status" className="absolute left-2 top-2 text-xs bg-amber-100 border border-amber-400 rounded px-2 py-1">{warning}</div>}
         {error && (
           <div data-testid="layout-error" role="alert" className="absolute inset-0 flex items-start justify-center pt-4 px-4">

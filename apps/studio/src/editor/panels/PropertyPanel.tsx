@@ -4,6 +4,7 @@ import { useEditor, lineBox } from "../store";
 import { NumberField, TextField, SelectField, CheckField } from "./Field";
 import { TablePanel } from "./TablePanel";
 import { RepeaterPanel } from "./RepeaterPanel";
+import { RefPanel } from "./RefPanel";
 
 export function PropertyPanel() {
   const selection = useEditor((s) => s.selection);
@@ -27,8 +28,11 @@ export function PropertyPanel() {
       <div className="text-xs font-semibold">{el.type} <span className="text-neutral-400">#{el.id}</span></div>
       <NumberField label="X" value={el.x} onChange={setX} />
       <NumberField label="Y" value={el.y} onChange={setY} />
-      <NumberField label="W" value={el.w} min={0} onChange={setW} />
-      <NumberField label="H" value={el.h} min={0} onChange={setH} />
+      {/* 인스턴스 크기는 참조한 컴포넌트 내용이 정한다. 크기 조절은 지원하지 않는다 (스펙 4.3) */}
+      {el.type !== "ref" && <>
+        <NumberField label="W" value={el.w} min={0} onChange={setW} />
+        <NumberField label="H" value={el.h} min={0} onChange={setH} />
+      </>}
       {el.type === "line" && <><NumberField label="X2" value={el.x2} onChange={(x2) => set({ x2 })} /><NumberField label="Y2" value={el.y2} onChange={(y2) => set({ y2 })} /></>}
       {el.type === "text" && <TextField label="내용" value={el.value} multiline onChange={(value) => set({ value })} />}
       {el.type === "image" && <><TextField label="src" value={el.src} onChange={(src) => set({ src })} />
@@ -41,7 +45,12 @@ export function PropertyPanel() {
       <TextField label="visible" value={el.visible ?? ""} onChange={(v) => set({ visible: v || undefined })} />
       {el.type === "table" && <TablePanel el={el} />}
       {el.type === "repeater" && <RepeaterPanel el={el} />}
-      {el.type !== "table" && el.type !== "repeater" && <>
+      {el.type === "ref" && <>
+        {/* 펼친 고정 요소가 어느 페이지에 나오는지는 ref의 flow가 정한다 (스펙 5.1) */}
+        <SelectField label="flow" value={el.flow} options={["once", "every", "last"]} onChange={(flow) => set({ flow })} />
+        <RefPanel el={el} />
+      </>}
+      {el.type !== "table" && el.type !== "repeater" && el.type !== "ref" && <>
         <div className="text-xs font-semibold mt-2">스타일</div>
         {(el.type === "text" || el.type === "pageNumber" || el.type === "barcode") &&
           <NumberField label="글자크기" value={el.style.fontSize} step={0.5} min={0} onChange={(fontSize) => { if (fontSize > 0) setStyle({ fontSize }); }} />}

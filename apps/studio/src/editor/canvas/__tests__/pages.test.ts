@@ -28,6 +28,17 @@ describe("pages", () => {
     expect(primaryItem(p, "nm")).toMatchObject({ instance: "cards#0" });
     expect(primaryItem(p, "zz")).toBeUndefined();
   });
+  it("primaryItem picks a component instance's refBox even when a child item comes first", () => {
+    const style = {} as Page["items"][number]["style"];
+    const p = pg(0, 0, 0, [
+      { kind: "text", elementId: "hdr", instance: "hdr/title", x: 12, y: 12, w: 5, h: 5, style, lines: [], lineHeight: 1, overflow: false },
+      { kind: "rect", elementId: "hdr", role: "refBox", x: 10, y: 10, w: 40, h: 10, style },
+      { kind: "rect", elementId: "std", role: "flowBox", instance: "std/t", x: 0, y: 30, w: 50, h: 20, style },
+      { kind: "rect", elementId: "std", role: "refBox", x: 0, y: 30, w: 50, h: 20, style },
+    ]);
+    expect(primaryItem(p, "hdr")).toMatchObject({ role: "refBox", x: 10, w: 40 });
+    expect(primaryItem(p, "std")).toMatchObject({ role: "refBox" });
+  });
   it("isOtherInstance dims only non-first repeater item instances, not table cells or group bands", () => {
     const rep = (id: string) => id === "cards";
     const notRep = () => false;
