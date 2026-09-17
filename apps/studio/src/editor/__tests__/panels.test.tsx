@@ -86,12 +86,21 @@ describe("palette (phase 2)", () => {
     const store = createEditorStore(report);
     const { getByRole } = render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
     fireEvent.click(getByRole("button", { name: "+ 표" }));
-    expect(store.getState().findElement("table-1")).toMatchObject({ type: "table", source: "", columns: [{ header: "열 1" }] });
+    // 스키마(min 1)를 만족하는 기본 소스 — 데이터셋이 없으면 "items"
+    expect(store.getState().findElement("table-1")).toMatchObject({ type: "table", source: "items", columns: [{ header: "열 1" }] });
     fireEvent.click(getByRole("button", { name: "+ 반복 영역" }));
     const rep = store.getState().findElement("repeater-1") as Extract<Element, { type: "repeater" }>;
-    expect(rep).toMatchObject({ type: "repeater", layout: "list", item: { w: 60, h: 20 } });
+    expect(rep).toMatchObject({ type: "repeater", source: "items", layout: "list", item: { w: 60, h: 20 } });
     expect(rep.item.children[0]).toMatchObject({ type: "text", value: "항목 {{ index + 1 }}" });
     expect(store.getState().selection).toEqual(["repeater-1"]);
+  });
+  it("uses the first dataset's name as the default source when one exists", () => {
+    const withDataset = parseReport({ id: "r2", version: 1, page: { width: 100, height: 100 },
+      datasets: [{ name: "lots", type: "static", rows: [{ NAME: "L1" }] }], elements: [] });
+    const store = createEditorStore(withDataset);
+    const { getByRole } = render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
+    fireEvent.click(getByRole("button", { name: "+ 반복 영역" }));
+    expect(store.getState().findElement("repeater-1")).toMatchObject({ type: "repeater", source: "lots" });
   });
   it("adds into the selected repeater's template", () => {
     const store = createEditorStore(report);
@@ -111,7 +120,8 @@ describe("page panel repeat switch", () => {
     const store = createEditorStore(report);
     const { getByLabelText } = render(<EditorContext.Provider value={store}><PagePanel /></EditorContext.Provider>);
     fireEvent.click(getByLabelText("레코드마다 한 부씩"));
-    expect(store.getState().report.repeat).toEqual({ source: "", as: "record" });
+    // 스키마(min 1)를 만족하는 기본 소스 — 데이터셋이 없으면 "items"
+    expect(store.getState().report.repeat).toEqual({ source: "items", as: "record" });
     fireEvent.change(getByLabelText("반복 소스"), { target: { value: "shipments" } });
     expect(store.getState().report.repeat).toEqual({ source: "shipments", as: "record" });
     fireEvent.click(getByLabelText("레코드마다 한 부씩"));
