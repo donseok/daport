@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import type { Page } from "@daport/renderer";
-import { clampView, currentPage, primaryItem } from "../pages";
+import { clampView, currentPage, primaryItem, isOtherInstance } from "../pages";
 
 const pg = (index: number, copyIndex: number, pageInCopy: number, items: Page["items"] = []): Page => ({ index, width: 10, height: 10, items, copyIndex, pageInCopy });
 const pages = [pg(0, 0, 0), pg(1, 0, 1), pg(2, 1, 0)];
@@ -27,5 +27,15 @@ describe("pages", () => {
     expect(primaryItem(p, "t")).toMatchObject({ role: "flowBox" });
     expect(primaryItem(p, "nm")).toMatchObject({ instance: "cards#0" });
     expect(primaryItem(p, "zz")).toBeUndefined();
+  });
+  it("isOtherInstance dims only non-first repeater item instances, not table cells or group bands", () => {
+    const rep = (id: string) => id === "cards";
+    const notRep = () => false;
+    expect(isOtherInstance("cards#0", rep)).toBe(false);
+    expect(isOtherInstance("cards#2", rep)).toBe(true);
+    expect(isOtherInstance("cards#g0h1", rep)).toBe(false);
+    expect(isOtherInstance("t#2", notRep)).toBe(false);
+    expect(isOtherInstance("cards#2/t2#0", rep)).toBe(true);
+    expect(isOtherInstance(undefined, rep)).toBe(false);
   });
 });

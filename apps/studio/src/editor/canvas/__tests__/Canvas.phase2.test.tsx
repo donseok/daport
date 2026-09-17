@@ -61,6 +61,7 @@ describe("Canvas (phase 2)", () => {
     expect(nm[0].style.opacity).toBe("");
     expect(nm[1].style.opacity).toBe("0.5");
     expect(q('[data-testid="template-outline"]')).not.toBeNull();
+    expect(all('[data-element-id="t"][data-role="cell"]').every((el) => el.style.opacity === "")).toBe(true);
     fireEvent.pointerDown(nm[2], ptr(px(70), px(62)));
     fireEvent.pointerUp(q('[data-testid="canvas"]')!, ptr(px(70), px(62)));
     expect(store.getState().selection).toEqual(["nm"]);

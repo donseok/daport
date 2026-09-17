@@ -17,9 +17,6 @@ const STROKE_HIT_PX = 3;
 /** 선택 상자·드래그 시작 상자. 선은 두 끝점을 감싸는 상자다 (x/y가 시작점이라 오른쪽→왼쪽 선이면 왼쪽 변이 아니다) */
 const itemBox = (it: PlacedItem): Box => (it.kind === "line" ? lineBox(it) : { x: it.x, y: it.y, w: it.w, h: it.h });
 
-/** 반복 인스턴스는 흐리게, 템플릿 자리는 점선으로 표시하는 CSS */
-const CANVAS_CSS = `.dp-el[data-instance]{opacity:1}`;
-
 export function Canvas({ zoom }: { zoom: number }) {
   const report = useEditor((s) => s.report);
   const selection = useEditor((s) => s.selection);
@@ -36,7 +33,7 @@ export function Canvas({ zoom }: { zoom: number }) {
   // 미리보기·PDF와 같게 asset://을 /api/assets/{id}로 바꾼다 (상대 URL이라 studio 출처 기준으로 해석된다).
   // 스펙 10: 디자이너는 표현식 오류를 요소마다 #ERR로 보인다. onExpressionError("fail")는 미리보기·PDF 렌더만 따른다
   const pages = useMemo(() => layout({ ...resolveAssetUrls(report, ""), onExpressionError: "blank" }, data), [report, data]);
-  const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height) + "\n" + CANVAS_CSS, [report.page.width, report.page.height]);
+  const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height), [report.page.width, report.page.height]);
   const page = currentPage(pages, view);
 
   // 편집으로 페이지 수가 줄면 보기를 마지막 페이지로 당긴다 (스펙 7.4)
@@ -124,7 +121,7 @@ export function Canvas({ zoom }: { zoom: number }) {
     <div className="relative inline-block shadow-lg" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
       data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel}>
       <style>{css}</style>
-      <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance) ? dim(it) : it)) }} />
+      <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
       <div className="absolute inset-0 pointer-events-none">
         {templates.map((t) => (
           <div key={`${t.elementId}|${t.instance}`} data-testid="template-outline" className="absolute border border-dashed border-blue-400"
