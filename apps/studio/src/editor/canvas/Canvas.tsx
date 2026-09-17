@@ -7,7 +7,7 @@ import { useDrag, type Box, type Handle } from "./useDrag";
 import { SelectionBox } from "./SelectionBox";
 import { pxToMm, snapMm } from "./snap";
 import { clampView, currentPage, primaryItem, isOtherInstance } from "./pages";
-import { layoutFor } from "./layoutCache";
+import { layoutFor, layoutError } from "./layoutCache";
 import { resolveDrop, DRAG_MIME, type DragField, type DropTarget } from "../data/bindings";
 
 /** 채우기 없는 사각형은 선에서 이 화면 거리(px) 안쪽일 때만 고른다 */
@@ -35,6 +35,8 @@ export function Canvas({ zoom }: { zoom: number }) {
 
   // 캔버스와 페이지 선택기가 같은 레이아웃을 쓴다 (report 객체당 한 번 계산). 스펙 10: 표현식 오류는 요소마다 #ERR로 보인다
   const pages = useMemo(() => layoutFor(report), [report]);
+  // layoutFor는 전체 함수라 오류가 나도 던지지 않고 빈 페이지를 준다 — 여기서 배너로 알린다 (Finding 1)
+  const error = layoutError(report);
   const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height), [report.page.width, report.page.height]);
   const page = currentPage(pages, view);
 
@@ -176,6 +178,11 @@ export function Canvas({ zoom }: { zoom: number }) {
         ))}
         {Object.entries(shown).map(([id, b]) => <SelectionBox key={id} box={b} single={selection.length === 1} onHandleDown={onHandleDown} />)}
         {warning && <div data-testid="drop-warning" role="status" className="absolute left-2 top-2 text-xs bg-amber-100 border border-amber-400 rounded px-2 py-1">{warning}</div>}
+        {error && (
+          <div data-testid="layout-error" role="alert" className="absolute inset-0 flex items-start justify-center pt-4 px-4">
+            <div className="text-xs text-white bg-red-700 rounded px-3 py-2 max-w-full">레이아웃 오류: {error}</div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { render, fireEvent, cleanup, act } from "@testing-library/react";
 import { parseReport } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../../store";
 import { Canvas } from "../Canvas";
+import { PageSelector } from "../../PageSelector";
 import { mmToPxScaled } from "../snap";
 
 const rows = (n: number) => Array.from({ length: n }, (_, i) => ({ N: i }));
@@ -77,5 +78,24 @@ describe("Canvas (phase 2)", () => {
     fireEvent.pointerUp(q('[data-testid="canvas"]')!, ptr(px(8 + 10), px(63)));
     expect(store.getState().findElement("nm")).toMatchObject({ x: 11, y: 1 });
     expect(all('[data-element-id="nm"]').every((el) => el.style.left === "16mm" || el.style.left === "46mm" || el.style.left === "76mm")).toBe(true);
+  });
+});
+
+describe("Canvas (레이아웃 오류가 나도 편집기 전체를 내리지 않는다)", () => {
+  // 200행 샘플에 표를 반복해 페이지 상한(2000)을 넘긴다 — Finding 1
+  const overLimit = parseReport({ id: "over", version: 1, page: { width: 100, height: 100 }, repeat: { source: "ships" },
+    sample: { params: {}, capturedAt: "2026-09-17T00:00:00.000Z", data: { ships: Array.from({ length: 2001 }, (_, i) => ({ N: i })) } }, elements: [] });
+
+  it("Canvas는 빈 페이지 위에 빨간 오류 배너를 보이고, 툴바의 PageSelector는 1 / 1을 그대로 보인다", () => {
+    const store = createEditorStore(overLimit);
+    const { q } = mount(store);
+    const banner = q('[data-testid="layout-error"]');
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).toContain("2001");
+
+    cleanup();
+    const selectorStore = createEditorStore(overLimit);
+    const { getByTestId } = render(<EditorContext.Provider value={selectorStore}><PageSelector /></EditorContext.Provider>);
+    expect(getByTestId("page-indicator").textContent).toBe("1 / 1");
   });
 });

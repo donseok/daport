@@ -38,6 +38,7 @@ function useUnsavedChangesWarning(store: EditorStore) {
 
 export function Editor({ initial }: { initial: Report }) {
   const store = useMemo(() => createEditorStore(initial), [initial]);
+  const report = useStore(store, (s) => s.report);
   const [zoom, setZoom] = useState(1);
   const [tab, setTab] = useState<"elements" | "data">("elements");
   useKeyboard(store);
@@ -45,7 +46,10 @@ export function Editor({ initial }: { initial: Report }) {
   return (
     <EditorContext.Provider value={store}>
       <div className="h-screen flex flex-col">
-        <Toolbar reportId={initial.id} zoom={zoom} setZoom={setZoom} />
+        {/* 툴바의 PageSelector도 layoutFor를 쓴다. layoutFor는 전체 함수라 던지지 않지만, 벨트-앤-브레이스로 여기도 가둔다 */}
+        <EditorErrorBoundary resetKey={report}>
+          <Toolbar reportId={initial.id} zoom={zoom} setZoom={setZoom} />
+        </EditorErrorBoundary>
         <div className="flex-1 grid grid-cols-[260px_1fr_280px] min-h-0">
           <aside className="border-r bg-white overflow-auto flex flex-col">
             <div className="flex border-b text-xs">
