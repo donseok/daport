@@ -129,6 +129,15 @@ describe("palette (phase 2)", () => {
   });
 });
 
+describe("palette (phase 3)", () => {
+  it("adds a code128 barcode with a sample value", () => {
+    const store = createEditorStore(report);
+    render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
+    fireEvent.click(screen.getByRole("button", { name: "+ 바코드" }));
+    expect(store.getState().findElement("barcode-1")).toMatchObject({ type: "barcode", format: "code128", value: "123456", showText: true, w: 40, h: 15 });
+  });
+});
+
 describe("page panel repeat switch", () => {
   it("toggles repeat with a source expression", () => {
     const store = createEditorStore(report);

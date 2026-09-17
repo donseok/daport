@@ -79,3 +79,18 @@ describe("PropertyPanel", () => {
     expect(store.getState().history.past.length).toBe(past);   // 0을 커밋하거나 히스토리를 쌓지 않는다
   });
 });
+
+describe("PropertyPanel barcode", () => {
+  it("edits format, value, showText and font size", () => {
+    const store = createEditorStore(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "b", type: "barcode", x: 0, y: 0, w: 40, h: 15, format: "code128", value: "123" },
+    ]}));
+    store.getState().select(["b"]);
+    const { getByLabelText } = render(<EditorContext.Provider value={store}><PropertyPanel /></EditorContext.Provider>);
+    fireEvent.change(getByLabelText("형식"), { target: { value: "qr" } });
+    fireEvent.change(getByLabelText("값"), { target: { value: "{{ record.NO }}" } });
+    fireEvent.click(getByLabelText("텍스트 표시"));
+    fireEvent.change(getByLabelText("글자크기"), { target: { value: "6" } });
+    expect(store.getState().findElement("b")).toMatchObject({ format: "qr", value: "{{ record.NO }}", showText: false, style: { fontSize: 6 } });
+  });
+});
