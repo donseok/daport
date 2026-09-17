@@ -22,9 +22,12 @@ export function encodeTspl(bitmaps: Bitmap[], opts: LabelOptions): Buffer {
   const parts: Buffer[] = [];
   for (const bm of bitmaps) {
     const rb = rowBytes(bm.width);
+    // LabelOutputSchema의 darkness(0~30)는 ZPL ~SD 범위다. TSPL DENSITY는 0~15뿐이라
+    // 그 값을 그대로 보내면 프린터가 거부할 수 있는 명령이 나간다. SPEED(inches/sec)는
+    // 두 언어가 같은 단위를 쓰므로 그대로 통과시킨다.
     const head = [
       `SIZE ${opts.widthMm} mm,${opts.heightMm} mm`, "GAP 3 mm,0 mm",
-      ...(opts.darkness !== undefined ? [`DENSITY ${opts.darkness}`] : []),
+      ...(opts.darkness !== undefined ? [`DENSITY ${Math.min(opts.darkness, 15)}`] : []),
       ...(opts.speed !== undefined ? [`SPEED ${opts.speed}`] : []),
       "CLS", `BITMAP 0,0,${rb},${bm.height},0,`,
     ].join("\r\n");

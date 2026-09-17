@@ -32,4 +32,10 @@ describe("encodeTspl", () => {
     expect(text).toContain("DENSITY 8\r\nSPEED 3\r\n");
     expect(text).toContain("PRINT 1,2\r\n");
   });
+  it("clamps darkness to TSPL's 0-15 DENSITY range while ZPL keeps the full 0-30 ~SD value", () => {
+    const zpl = encodeZpl([bm], { ...opts, darkness: 25 });
+    expect(zpl).toContain("~SD25\n");
+    const tspl = encodeTspl([bm], { ...opts, darkness: 25 }).toString("latin1");
+    expect(tspl).toContain("DENSITY 15\r\n");
+  });
 });
