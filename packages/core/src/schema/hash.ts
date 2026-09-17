@@ -1,4 +1,5 @@
 import type { ComponentBody } from "./component";
+import type { Report } from "./report";
 
 /**
  * 정규 JSON: 객체 키를 코드 단위 순서로 정렬하고 값이 undefined인 속성을 지우며 배열 순서는 유지한다.
@@ -63,4 +64,9 @@ export function sha256Hex(text: string): string {
 /** 컴포넌트 내용 해시: sha256Hex(canonicalJson(body)) */
 export function componentHash(body: ComponentBody): string {
   return sha256Hex(canonicalJson(body));
+}
+
+/** 레포트 모델 해시: sha256Hex(canonicalJson(report)). 배포 버전과 draft가 같은지 비교하는 데 쓴다 (4단계 스펙 4.4) */
+export function reportHash(report: Report): string {
+  return sha256Hex(canonicalJson(report));
 }

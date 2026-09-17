@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { canonicalJson, sha256Hex, componentHash } from "../schema/hash";
+import { canonicalJson, sha256Hex, componentHash, reportHash } from "../schema/hash";
 import { parseComponentBody, type ComponentBody } from "../schema/component";
+import { parseReport } from "../schema/report";
 import * as core from "../index";
 
 const nodeSha = (s: string) => createHash("sha256").update(s, "utf8").digest("hex");
@@ -88,5 +89,20 @@ describe("componentHash", () => {
     expect(core.componentHash).toBe(componentHash);
     expect(core.sha256Hex).toBe(sha256Hex);
     expect(core.canonicalJson).toBe(canonicalJson);
+  });
+});
+
+describe("reportHash", () => {
+  const base = { id: "r", name: "R", version: 1, page: { width: 100, height: 100 }, elements: [{ id: "t", type: "text", x: 0, y: 0, w: 10, h: 5, text: "a" }] };
+  it("is stable across key order and whitespace", () => {
+    const a = parseReport(base);
+    const b = parseReport(JSON.parse(JSON.stringify({ elements: base.elements, page: { height: 100, width: 100 }, version: 1, name: "R", id: "r" })));
+    expect(reportHash(a)).toBe(reportHash(b));
+    expect(reportHash(a)).toMatch(/^[0-9a-f]{64}$/);
+  });
+  it("changes when the model changes", () => {
+    const a = parseReport(base);
+    const b = parseReport({ ...base, name: "S" });
+    expect(reportHash(a)).not.toBe(reportHash(b));
   });
 });
