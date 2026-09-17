@@ -83,24 +83,49 @@ export const TableElementSchema = Base.extend({
 });
 export type TableElement = z.infer<typeof TableElementSchema>;
 
+export type RepeaterBand = { h: number; children: Element[] };
+export type RepeaterGroup = { by: string; header?: RepeaterBand; footer?: RepeaterBand };
+export type RepeaterElement = z.infer<typeof Base> & {
+  type: "repeater";
+  source: string;
+  layout: "list" | "grid";
+  gap: [number, number];
+  item: { w: number; h: number; children: Element[] };
+  groups: RepeaterGroup[];
+  overflow: "continue" | "clip";
+};
+
 type LeafElement =
   | z.infer<typeof TextElementSchema> | z.infer<typeof ImageElementSchema>
   | z.infer<typeof LineElementSchema> | z.infer<typeof RectElementSchema>
   | z.infer<typeof BarcodeElementSchema> | z.infer<typeof PageNumberElementSchema>
   | z.infer<typeof RefElementSchema> | z.infer<typeof TableElementSchema>;
 export type GroupElement = z.infer<typeof Base> & { type: "group"; children: Element[] };
-export type Element = LeafElement | GroupElement;
+export type Element = LeafElement | GroupElement | RepeaterElement;
 
 export const GroupElementSchema: z.ZodType<GroupElement> = Base.extend({
   type: z.literal("group"),
   children: z.lazy(() => z.array(ElementSchema)),
 }) as unknown as z.ZodType<GroupElement>;
 
+/** 반복 영역의 항목·그룹 머리·소계 템플릿. 자식 좌표는 밴드 좌상단 기준 */
+export const RepeaterBandSchema = z.object({ h: z.number().positive(), children: z.lazy(() => z.array(ElementSchema)) });
+export const RepeaterGroupSchema = z.object({ by: z.string().min(1), header: RepeaterBandSchema.optional(), footer: RepeaterBandSchema.optional() });
+export const RepeaterElementSchema: z.ZodType<RepeaterElement> = Base.extend({
+  type: z.literal("repeater"),
+  source: z.string().min(1),
+  layout: z.enum(["list", "grid"]).default("list"),
+  gap: z.tuple([z.number().nonnegative(), z.number().nonnegative()]).default([0, 0]),   // [가로, 세로] mm
+  item: z.object({ w: z.number().positive(), h: z.number().positive(), children: z.lazy(() => z.array(ElementSchema)) }),
+  groups: z.array(RepeaterGroupSchema).default([]),
+  overflow: z.enum(["continue", "clip"]).default("continue"),
+}) as unknown as z.ZodType<RepeaterElement>;
+
 export const ElementSchema: z.ZodType<Element> = z.lazy(() =>
   z.discriminatedUnion("type", [
     TextElementSchema, ImageElementSchema, LineElementSchema, RectElementSchema,
     BarcodeElementSchema, PageNumberElementSchema, RefElementSchema, TableElementSchema,
-    GroupElementSchema as any,
+    GroupElementSchema as any, RepeaterElementSchema as any,
   ])
 ) as unknown as z.ZodType<Element>;
 

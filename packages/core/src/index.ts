@@ -3,6 +3,7 @@ export * from "./units";
 export * from "./schema/color";
 export * from "./schema/style";
 export * from "./schema/elements";
+export * from "./schema/tree";
 export * from "./schema/report";
 export * from "./schema/json-schema";
 export * from "./expression/engine";
