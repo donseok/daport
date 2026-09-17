@@ -4,6 +4,7 @@ export * from "./schema/color";
 export * from "./schema/style";
 export * from "./schema/elements";
 export * from "./schema/tree";
+export * from "./schema/component";
 export * from "./schema/output";
 export * from "./schema/report";
 export * from "./schema/preset";

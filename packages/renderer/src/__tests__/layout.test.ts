@@ -75,10 +75,10 @@ describe("layout", () => {
     expect(items[1]).toMatchObject({ kind: "image", src: "asset://ACME" });
   });
   it("draws a barcode as svg, a table as a flowBox and keeps ref as a placeholder", () => {
-    const r = parseReport({ id: "r", version: 1, page, elements: [
+    const r = parseReport({ id: "r", version: 1, page, components: { "hdr@1": { name: "hdr", w: 10, h: 5 } }, elements: [
       { id: "b", type: "barcode", x: 0, y: 0, w: 10, h: 5, format: "qr", value: "x" },
       { id: "t", type: "table", x: 0, y: 0, w: 10, h: 5, source: "s", columns: [] },
-      { id: "c", type: "ref", x: 0, y: 0, w: 10, h: 5, ref: "hdr" },
+      { id: "c", type: "ref", x: 0, y: 0, w: 10, h: 5, ref: "hdr", version: 1 },
     ]});
     const items = layout(r, ctx)[0].items;
     expect(items.map((i) => i.kind)).toEqual(["svg", "rect", "placeholder"]);

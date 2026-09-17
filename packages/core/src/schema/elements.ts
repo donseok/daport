@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { StyleSchema, StyleOverrideSchema, color } from "./style";
+import { COMPONENT_ID_RE } from "./ids";
 
 const Base = z.object({
   id: z.string().min(1),
@@ -37,8 +38,10 @@ export const PageNumberElementSchema = Base.extend({
 });
 export const RefElementSchema = Base.extend({
   type: z.literal("ref"),
-  ref: z.string().min(1),
-  props: z.record(z.string(), z.unknown()).default({}),
+  ref: z.string().regex(COMPONENT_ID_RE, "ref는 컴포넌트 id 형식이어야 합니다"),
+  version: z.number().int().positive(),
+  /** 입력값. 문자열은 템플릿(값 전체가 {{ }} 하나면 원래 타입 유지). 지정하지 않은 이름은 기본값 */
+  props: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}),
 });
 export const CellAlignSchema = z.enum(["left", "center", "right"]);
 /** 머리행·그룹 행·소계 행의 셀. span은 차지하는 열 수("all"은 남은 열 전부). 스타일은 열·머리 스타일 위에 덮어쓸 값만 */

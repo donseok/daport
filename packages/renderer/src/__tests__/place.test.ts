@@ -4,7 +4,8 @@ import { flatten } from "../layout/flatten";
 import { placeStatic, errorItem, isVisible } from "../layout/place";
 
 const page = { width: 100, height: 50 };
-const flat = (els: unknown[]) => flatten(parseReport({ id: "r", version: 1, page, elements: els as never }).elements);
+const components = { "hdr@1": { name: "hdr", w: 5, h: 5 } };
+const flat = (els: unknown[]) => flatten(parseReport({ id: "r", version: 1, page, components, elements: els as never }).elements);
 const ctx = { params: {}, order: { NAME: "ACME", HIDE: true } };
 
 describe("placeStatic", () => {
@@ -16,7 +17,7 @@ describe("placeStatic", () => {
       { id: "l", type: "line", x: 0, y: 0, w: 5, h: 0, x2: 5, y2: 0 },
       { id: "r", type: "rect", x: 0, y: 0, w: 5, h: 5 },
       { id: "b", type: "barcode", x: 0, y: 0, w: 5, h: 5, format: "qr", value: "x" },
-      { id: "c", type: "ref", x: 0, y: 0, w: 5, h: 5, ref: "hdr" },
+      { id: "c", type: "ref", x: 0, y: 0, w: 5, h: 5, ref: "hdr", version: 1 },
     ]);
     const items = els.flatMap((el) => placeStatic(el, { ...ctx, page: 2, total: 3 }, { onExpressionError: "blank", instance: "cards#1" }));
     expect(items.map((i) => i.kind)).toEqual(["text", "text", "image", "line", "rect", "svg", "placeholder"]);
