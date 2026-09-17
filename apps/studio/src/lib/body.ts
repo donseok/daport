@@ -44,3 +44,11 @@ export function objectField(body: Record<string, unknown>, key: string): Record<
   const v = body[key];
   return v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : undefined;
 }
+
+/**
+ * 렌더 요청 본문의 선택 필드 props (스펙 7.5). 컴포넌트 편집 화면이 미리보기용 샘플 입력값을 보낸다.
+ * 객체가 아니면 undefined. 라우트는 데이터셋 실행 결과 컨텍스트에 props로 넣는다 (data의 키로는 예약어라 거부된다)
+ */
+export function propsField(body: Record<string, unknown>): Record<string, unknown> | undefined {
+  return objectField(body, "props");
+}

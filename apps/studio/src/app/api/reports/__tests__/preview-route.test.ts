@@ -56,3 +56,20 @@ describe("POST /api/reports/[id]/preview", () => {
     expect(big.status).toBe(413);
   });
 });
+
+describe("POST /api/reports/[id]/preview props field", () => {
+  const report = { id: "qc", version: 1, page: { width: 100, height: 40 },
+    elements: [{ id: "t", type: "text", x: 0, y: 0, w: 90, h: 8, value: "제목={{ props.title }} 수량={{ props.qty + 1 }}" }] };
+
+  it("puts the body props object into the layout context as props", async () => {
+    const res = await call({ report, params: {}, props: { title: "샘플 제목", qty: 2 } });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("제목=샘플 제목 수량=3");
+  });
+
+  it("does not accept props through data, because props is a reserved context name", async () => {
+    const res = await call({ report, params: {}, data: { props: [{ title: "x" }] } });
+    expect(res.status).toBe(400);
+    expect((await res.json()).datasetErrors).toEqual([expect.objectContaining({ dataset: "props", code: "BAD_DATA" })]);
+  });
+});

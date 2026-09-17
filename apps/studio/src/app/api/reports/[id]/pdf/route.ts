@@ -5,7 +5,7 @@ import { LayoutLimitError } from "@daport/renderer";
 import { renderPdf } from "@daport/pdf";
 import { getStore, ready } from "@/lib/report-store";
 import { resolveAssetUrls } from "@/lib/assets";
-import { readJsonBody, objectField, MAX_BODY_BYTES } from "@/lib/body";
+import { readJsonBody, objectField, propsField, MAX_BODY_BYTES } from "@/lib/body";
 import { runDatasets } from "@/lib/datasets";
 
 export const maxDuration = 60;
@@ -39,7 +39,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     const { context, errors } = await runDatasets(report, { params: objectField(body, "params"), data: objectField(body, "data") });
     if (errors.length) return NextResponse.json({ error: "데이터셋 실행 실패", datasetErrors: errors }, { status: 400 });
-    data = context;
+    const props = propsField(body);
+    data = props ? { ...context, props } : context;
   } catch (e) {
     return fail(e, 400);   // 필수 파라미터 누락
   }

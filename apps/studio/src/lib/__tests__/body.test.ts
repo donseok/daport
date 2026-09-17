@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { readJsonBody } from "../body";
+import { readJsonBody, propsField } from "../body";
 
 const req = (body: string | null, headers: Record<string, string> = {}) => new Request("http://x/", { method: "POST", body, headers });
 
@@ -21,5 +21,14 @@ describe("readJsonBody", () => {
     if (!byHeader.ok) expect(byHeader.response.status).toBe(413); else throw new Error("expected 413");
     const byBytes = await readJsonBody(req(JSON.stringify({ s: "x".repeat(200) })), 100);
     if (!byBytes.ok) expect(byBytes.response.status).toBe(413); else throw new Error("expected 413");
+  });
+});
+
+describe("propsField", () => {
+  it("returns the props object and undefined for anything that is not a plain object", () => {
+    expect(propsField({ props: { title: "T", n: 2, on: true } })).toEqual({ title: "T", n: 2, on: true });
+    expect(propsField({ props: {} })).toEqual({});
+    for (const props of [undefined, null, "x", 5, true, [1, 2], [{ title: "T" }]]) expect(propsField({ props })).toBeUndefined();
+    expect(propsField({})).toBeUndefined();
   });
 });
