@@ -14,7 +14,7 @@ function Item({ item }: { item: PlacedItem }) {
   const color = safeColor(s.color), stroke = safeColor(s.stroke), fill = safeColor(s.fill);
   const border = stroke ? `${s.strokeWidth}mm solid ${stroke}` : undefined;
   const cls = "dp-el" + (item.error ? " dp-err" : "");
-  const common = { className: cls, "data-element-id": item.elementId, title: item.error } as const;
+  const common = { className: cls, "data-element-id": item.elementId, "data-instance": item.instance, "data-role": item.role, title: item.error } as const;
   switch (item.kind) {
     case "text": {
       const justify = s.valign === "middle" ? "center" : s.valign === "bottom" ? "flex-end" : "flex-start";
@@ -53,7 +53,7 @@ function Item({ item }: { item: PlacedItem }) {
 export function PaintPage({ page }: { page: Page }) {
   return (
     <div className="dp-page" data-page-index={page.index}>
-      {page.items.map((it) => <Item key={it.elementId} item={it} />)}
+      {page.items.map((it, n) => <Item key={`${it.elementId}|${it.instance ?? ""}|${n}`} item={it} />)}
     </div>
   );
 }

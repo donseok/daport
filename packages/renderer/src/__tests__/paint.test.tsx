@@ -101,4 +101,20 @@ describe("paint", () => {
     expect(html).toContain("<div>a</div><div>\u00a0</div><div>b</div>");
     expect(html).not.toContain("<div> </div>");
   });
+  it("renders repeated instances with unique keys and data-instance/data-role attributes", () => {
+    const r = parseReport({ id: "rp", version: 1, page: { width: 100, height: 100 }, elements: [
+      { id: "cards", type: "repeater", x: 0, y: 0, w: 100, h: 100, source: "lots", item: { w: 50, h: 10, children: [{ id: "nm", type: "text", x: 0, y: 0, w: 20, h: 5, value: "{{ item.N }}" }] } },
+    ]});
+    const warn = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const html = renderToStaticMarkup(<PaintPages pages={layout(r, { params: {}, lots: [{ N: 1 }, { N: 2 }] })} />);
+      expect(html).toContain('data-instance="cards#0"');
+      expect(html).toContain('data-instance="cards#1"');
+      expect(html).toContain('data-role="flowBox"');
+      expect(html).toContain('data-role="template"');
+      expect(warn).not.toHaveBeenCalled();   // 중복 key 경고 없음
+    } finally {
+      warn.mockRestore();
+    }
+  });
 });
