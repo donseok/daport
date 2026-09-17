@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseReport } from "@daport/core";
-import { sampleParams, sampleContext } from "../data";
+import { sampleParams, sampleContext, requestBody } from "../data";
 
 const base = { id: "r", version: 1, page: { width: 10, height: 10 } };
 const report = parseReport({ ...base, params: [
@@ -32,5 +32,15 @@ describe("sampleContext", () => {
     expect((ctx.s as { A: number }).A).toBe(2);
     expect(ctx.extra).toEqual([{ X: 1 }]);
     expect(ctx.junk).toEqual([]);
+  });
+});
+
+describe("requestBody", () => {
+  it("sends merged params and sample.data unless live data is on or there is no sample", () => {
+    const r = parseReport({ ...base, params: [{ name: "lot" }], sample: { params: { lot: "L1" }, data: { s: [{ A: 1 }] }, capturedAt: "2026-09-17T00:00:00.000Z" } });
+    expect(requestBody(r, false)).toEqual({ report: r, params: { lot: "L1" }, data: { s: [{ A: 1 }] } });
+    expect(requestBody(r, true)).toEqual({ report: r, params: { lot: "L1" } });
+    const plain = parseReport({ ...base, params: [{ name: "lot" }] });
+    expect(requestBody(plain, false)).toEqual({ report: plain, params: { lot: "{lot}" } });
   });
 });

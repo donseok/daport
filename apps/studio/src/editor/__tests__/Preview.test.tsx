@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { render, cleanup, act } from "@testing-library/react";
+import { render, cleanup, act, waitFor } from "@testing-library/react";
 import { parseReport } from "@daport/core";
 import { createEditorStore, EditorContext } from "../store";
 import { Preview } from "../Preview";
@@ -51,5 +51,15 @@ describe("Preview", () => {
     await act(async () => { vi.advanceTimersByTime(50); });
     expect(container.textContent).not.toContain("aborted");
     expect(container.querySelector("iframe")!.getAttribute("srcdoc")).toBe("<p>ok</p>");
+  });
+
+  it("posts sample data and lists dataset errors from a 400 response", async () => {
+    // 실제 타이머로 디바운스(150ms)와 응답 처리를 기다린다
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response(JSON.stringify({ error: "데이터셋 실행 실패", datasetErrors: [{ dataset: "h", code: "HOST_NOT_ALLOWED", message: "host not allowed: x" }] }), { status: 400 }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(parseReport({ ...report, sample: { params: {}, data: { h: [{ A: 1 }] }, capturedAt: "2026-09-17T00:00:00.000Z" } }));
+    const { container } = render(<EditorContext.Provider value={store}><Preview reportId="r" /></EditorContext.Provider>);
+    await waitFor(() => expect(container.textContent).toContain("h: HOST_NOT_ALLOWED"), { timeout: 3000 });
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body)).data).toEqual({ h: [{ A: 1 }] });
   });
 });

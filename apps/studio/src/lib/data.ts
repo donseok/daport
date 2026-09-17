@@ -22,3 +22,9 @@ export function sampleContext(report: Report): DataContext {
   for (const [name, v] of Object.entries(data)) if (!(name in ctx)) ctx[name] = rowsProxy(asRows(v));
   return ctx;
 }
+
+/** 미리보기·PDF 요청 본문 (스펙 7.5). 편집 중에는 sample.data를 보내 서버 데이터셋을 실행하지 않는다. 실데이터 토글이 켜지면 data를 빼고 보낸다 */
+export function requestBody(report: Report, liveData: boolean): { report: Report; params: Record<string, unknown>; data?: Record<string, unknown> } {
+  const body = { report, params: { ...sampleParams(report), ...report.sample?.params } };
+  return liveData || !report.sample ? body : { ...body, data: report.sample.data };
+}

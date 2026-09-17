@@ -1,15 +1,14 @@
 "use client";
-import { useEffect, useMemo, useState, type PointerEvent } from "react";
-import { layout } from "@daport/renderer/layout";
+import { useEffect, useMemo, useState, type DragEvent, type PointerEvent } from "react";
 import type { PlacedItem } from "@daport/renderer";
 import { PaintPage, pageCss, fontFaceCss } from "@daport/renderer/paint";   // 패키지 루트는 react-dom/server를 쓰는 html.ts까지 끌어온다
-import { sampleContext } from "@/lib/data";
-import { resolveAssetUrls } from "@/lib/assets";
 import { useEditor, lineBox } from "../store";
 import { useDrag, type Box, type Handle } from "./useDrag";
 import { SelectionBox } from "./SelectionBox";
-import { pxToMm } from "./snap";
+import { pxToMm, snapMm } from "./snap";
 import { clampView, currentPage, primaryItem, isOtherInstance } from "./pages";
+import { layoutFor } from "./layoutCache";
+import { resolveDrop, DRAG_MIME, type DragField, type DropTarget } from "../data/bindings";
 
 /** 채우기 없는 사각형은 선에서 이 화면 거리(px) 안쪽일 때만 고른다 */
 const STROKE_HIT_PX = 3;
@@ -27,12 +26,15 @@ export function Canvas({ zoom }: { zoom: number }) {
   const findElement = useEditor((s) => s.findElement);
   const moveSelected = useEditor((s) => s.moveSelected);
   const resizeElement = useEditor((s) => s.resizeElement);
+  const addElement = useEditor((s) => s.addElement);
+  const updateElement = useEditor((s) => s.updateElement);
+  const allocateId = useEditor((s) => s.allocateId);
+  const findParentRepeater = useEditor((s) => s.findParentRepeater);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
-  const data = useMemo(() => sampleContext(report), [report]);
-  // 미리보기·PDF와 같게 asset://을 /api/assets/{id}로 바꾼다 (상대 URL이라 studio 출처 기준으로 해석된다).
-  // 스펙 10: 디자이너는 표현식 오류를 요소마다 #ERR로 보인다. onExpressionError("fail")는 미리보기·PDF 렌더만 따른다
-  const pages = useMemo(() => layout({ ...resolveAssetUrls(report, ""), onExpressionError: "blank" }, data), [report, data]);
+  // 캔버스와 페이지 선택기가 같은 레이아웃을 쓴다 (report 객체당 한 번 계산). 스펙 10: 표현식 오류는 요소마다 #ERR로 보인다
+  const pages = useMemo(() => layoutFor(report), [report]);
   const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height), [report.page.width, report.page.height]);
   const page = currentPage(pages, view);
 
@@ -115,11 +117,56 @@ export function Canvas({ zoom }: { zoom: number }) {
   // 핸들은 단일 선택에만 보인다. 선은 크기 0이 정상이라 최소 크기를 0으로 둔다 (1이면 가로선의 n/s 핸들이 선을 1mm 기울인다)
   const onHandleDown = (e: PointerEvent, h: Handle) => { drag.begin(e, h, boxes, findElement(selection[0])?.type === "line" ? 0 : 1); };
 
+  /** 놓인 자리의 대상: 표(셀·테두리·flowBox), 반복 영역 템플릿(템플릿 자리·어느 인스턴스든), 그 밖은 빈 캔버스 */
+  const dropTargetAt = (e: DragEvent<HTMLDivElement>, x: number, y: number): DropTarget => {
+    const root = e.currentTarget;
+    const stack = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(e.clientX, e.clientY) : [e.target as Element];
+    const templateOf = (repeaterId: string): DropTarget => {
+      const t = page.items.find((i) => i.role === "template" && i.elementId === repeaterId);
+      return t ? { kind: "repeaterItem", repeaterId, x: snapMm(x - t.x), y: snapMm(y - t.y) } : { kind: "canvas", x, y };
+    };
+    for (const node of stack) {
+      if (!root.contains(node)) continue;
+      const host = node.closest("[data-element-id]");
+      const id = host?.getAttribute("data-element-id");
+      if (!host || !id) continue;
+      const role = host.getAttribute("data-role");
+      const el = findElement(id);
+      if (el?.type === "table") return { kind: "table", tableId: id };
+      if (el?.type === "repeater" && (role === "flowBox" || role === "template")) return templateOf(id);
+      const rep = findParentRepeater(id);
+      if (rep) {
+        // 인스턴스 자식 위에 놓으면 그 인스턴스의 원점 기준 상대좌표를 템플릿 좌표로 쓴다
+        const inst = host.getAttribute("data-instance");
+        const slot = page.items.find((i) => i.role === "template" && i.elementId === rep);
+        const first = page.items.find((i) => i.elementId === id && i.instance === inst);
+        const tmpl = primaryItem(page, id);
+        if (slot && first && tmpl) return { kind: "repeaterItem", repeaterId: rep, x: snapMm(x - (first.x - tmpl.x) - slot.x), y: snapMm(y - (first.y - tmpl.y) - slot.y) };
+        return templateOf(rep);
+      }
+    }
+    return { kind: "canvas", x, y };
+  };
+  const onDragOver = (e: DragEvent<HTMLDivElement>) => { if (Array.from(e.dataTransfer.types).includes(DRAG_MIME)) e.preventDefault(); };
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    const raw = e.dataTransfer.getData(DRAG_MIME);
+    if (!raw) return;
+    e.preventDefault();
+    const field = JSON.parse(raw) as DragField;
+    const origin = e.currentTarget.querySelector(".dp-page")?.getBoundingClientRect();
+    const x = snapMm(pxToMm(e.clientX - (origin?.left ?? 0), zoom)), y = snapMm(pxToMm(e.clientY - (origin?.top ?? 0), zoom));
+    const result = resolveDrop(field, dropTargetAt(e, x, y), report, allocateId);
+    if (result.action === "addElement") addElement(result.element, result.into ? { into: result.into } : undefined);
+    else if (result.action === "addColumn") { const t = findElement(result.tableId); if (t?.type === "table") updateElement(t.id, { columns: [...t.columns, result.column] }); }
+    setWarning(result.warning ?? null);
+  };
+
   const shown = ghost ?? boxes;
   const templates = page.items.filter((i) => i.role === "template");
   return (
     <div className="relative inline-block shadow-lg" style={{ transform: `scale(${zoom})`, transformOrigin: "top left" }}
-      data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel}>
+      data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel}
+      onDragOver={onDragOver} onDrop={onDrop}>
       <style>{css}</style>
       <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
       <div className="absolute inset-0 pointer-events-none">
@@ -128,6 +175,7 @@ export function Canvas({ zoom }: { zoom: number }) {
             style={{ left: `${t.x}mm`, top: `${t.y}mm`, width: `${t.w}mm`, height: `${t.h}mm` }} />
         ))}
         {Object.entries(shown).map(([id, b]) => <SelectionBox key={id} box={b} single={selection.length === 1} onHandleDown={onHandleDown} />)}
+        {warning && <div data-testid="drop-warning" role="status" className="absolute left-2 top-2 text-xs bg-amber-100 border border-amber-400 rounded px-2 py-1">{warning}</div>}
       </div>
     </div>
   );

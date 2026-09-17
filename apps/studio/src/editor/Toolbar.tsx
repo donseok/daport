@@ -1,7 +1,8 @@
 "use client";
 import { useContext, useState } from "react";
-import { sampleParams } from "@/lib/data";
+import { requestBody } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
+import { PageSelector } from "./PageSelector";
 
 /** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
 async function failureMessage(r: Response, label: string): Promise<string> {
@@ -20,6 +21,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const markSaved = useEditor((s) => s.markSaved);
   const undo = useEditor((s) => s.undo);
   const redo = useEditor((s) => s.redo);
+  const liveData = useEditor((s) => s.liveData);
+  const setLiveData = useEditor((s) => s.setLiveData);
   // PDF 렌더는 몇 초 걸릴 수 있으므로 저장과 따로 막는다
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -42,7 +45,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     setExporting(true);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify({ report, params: sampleParams(report) }) });
+        body: JSON.stringify(requestBody(report, liveData)) });
       if (!r.ok) { alert(await failureMessage(r, "PDF")); return; }
       const url = URL.createObjectURL(await r.blob());
       const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
@@ -62,6 +65,8 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       <button className={btn} onClick={redo}>다시하기</button>
       <button className={btn} onClick={() => setMode(mode === "design" ? "preview" : "design")}>{mode === "design" ? "미리보기" : "디자인"}</button>
       <label className="text-xs ml-2">배율 <input type="range" min={0.25} max={3} step={0.25} value={zoom} onChange={(e) => setZoom(Number(e.target.value))} /> {Math.round(zoom * 100)}%</label>
+      <PageSelector />
+      <label className="text-xs flex items-center gap-1 ml-2"><input type="checkbox" aria-label="실데이터" checked={liveData} onChange={(e) => setLiveData(e.target.checked)} />실데이터</label>
       <div className="flex-1" />
       <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>
       <button className={btn} disabled={saving || !dirty} onClick={save} data-testid="save">저장</button>
