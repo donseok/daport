@@ -1,0 +1,433 @@
+{
+  "id": "component-demo",
+  "name": "컴포넌트 예제",
+  "version": 1,
+  "page": {
+    "width": 210,
+    "height": 297,
+    "margin": [
+      10,
+      10,
+      10,
+      10
+    ]
+  },
+  "datasets": [
+    {
+      "name": "doc",
+      "type": "static",
+      "rows": [
+        {
+          "TITLE": "품질 검사 성적서",
+          "LOT": "L-2026-0917",
+          "LINE": "2라인"
+        }
+      ]
+    },
+    {
+      "name": "items",
+      "type": "static",
+      "rows": [
+        {
+          "NO": 1,
+          "NAME": "치수 1",
+          "RES": "합격"
+        },
+        {
+          "NO": 2,
+          "NAME": "외관 2",
+          "RES": "합격"
+        },
+        {
+          "NO": 3,
+          "NAME": "경도 3",
+          "RES": "합격"
+        },
+        {
+          "NO": 4,
+          "NAME": "도막 4",
+          "RES": "보류"
+        },
+        {
+          "NO": 5,
+          "NAME": "치수 5",
+          "RES": "합격"
+        },
+        {
+          "NO": 6,
+          "NAME": "외관 6",
+          "RES": "합격"
+        },
+        {
+          "NO": 7,
+          "NAME": "경도 7",
+          "RES": "합격"
+        },
+        {
+          "NO": 8,
+          "NAME": "도막 8",
+          "RES": "합격"
+        },
+        {
+          "NO": 9,
+          "NAME": "치수 9",
+          "RES": "합격"
+        },
+        {
+          "NO": 10,
+          "NAME": "외관 10",
+          "RES": "불합격"
+        },
+        {
+          "NO": 11,
+          "NAME": "경도 11",
+          "RES": "합격"
+        },
+        {
+          "NO": 12,
+          "NAME": "도막 12",
+          "RES": "합격"
+        },
+        {
+          "NO": 13,
+          "NAME": "치수 13",
+          "RES": "합격"
+        },
+        {
+          "NO": 14,
+          "NAME": "외관 14",
+          "RES": "합격"
+        },
+        {
+          "NO": 15,
+          "NAME": "경도 15",
+          "RES": "합격"
+        },
+        {
+          "NO": 16,
+          "NAME": "도막 16",
+          "RES": "합격"
+        },
+        {
+          "NO": 17,
+          "NAME": "치수 17",
+          "RES": "보류"
+        },
+        {
+          "NO": 18,
+          "NAME": "외관 18",
+          "RES": "합격"
+        },
+        {
+          "NO": 19,
+          "NAME": "경도 19",
+          "RES": "합격"
+        },
+        {
+          "NO": 20,
+          "NAME": "도막 20",
+          "RES": "합격"
+        },
+        {
+          "NO": 21,
+          "NAME": "치수 21",
+          "RES": "합격"
+        },
+        {
+          "NO": 22,
+          "NAME": "외관 22",
+          "RES": "합격"
+        },
+        {
+          "NO": 23,
+          "NAME": "경도 23",
+          "RES": "합격"
+        },
+        {
+          "NO": 24,
+          "NAME": "도막 24",
+          "RES": "합격"
+        },
+        {
+          "NO": 25,
+          "NAME": "치수 25",
+          "RES": "합격"
+        },
+        {
+          "NO": 26,
+          "NAME": "외관 26",
+          "RES": "합격"
+        },
+        {
+          "NO": 27,
+          "NAME": "경도 27",
+          "RES": "불합격"
+        },
+        {
+          "NO": 28,
+          "NAME": "도막 28",
+          "RES": "합격"
+        },
+        {
+          "NO": 29,
+          "NAME": "치수 29",
+          "RES": "합격"
+        },
+        {
+          "NO": 30,
+          "NAME": "외관 30",
+          "RES": "합격"
+        },
+        {
+          "NO": 31,
+          "NAME": "경도 31",
+          "RES": "합격"
+        },
+        {
+          "NO": 32,
+          "NAME": "도막 32",
+          "RES": "합격"
+        },
+        {
+          "NO": 33,
+          "NAME": "치수 33",
+          "RES": "합격"
+        },
+        {
+          "NO": 34,
+          "NAME": "외관 34",
+          "RES": "보류"
+        },
+        {
+          "NO": 35,
+          "NAME": "경도 35",
+          "RES": "합격"
+        },
+        {
+          "NO": 36,
+          "NAME": "도막 36",
+          "RES": "합격"
+        },
+        {
+          "NO": 37,
+          "NAME": "치수 37",
+          "RES": "합격"
+        },
+        {
+          "NO": 38,
+          "NAME": "외관 38",
+          "RES": "합격"
+        },
+        {
+          "NO": 39,
+          "NAME": "경도 39",
+          "RES": "합격"
+        },
+        {
+          "NO": 40,
+          "NAME": "도막 40",
+          "RES": "합격"
+        }
+      ]
+    }
+  ],
+  "components": {
+    "doc-header@1": {
+      "name": "문서 헤더",
+      "w": 190,
+      "h": 20,
+      "props": [
+        {
+          "name": "title",
+          "type": "string",
+          "default": "문서",
+          "label": "제목"
+        },
+        {
+          "name": "sub",
+          "type": "string",
+          "default": "",
+          "label": "부제"
+        }
+      ],
+      "elements": [
+        {
+          "id": "frame",
+          "type": "rect",
+          "x": 0,
+          "y": 0,
+          "w": 190,
+          "h": 20,
+          "style": {
+            "stroke": "#333333",
+            "strokeWidth": 0.3
+          }
+        },
+        {
+          "id": "ttl",
+          "type": "text",
+          "x": 3,
+          "y": 2,
+          "w": 130,
+          "h": 9,
+          "value": "{{ props.title }}",
+          "style": {
+            "fontSize": 14,
+            "bold": true
+          }
+        },
+        {
+          "id": "sub",
+          "type": "text",
+          "x": 3,
+          "y": 12,
+          "w": 130,
+          "h": 6,
+          "value": "{{ props.sub }}",
+          "style": {
+            "fontSize": 9
+          }
+        },
+        {
+          "id": "pn",
+          "type": "pageNumber",
+          "x": 140,
+          "y": 12,
+          "w": 47,
+          "h": 6,
+          "style": {
+            "fontSize": 9,
+            "align": "right"
+          }
+        }
+      ]
+    },
+    "check-table@1": {
+      "name": "검사 항목 표",
+      "w": 190,
+      "h": 120,
+      "props": [
+        {
+          "name": "caption",
+          "type": "string",
+          "default": "검사 항목"
+        }
+      ],
+      "elements": [
+        {
+          "id": "cap",
+          "type": "text",
+          "x": 0,
+          "y": 0,
+          "w": 190,
+          "h": 7,
+          "value": "{{ props.caption }}",
+          "style": {
+            "fontSize": 10,
+            "bold": true
+          }
+        },
+        {
+          "id": "t",
+          "type": "table",
+          "x": 0,
+          "y": 8,
+          "w": 190,
+          "h": 112,
+          "source": "items",
+          "rowHeight": 7,
+          "headerHeight": 7,
+          "headerStyle": {
+            "bold": true,
+            "fill": "#eeeeee"
+          },
+          "columns": [
+            {
+              "header": "번호",
+              "value": "{{ row.NO }}",
+              "w": 30,
+              "align": "center",
+              "style": {
+                "fontSize": 9,
+                "padding": 1
+              }
+            },
+            {
+              "header": "항목",
+              "value": "{{ row.NAME }}",
+              "w": 100,
+              "style": {
+                "fontSize": 9,
+                "padding": 1
+              }
+            },
+            {
+              "header": "판정",
+              "value": "{{ row.RES }}",
+              "w": 60,
+              "align": "center",
+              "style": {
+                "fontSize": 9,
+                "padding": 1
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "elements": [
+    {
+      "id": "hdr-top",
+      "type": "ref",
+      "ref": "doc-header",
+      "version": 1,
+      "x": 10,
+      "y": 10,
+      "w": 190,
+      "h": 20,
+      "flow": "every",
+      "props": {
+        "title": "{{ doc.TITLE }}",
+        "sub": "LOT {{ doc.LOT }}"
+      }
+    },
+    {
+      "id": "info",
+      "type": "text",
+      "x": 10,
+      "y": 34,
+      "w": 190,
+      "h": 8,
+      "value": "라인: {{ doc.LINE }}"
+    },
+    {
+      "id": "checks",
+      "type": "ref",
+      "ref": "check-table",
+      "version": 1,
+      "x": 10,
+      "y": 46,
+      "w": 190,
+      "h": 120,
+      "props": {
+        "caption": "{{ doc.LINE }} 검사 항목 ({{ count(items) }}건)"
+      }
+    },
+    {
+      "id": "hdr-bottom",
+      "type": "ref",
+      "ref": "doc-header",
+      "version": 1,
+      "x": 10,
+      "y": 267,
+      "w": 190,
+      "h": 20,
+      "flow": "every",
+      "props": {
+        "title": "확인",
+        "sub": "{{ doc.LOT }} · {{ page }}/{{ total }}"
+      }
+    }
+  ]
+}
