@@ -44,7 +44,14 @@ function isUniqueViolation(e: unknown): boolean {
 export class DbPresetStore implements PresetStore {
   async list() {
     const rows = await db().select().from(presets).orderBy(presets.createdAt);
-    return [...BUILTIN_PRESETS, ...rows.map((r) => PresetSchema.parse(r.body))];
+    // 저장된 행 하나가 스키마에 안 맞아도 GET /api/presets 전체가 죽지 않도록 그 행만 건너뛴다
+    const parsed: Preset[] = [];
+    for (const r of rows) {
+      const result = PresetSchema.safeParse(r.body);
+      if (result.success) parsed.push(result.data);
+      else console.warn(`잘못된 프리셋 행을 건너뜁니다: ${r.id}`, result.error);
+    }
+    return [...BUILTIN_PRESETS, ...parsed];
   }
   async get(id: string) {
     const b = BUILTIN_PRESETS.find((p) => p.id === id); if (b) return b;
