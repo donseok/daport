@@ -3,15 +3,18 @@ import { withPage, fontBaseUrl, isBrowserCrash } from "@daport/browser";
 import { fontsDir } from "./fonts-dir";
 export { closePool } from "@daport/browser";
 
-export async function renderPdf(report: Report, data: DataContext, attempt = 0): Promise<Buffer> {
+/** allowHosts: 렌더 중 Chromium이 요청할 수 있는 호스트(포트 포함). 생략하면 제한하지 않는다 (4단계 스펙 5.6) */
+export type RenderOptions = { allowHosts?: string[] };
+
+export async function renderPdf(report: Report, data: DataContext, opts: RenderOptions = {}, attempt = 0): Promise<Buffer> {
   const html = renderToHtml(report, data, { fontBaseUrl });
   try {
-    return await withPage(html, { fontsDir }, (page) => page.pdf({
+    return await withPage(html, { fontsDir, allowHosts: opts.allowHosts }, (page) => page.pdf({
       width: `${report.page.width}mm`, height: `${report.page.height}mm`,
       printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 },
     }));
   } catch (e) {
-    if (attempt === 0 && isBrowserCrash(e)) return renderPdf(report, data, 1);     // Chromium 크래시·끊김만 1회 재시도
+    if (attempt === 0 && isBrowserCrash(e)) return renderPdf(report, data, opts, 1);     // Chromium 크래시·끊김만 1회 재시도
     throw e;
   }
 }
