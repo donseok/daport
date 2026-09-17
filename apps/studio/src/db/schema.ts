@@ -8,3 +8,10 @@ export const reports = pgTable("reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+export const presets = pgTable("presets", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  body: jsonb("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
