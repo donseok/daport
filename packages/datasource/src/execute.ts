@@ -1,5 +1,6 @@
 import { resolveParams, rowsProxy, type Report, type DataContext, type Dataset } from "@daport/core";
 import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver } from "./types";
+import { runSql } from "./sql";
 
 export type ExecuteOptions = {
   params: Record<string, unknown>;
@@ -28,7 +29,7 @@ async function runDataset(ds: Dataset, params: Record<string, unknown>, opts: Ex
   switch (ds.type) {
     case "static": return ds.rows;
     case "http": throw new DatasetFailure("HOST_NOT_ALLOWED", "http connector not configured");
-    case "sql": throw new DatasetFailure("SQL_NOT_CONFIGURED", `sql connection "${ds.connection}" is not configured`);
+    case "sql": return runSql(ds, params, opts.connectors, limits);
   }
 }
 
