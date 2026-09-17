@@ -50,14 +50,19 @@ describe("rasterizePages", () => {
     expect(bms[0].bits.some((b) => b !== 0)).toBe(true);
   }, 60_000);
   it.each([["coil-tag", coilTag], ["product-label", productLabel]])("%s: label bitmap matches the PDF rasterized at the same dpi", async (_n, fixture) => {
+    const dpi = 203;
     const report = parseReport(fixture);
     const data = fixtureContext(report);
-    const label = await rasterizePages(report, data, 203, 128);
-    const pdf = await pdfBitmaps(report, data, 203, 128);
+    const label = await rasterizePages(report, data, dpi, 128);
+    const pdf = await pdfBitmaps(report, data, dpi, 128);
     expect(pdf).toHaveLength(label.length);
+    // Playwright의 page.pdf()는 mm→px 상수로 3.78을 쓰고 Chromium이 MediaBox를 1/300in 격자에 맞춰 반올림해,
+    // PDF 페이지가 명목 크기보다 최대 ~0.2% 작아진다. 96dpi에서는 반올림하면 ≤1px지만 203dpi에서는 최대 ≤3px까지 벌어진다.
+    // (label 쪽 rasterizePages는 정확한 round(mm×dpi/25.4) 크기를 내므로 이 오차는 PDF 경로에만 있다 — raster.ts는 바꾸지 않는다)
+    const DIM_TOL = Math.ceil(dpi / 96);
     label.forEach((bm, i) => {
-      expect(Math.abs(bm.width - pdf[i].width)).toBeLessThanOrEqual(1);
-      expect(Math.abs(bm.height - pdf[i].height)).toBeLessThanOrEqual(1);
+      expect(Math.abs(bm.width - pdf[i].width)).toBeLessThanOrEqual(DIM_TOL);
+      expect(Math.abs(bm.height - pdf[i].height)).toBeLessThanOrEqual(DIM_TOL);
       expect(tolerantDiff(bm, pdf[i]), `${_n} label ${i}`).toBeLessThan(MAX_DIFF);
     });
   }, 120_000);
