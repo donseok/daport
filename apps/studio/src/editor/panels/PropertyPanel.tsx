@@ -33,13 +33,19 @@ export function PropertyPanel() {
       {el.type === "text" && <TextField label="내용" value={el.value} multiline onChange={(value) => set({ value })} />}
       {el.type === "image" && <><TextField label="src" value={el.src} onChange={(src) => set({ src })} />
         <SelectField label="fit" value={el.fit} options={["contain", "cover", "stretch"]} onChange={(fit) => set({ fit })} /></>}
+      {el.type === "barcode" && <>
+        <SelectField label="형식" value={el.format} options={["code128", "ean13", "qr", "code39", "datamatrix"]} onChange={(format) => set({ format })} />
+        <TextField label="값" value={el.value} onChange={(value) => set({ value })} />
+        <CheckField label="텍스트 표시" value={el.showText} onChange={(showText) => set({ showText })} />
+      </>}
       <TextField label="visible" value={el.visible ?? ""} onChange={(v) => set({ visible: v || undefined })} />
       {el.type === "table" && <TablePanel el={el} />}
       {el.type === "repeater" && <RepeaterPanel el={el} />}
       {el.type !== "table" && el.type !== "repeater" && <>
         <div className="text-xs font-semibold mt-2">스타일</div>
+        {(el.type === "text" || el.type === "pageNumber" || el.type === "barcode") &&
+          <NumberField label="글자크기" value={el.style.fontSize} step={0.5} min={0} onChange={(fontSize) => { if (fontSize > 0) setStyle({ fontSize }); }} />}
         {(el.type === "text" || el.type === "pageNumber") && <>
-          <NumberField label="글자크기" value={el.style.fontSize} step={0.5} min={0} onChange={(fontSize) => { if (fontSize > 0) setStyle({ fontSize }); }} />
           <CheckField label="굵게" value={el.style.bold} onChange={(bold) => setStyle({ bold })} />
           <SelectField label="정렬" value={el.style.align} options={["left", "center", "right"]} onChange={(align) => setStyle({ align })} />
           <SelectField label="세로정렬" value={el.style.valign} options={["top", "middle", "bottom"]} onChange={(valign) => setStyle({ valign })} />

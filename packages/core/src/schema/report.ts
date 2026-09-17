@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ElementSchema } from "./elements";
 import { walkElements } from "./tree";
+import { OutputSchema } from "./output";
 
 export const PageSchema = z.object({
   width: z.number().positive(),
@@ -67,6 +68,7 @@ export const ReportSchema = z.object({
   onExpressionError: z.enum(["blank", "fail"]).default("blank"),
   repeat: RepeatSchema.optional(),
   sample: SampleSchema.optional(),
+  output: OutputSchema.default({ kind: "pdf" }),
 }).superRefine((r, ctx) => {
   const seen = new Set<string>();
   walkElements(r.elements, (el, _parent, _i, ancestors) => {

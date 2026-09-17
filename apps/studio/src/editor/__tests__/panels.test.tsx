@@ -1,5 +1,5 @@
-import { describe, it, expect, afterEach } from "vitest";
-import { render, screen, fireEvent, cleanup } from "@testing-library/react";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { parseReport, ElementSchema, type Element } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../store";
 import { ElementPalette } from "../panels/ElementPalette";
@@ -47,28 +47,85 @@ describe("ElementPalette", () => {
   });
 });
 
-describe("PagePanel", () => {
-  it("applies a preset and reflects it in the select", () => {
+describe("PagePanel presets", () => {
+  beforeEach(() => { vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([]), { status: 200 }))); });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows custom for an unknown size, applies a builtin preset (page + output) and returns to custom", async () => {
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("사용자 정의");
-    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "A4 가로" } });
-    expect(store.getState().report.page).toMatchObject({ width: 297, height: 210 });
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("A4 가로");
-    // "사용자 정의"를 고르면 크기는 그대로 둔다
-    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "사용자 정의" } });
-    expect(store.getState().report.page).toMatchObject({ width: 297, height: 210 });
+    const select = () => screen.getByLabelText("프리셋") as HTMLSelectElement;
+    expect(select().value).toBe("custom");
+    fireEvent.change(select(), { target: { value: "coil-tag-100x150" } });
+    expect(store.getState().report.page).toMatchObject({ width: 100, height: 150 });
+    expect(store.getState().report.output.kind).toBe("label");
+    expect(select().value).toBe("coil-tag-100x150");
+    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "99" } });
+    expect(select().value).toBe("custom");
   });
-
-  it("edits width and height in mm", () => {
+  it("lists user presets from the API, saves the current settings as a preset and deletes it", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    let list = [{ id: "my-tag", name: "내 Tag", page: { width: 80, height: 50, margin: [1, 1, 1, 1], unit: "mm" }, output: { kind: "pdf" }, builtin: false }];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (init?.method === "POST") { list = [...list, { ...JSON.parse(String(init.body)), builtin: false, output: { kind: "pdf" } }]; return new Response(JSON.stringify(list.at(-1)), { status: 201 }); }
+      if (init?.method === "DELETE") { list = list.filter((p) => !url.endsWith(p.id)); return new Response(null, { status: 204 }); }
+      return new Response(JSON.stringify(list), { status: 200 });
+    }));
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
-    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "60" } });
-    fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "40" } });
-    expect(store.getState().report.page).toMatchObject({ width: 60, height: 40 });
-    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("Tag 60×40");
+    await waitFor(() => expect(screen.getByRole("option", { name: "내 Tag" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "my-tag" } });
+    expect(store.getState().report.page).toMatchObject({ width: 80, height: 50, margin: [1, 1, 1, 1] });
+    fireEvent.click(screen.getByRole("button", { name: "프리셋 삭제" }));
+    await waitFor(() => expect(screen.queryByRole("option", { name: "내 Tag" })).toBeNull());
+    fireEvent.change(screen.getByLabelText("새 프리셋 id"), { target: { value: "saved-one" } });
+    fireEvent.change(screen.getByLabelText("새 프리셋 이름"), { target: { value: "저장한 것" } });
+    fireEvent.click(screen.getByRole("button", { name: "프리셋으로 저장" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: "저장한 것" })).toBeTruthy());
+    const post = calls.find((c) => c.init?.method === "POST")!;
+    expect(JSON.parse(String(post.init!.body))).toMatchObject({ id: "saved-one", name: "저장한 것", page: { width: 80, height: 50 } });
   });
+  it("groups builtin and user presets under separate optgroups", async () => {
+    const preset = { id: "my-tag", name: "내 Tag", page: { width: 80, height: 50, margin: [1, 1, 1, 1], unit: "mm" }, output: { kind: "pdf" }, builtin: false };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([preset]), { status: 200 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "내 Tag" })).toBeTruthy());
+    const select = screen.getByLabelText("프리셋") as HTMLSelectElement;
+    const groups = Array.from(select.querySelectorAll("optgroup"));
+    expect(groups.map((g) => g.label)).toEqual(["내장", "사용자 정의"]);
+    expect(within(groups[0]).getByRole("option", { name: "A4 세로" })).toBeTruthy();
+    expect(within(groups[1]).getByRole("option", { name: "내 Tag" })).toBeTruthy();
+  });
+  it("detects the current preset even when darkness/speed appear in a different key order after patch merging", async () => {
+    const preset = {
+      id: "tag-label", name: "라벨 태그",
+      page: { width: 100, height: 100, margin: [10, 10, 10, 10], unit: "mm" },
+      output: { kind: "label", label: { language: "zpl", dpi: 203, threshold: 128, darkness: 10, speed: 4, copies: 1 } },
+      builtin: false,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([preset]), { status: 200 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "라벨 태그" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "tag-label" } });
+    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("tag-label");
+    // OutputPanel의 { ...(label ?? DEFAULT_LABEL), ...patch } 병합처럼 필드 순서가 달라져도
+    // (darkness/speed 값 자체는 그대로) 여전히 같은 프리셋으로 인식돼야 한다
+    store.getState().setOutput({ kind: "label", label: { language: "zpl", dpi: 203, threshold: 128, copies: 1, speed: 4, darkness: 10 } });
+    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("tag-label");
+  });
+  it("shows an error when the initial preset list fails to load, but keeps builtin presets usable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 500 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByText("프리셋 목록을 불러오지 못했습니다")).toBeTruthy());
+    expect(screen.getByRole("option", { name: "A4 세로" })).toBeTruthy();
+  });
+});
 
+describe("PagePanel size guards", () => {
   it("ignores empty or non-positive size input instead of committing it", () => {
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
@@ -112,6 +169,15 @@ describe("palette (phase 2)", () => {
     store.getState().select(["rect-1"]);                                       // 템플릿 자식이 선택돼도 같은 템플릿에
     fireEvent.click(getByRole("button", { name: "+ 텍스트" }));
     expect((store.getState().findElement("repeater-1") as Extract<Element, { type: "repeater" }>).item.children.map((c) => c.id)).toEqual(["text-1", "rect-1", "text-2"]);
+  });
+});
+
+describe("palette (phase 3)", () => {
+  it("adds a code128 barcode with a sample value", () => {
+    const store = createEditorStore(report);
+    render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
+    fireEvent.click(screen.getByRole("button", { name: "+ 바코드" }));
+    expect(store.getState().findElement("barcode-1")).toMatchObject({ type: "barcode", format: "code128", value: "123456", showText: true, w: 40, h: 15 });
   });
 });
 

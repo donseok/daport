@@ -17,8 +17,9 @@ export type PlacedImage = PlacedBase & { kind: "image"; src: string; fit: "conta
 export type PlacedLine = PlacedBase & { kind: "line"; x2: number; y2: number };
 export type PlacedRect = PlacedBase & { kind: "rect" };
 export type PlacedPlaceholder = PlacedBase & { kind: "placeholder"; label: string };
+export type PlacedSvg = PlacedBase & { kind: "svg"; svg: string };
 
-export type PlacedItem = PlacedText | PlacedImage | PlacedLine | PlacedRect | PlacedPlaceholder;
+export type PlacedItem = PlacedText | PlacedImage | PlacedLine | PlacedRect | PlacedPlaceholder | PlacedSvg;
 
 /** index는 전체 문서 기준(0부터). copyIndex는 몇 번째 부(0부터, repeat 없으면 0), pageInCopy는 부 안의 페이지(0부터) */
 export type Page = { index: number; width: number; height: number; items: PlacedItem[]; copyIndex: number; pageInCopy: number };

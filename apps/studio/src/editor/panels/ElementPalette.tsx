@@ -15,6 +15,7 @@ const ITEMS: { label: string; base: string; make: (id: string, alloc: (base: str
   { label: "선", base: "line", make: (id) => ({ id, type: "line", x: 10, y: 10, w: 50, h: 0, x2: 60, y2: 10, flow: "once", style: { ...defaultStyle(), stroke: "#000" } }) },
   { label: "사각형", base: "rect", make: (id) => ({ id, type: "rect", x: 10, y: 10, w: 40, h: 20, flow: "once", style: { ...defaultStyle(), stroke: "#000" } }) },
   { label: "페이지번호", base: "pn", make: (id) => ({ id, type: "pageNumber", x: 10, y: 10, w: 40, h: 6, format: "{{ page }} / {{ total }}", flow: "every", style: defaultStyle() }) },
+  { label: "바코드", base: "barcode", make: (id) => ({ id, type: "barcode", x: 10, y: 10, w: 40, h: 15, format: "code128", value: "123456", showText: true, flow: "once", style: { ...defaultStyle(), fontSize: 8 } }) },
   { label: "표", base: "table", make: (id, _alloc, report) => ({ id, type: "table", x: 10, y: 10, w: 100, h: 40, source: defaultSource(report), columns: [{ header: "열 1", value: "", w: 50, style: defaultStyle() }],
     repeatHeader: true, overflow: "continue", keepTogether: "row", rowHeight: 6, headerHeight: 7, border: "all", borderStyle: { stroke: "#000000", strokeWidth: 0.2 },
     headerStyle: {}, groups: [], pageFooter: [], footer: [], flow: "once", style: defaultStyle() }) },

@@ -1,5 +1,5 @@
 "use client";
-import { useContext, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { requestBody } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
 import { PageSelector } from "./PageSelector";
@@ -23,6 +23,21 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const redo = useEditor((s) => s.redo);
   const liveData = useEditor((s) => s.liveData);
   const setLiveData = useEditor((s) => s.setLiveData);
+  const bitmapPreview = useEditor((s) => s.bitmapPreview);
+  const setBitmapPreview = useEditor((s) => s.setBitmapPreview);
+  const isLabel = report.output.kind === "label";
+  const [printers, setPrinters] = useState<string[]>([]);
+  const [printer, setPrinter] = useState("");
+  const [printing, setPrinting] = useState(false);
+  useEffect(() => {
+    // PDF 레포트에서는 인쇄 UI가 없으니 불필요한 요청을 만들지 않는다. 허용 목록이 비어 있으면 전송 UI를 두지 않는다 (스펙 7.3)
+    if (!isLabel) return;
+    fetch("/api/printers", { method: "GET" }).then((r) => (r.ok ? r.json() : [])).then((list: unknown) => {
+      const names = Array.isArray(list) ? (list as { name: string }[]).map((p) => p.name) : [];
+      setPrinters(names); setPrinter(names[0] ?? "");
+    }).catch(() => setPrinters([]));
+  }, [isLabel]);
+
   // PDF 렌더는 몇 초 걸릴 수 있으므로 저장과 따로 막는다
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -41,21 +56,46 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       setSaving(false);
     }
   };
+  /** 응답을 파일로 내려받는다 (PDF·라벨 공용). 파일 이름은 content-disposition, 없으면 fallback */
+  const download = async (r: Response, fallback: string) => {
+    const cd = r.headers.get("content-disposition") ?? "";
+    const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? fallback;
+    const url = URL.createObjectURL(await r.blob());
+    const a = Object.assign(document.createElement("a"), { href: url, download: name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 0);   // 클릭 직후 바로 해제하면 일부 브라우저에서 다운로드가 시작되기 전에 URL이 사라진다
+  };
   const pdf = async () => {
     setExporting(true);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify(requestBody(report, liveData)) });
       if (!r.ok) { alert(await failureMessage(r, "PDF")); return; }
-      const url = URL.createObjectURL(await r.blob());
-      const a = Object.assign(document.createElement("a"), { href: url, download: `${report.name || report.id}.pdf` });
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);   // 클릭 직후 바로 해제하면 일부 브라우저에서 다운로드가 시작되기 전에 URL이 사라진다
+      await download(r, `${report.name || report.id}.pdf`);
     } catch (e) {
       alert(`PDF 실패: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setExporting(false);
     }
+  };
+  const label = async () => {
+    setExporting(true);
+    try {
+      const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/label`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(requestBody(report, liveData)) });
+      if (!r.ok) { alert(await failureMessage(r, "라벨")); return; }
+      await download(r, `${report.id}.zpl`);
+    } catch (e) { alert(`라벨 실패: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setExporting(false); }
+  };
+  const print = async () => {
+    setPrinting(true);
+    try {
+      const r = await fetch("/api/print", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ printer, ...requestBody(report, liveData) }) });
+      if (!r.ok) { alert(await failureMessage(r, "인쇄")); return; }
+      const res = (await r.json()) as { printer: string; bytes: number; pages: number };
+      alert(`${res.printer}로 ${res.pages}장(${res.bytes} bytes) 보냈습니다`);
+    } catch (e) { alert(`인쇄 실패: ${e instanceof Error ? e.message : String(e)}`); }
+    finally { setPrinting(false); }
   };
   const btn = "text-xs border rounded px-2 py-1 bg-white hover:bg-neutral-100 disabled:opacity-50";
   return (
@@ -68,6 +108,14 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       <PageSelector />
       <label className="text-xs flex items-center gap-1 ml-2"><input type="checkbox" aria-label="실데이터" checked={liveData} onChange={(e) => setLiveData(e.target.checked)} />실데이터</label>
       <div className="flex-1" />
+      {isLabel && <>
+        <label className="text-xs flex items-center gap-1"><input type="checkbox" aria-label="비트맵" checked={bitmapPreview} onChange={(e) => setBitmapPreview(e.target.checked)} />비트맵</label>
+        {printers.length > 0 && <>
+          <select aria-label="프린터" className="text-xs border rounded px-1 py-1" value={printer} onChange={(e) => setPrinter(e.target.value)}>{printers.map((p) => <option key={p} value={p}>{p}</option>)}</select>
+          <button className={btn} disabled={printing || !printer} onClick={print}>프린터로 보내기</button>
+        </>}
+        <button className={btn} disabled={exporting} onClick={label} data-testid="label-download">라벨 다운로드</button>
+      </>}
       <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>
       <button className={btn} disabled={saving || !dirty} onClick={save} data-testid="save">저장</button>
     </div>

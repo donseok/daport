@@ -14,6 +14,7 @@ export function pageCss(width: number, height: number): string {
     `.dp-el{position:absolute;box-sizing:border-box;margin:0}`,
     `.dp-text{white-space:pre;overflow:hidden}`,
     `.dp-line{overflow:visible}`,
+    `.dp-svg svg{width:100%;height:100%;display:block}`,
     `.dp-ph{border:0.2mm dashed #999;color:#999;font-size:6pt;display:flex;align-items:center;justify-content:center}`,
     `.dp-err{outline:0.3mm solid #e00;color:#e00}`,
   ].join("\n");

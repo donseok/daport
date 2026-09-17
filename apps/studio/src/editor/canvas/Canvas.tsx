@@ -172,6 +172,9 @@ export function Canvas({ zoom }: { zoom: number }) {
       <style>{css}</style>
       <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
       <div className="absolute inset-0 pointer-events-none">
+        {report.output.kind === "label" && (
+          <div data-testid="label-badge" className="absolute right-2 top-2 text-[10px] px-1.5 py-0.5 rounded bg-neutral-800 text-white">{`라벨 · ${report.output.label.language.toUpperCase()} · ${report.output.label.dpi}dpi`}</div>
+        )}
         {templates.map((t) => (
           <div key={`${t.elementId}|${t.instance}`} data-testid="template-outline" className="absolute border border-dashed border-blue-400"
             style={{ left: `${t.x}mm`, top: `${t.y}mm`, width: `${t.w}mm`, height: `${t.h}mm` }} />

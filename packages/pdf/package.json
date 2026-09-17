@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@daport/renderer": "workspace:*",
-    "playwright": "^1.55.0"
+    "@daport/browser": "workspace:*",
+    "@daport/renderer": "workspace:*"
   },
   "devDependencies": {
     "@daport/core": "workspace:*",

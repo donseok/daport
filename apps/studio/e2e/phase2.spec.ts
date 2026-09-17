@@ -7,7 +7,7 @@ const rows = Array.from({ length: 120 }, (_, i) => ({ N: i + 1, NAME: `품목 ${
 /** 홈 화면 폼으로 빈 A4 레포트를 만들고 캔버스가 뜰 때까지 기다린다 */
 async function createReport(page: Page, id: string) {
   await page.goto("/");
-  await page.getByLabel("ID").fill(id);
+  await page.getByLabel("ID", { exact: true }).fill(id);
   await page.getByLabel("크기").selectOption("210x297");
   await page.getByRole("button", { name: "새 레포트" }).click();
   await expect(page).toHaveURL(new RegExp(`/reports/${id}$`));
@@ -18,8 +18,8 @@ async function createReport(page: Page, id: string) {
 async function addStaticDataset(page: Page, name: string, data: unknown[]) {
   await page.getByRole("button", { name: "데이터" }).click();
   await page.getByRole("button", { name: "+ static" }).click();
-  await page.getByLabel("이름").fill(name);
-  await page.getByLabel("행(JSON)").fill(JSON.stringify(data));
+  await page.getByLabel("이름", { exact: true }).fill(name);
+  await page.getByLabel("행(JSON)", { exact: true }).fill(JSON.stringify(data));
   await page.getByTestId("fetch-sample").click();
   await expect(page.getByTestId(`fields-${name}`).locator('[data-path="N"]')).toBeVisible();
 }
@@ -68,7 +68,7 @@ test("repeater: editing the template text updates every instance; page selector 
   await addStaticDataset(page, "items", rows.slice(0, 30));
   await page.getByRole("button", { name: "요소" }).click();
   await page.getByRole("button", { name: "+ 반복 영역", exact: true }).click();
-  await page.getByLabel("소스").fill("items");
+  await page.getByLabel("소스", { exact: true }).fill("items");
 
   const canvas = page.getByTestId("canvas");
   const instances = canvas.locator('[data-element-id="text-1"]');
@@ -78,7 +78,7 @@ test("repeater: editing the template text updates every instance; page selector 
 
   // 두 번째 인스턴스를 눌러도 템플릿 자식이 선택되고, 내용을 바꾸면 모든 인스턴스에 반영된다
   await instances.nth(1).click();
-  await page.getByLabel("내용").fill("{{ item.NAME }}");
+  await page.getByLabel("내용", { exact: true }).fill("{{ item.NAME }}");
   await expect(instances.first()).toHaveText(/품목 1/);
   await expect(instances.nth(1)).toHaveText(/품목 2/);
   await expect(canvas.locator('[data-element-id="text-1"]:has-text("품목")')).toHaveCount(n);

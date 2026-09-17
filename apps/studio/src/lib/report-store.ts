@@ -7,9 +7,11 @@ import inspectionCert from "../../../../packages/renderer/src/__tests__/fixtures
 import invoice from "../../../../packages/renderer/src/__tests__/fixtures/invoice.report.json";
 import shippingOrder from "../../../../packages/renderer/src/__tests__/fixtures/shipping-order.report.json";
 import badgeSheet from "../../../../packages/renderer/src/__tests__/fixtures/badge-sheet.report.json";
+import coilTag from "../../../../packages/renderer/src/__tests__/fixtures/coil-tag.report.json";
+import productLabel from "../../../../packages/renderer/src/__tests__/fixtures/product-label.report.json";
 
 /** dev 서버·E2E가 여는 예제. 예제 전용 코드는 없고 JSON만 넣는다 */
-export const SEED_FIXTURES: unknown[] = [qualityCert, inspectionCert, invoice, shippingOrder, badgeSheet];
+export const SEED_FIXTURES: unknown[] = [qualityCert, inspectionCert, invoice, shippingOrder, badgeSheet, coilTag, productLabel];
 
 export type ReportSummary = { id: string; name: string; updatedAt: string };
 

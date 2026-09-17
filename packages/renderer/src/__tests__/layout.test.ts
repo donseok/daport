@@ -74,14 +74,14 @@ describe("layout", () => {
     expect(items[0]).toMatchObject({ kind: "text", lines: ["1 / 1"] });
     expect(items[1]).toMatchObject({ kind: "image", src: "asset://ACME" });
   });
-  it("keeps barcode/ref as placeholders and draws a table as a flowBox", () => {
+  it("draws a barcode as svg, a table as a flowBox and keeps ref as a placeholder", () => {
     const r = parseReport({ id: "r", version: 1, page, elements: [
       { id: "b", type: "barcode", x: 0, y: 0, w: 10, h: 5, format: "qr", value: "x" },
       { id: "t", type: "table", x: 0, y: 0, w: 10, h: 5, source: "s", columns: [] },
       { id: "c", type: "ref", x: 0, y: 0, w: 10, h: 5, ref: "hdr" },
     ]});
     const items = layout(r, ctx)[0].items;
-    expect(items.map((i) => i.kind)).toEqual(["placeholder", "rect", "placeholder"]);
+    expect(items.map((i) => i.kind)).toEqual(["svg", "rect", "placeholder"]);
     expect(items[1]).toMatchObject({ role: "flowBox", elementId: "t" });
   });
 });
