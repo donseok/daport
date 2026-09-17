@@ -1,4 +1,5 @@
-import { DbReportStore } from "../src/lib/report-store";
-import fixture from "../../../packages/renderer/src/__tests__/fixtures/quality-cert.report.json";
+import { DbReportStore, SEED_FIXTURES } from "../src/lib/report-store";
+import type { ReportInput } from "@daport/core";
 const s = new DbReportStore();
-s.create(fixture as any).then(() => console.log("seeded quality-cert")).catch((e) => { console.error(e.message); process.exit(1); });
+Promise.all(SEED_FIXTURES.map((f) => s.create(f as ReportInput).then(() => console.log(`seeded ${(f as { id: string }).id}`)).catch((e) => console.error(e.message))))
+  .then(() => process.exit(0));

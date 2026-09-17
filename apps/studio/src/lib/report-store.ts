@@ -2,7 +2,14 @@ import { eq } from "drizzle-orm";
 import { parseReport, type Report, type ReportInput } from "@daport/core";
 import { db } from "@/db/client";
 import { reports } from "@/db/schema";
-import fixture from "../../../../packages/renderer/src/__tests__/fixtures/quality-cert.report.json";
+import qualityCert from "../../../../packages/renderer/src/__tests__/fixtures/quality-cert.report.json";
+import inspectionCert from "../../../../packages/renderer/src/__tests__/fixtures/inspection-cert.report.json";
+import invoice from "../../../../packages/renderer/src/__tests__/fixtures/invoice.report.json";
+import shippingOrder from "../../../../packages/renderer/src/__tests__/fixtures/shipping-order.report.json";
+import badgeSheet from "../../../../packages/renderer/src/__tests__/fixtures/badge-sheet.report.json";
+
+/** dev 서버·E2E가 여는 예제. 예제 전용 코드는 없고 JSON만 넣는다 */
+export const SEED_FIXTURES: unknown[] = [qualityCert, inspectionCert, invoice, shippingOrder, badgeSheet];
 
 export type ReportSummary = { id: string; name: string; updatedAt: string };
 
@@ -78,8 +85,8 @@ export function getStore(): ReportStore {
   if (!holder.__daportReportStore) {
     const store = process.env.DATABASE_URL ? new DbReportStore() : new MemoryReportStore();
     holder.__daportReportStore = store;
-    // 메모리 저장소는 프로세스마다 비므로 dev 서버 부팅 시 품질보증서 골든 픽스처를 넣는다 (DB는 scripts/seed.ts)
-    if (!process.env.DATABASE_URL) holder.__daportSeeded = store.create(fixture as unknown as ReportInput).then(() => {});
+    // 메모리 저장소는 프로세스마다 비므로 dev 서버 부팅 시 예제 픽스처를 넣는다 (DB는 scripts/seed.ts)
+    if (!process.env.DATABASE_URL) holder.__daportSeeded = Promise.all(SEED_FIXTURES.map((f) => store.create(f as ReportInput))).then(() => {});
   }
   return holder.__daportReportStore;
 }
