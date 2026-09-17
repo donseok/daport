@@ -34,3 +34,28 @@ describe("executeDatasets sql", () => {
     expect((await executeDatasets(report, { params: {}, connectors: { sql: { mes: big } }, secrets: () => undefined, limits: { maxRows: 1 } })).errors[0].code).toBe("TOO_MANY_ROWS");
   });
 });
+
+describe("extractBinds lexing (Oracle)", () => {
+  const p = { a: 1, b: 2, c: 3, d: 4, e: 5, f: 6, id: 7 };
+  const names = (sql: string) => Object.keys(extractBinds(sql, p)).sort();
+  it("ignores binds in line and block comments", () => {
+    expect(names("select 1 from t -- :a\n where id = :id /* :b\n :c */")).toEqual(["id"]);
+  });
+  it("ignores binds inside q-quoted literals with any delimiter, including embedded quotes", () => {
+    expect(names("select q'[it's :a]', Q'{x :b}', q'(:c)', q'<:d>', q'!:e!' from t where id = :id")).toEqual(["id"]);
+  });
+  it("ignores national q-quoted literals (nq'...') and does not mistake identifiers ending in q", () => {
+    expect(names("select nq'[it's :a]', NQ'{:b}' from t where id = :id")).toEqual(["id"]);
+    expect(names("select seq'x' from t where id = :id")).toEqual(["id"]);
+  });
+  it("ignores quoted identifiers and escaped quotes in normal literals", () => {
+    expect(names(`select "X:a" from t where s = 'it''s :b' and id = :id`)).toEqual(["id"]);
+  });
+  it("still finds binds next to operators, parentheses and line starts, and skips :: casts", () => {
+    expect(names("select * from t where (a=:a)\n:b is null or x::c = 1 and f in (:f)")).toEqual(["a", "b", "f"]);
+  });
+  it("does not treat an unterminated comment or literal as SQL", () => {
+    expect(names("select :a from t /* :b")).toEqual(["a"]);
+    expect(names("select :a from t where s = 'x :b")).toEqual(["a"]);
+  });
+});
