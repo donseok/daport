@@ -16,10 +16,10 @@ describe("parseAllowList", () => {
 });
 
 describe("buildHttpRequest", () => {
-  it("encodes url template values, leaves header/body values raw, and reports used secrets", () => {
+  it("encodes url template values, fills headers and JSON body string values, and reports used secrets", () => {
     const { request, usedSecrets } = buildHttpRequest(ds({ method: "POST", url: "https://h/{{ params.no }}?q={{ params.q }}", headers: { Authorization: "Bearer {{ secrets.MES_TOKEN }}" }, body: "{\"lot\": \"{{ params.q }}\"}" }),
       { no: "A/1", q: "a b&c" }, secrets);
-    expect(request).toEqual({ method: "POST", url: "https://h/A%2F1?q=a%20b%26c", headers: { Authorization: "Bearer s3cr3t" }, body: "{\"lot\": \"a b&c\"}" });
+    expect(request).toEqual({ method: "POST", url: "https://h/A%2F1?q=a%20b%26c", headers: { Authorization: "Bearer s3cr3t", "content-type": "application/json" }, body: "{\"lot\":\"a b&c\"}", secretNames: ["MES_TOKEN"] });
     expect(usedSecrets).toEqual(["s3cr3t"]);
   });
   it("omits the body for GET and resolves a missing secret to an empty string", () => {
@@ -51,7 +51,7 @@ describe("maskSecrets", () => {
 describe("createFetchHttpConnector", () => {
   it("rejects hosts outside the allow list without calling fetch, and non-http schemes", async () => {
     const f = fakeFetch(() => json([]));
-    const c = createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f });
+    const c = createFetchHttpConnector({ allow: ["mes.example.com=MES_TOKEN"], fetch: f });
     await expect(c.request({ method: "GET", url: "https://other.example.com/x", headers: {} }, limits)).rejects.toMatchObject({ code: "HOST_NOT_ALLOWED" });
     await expect(c.request({ method: "GET", url: "ftp://mes.example.com/x", headers: {} }, limits)).rejects.toMatchObject({ code: "HOST_NOT_ALLOWED" });
     await expect(c.request({ method: "GET", url: "not a url", headers: {} }, limits)).rejects.toMatchObject({ code: "HOST_NOT_ALLOWED" });
@@ -86,7 +86,7 @@ describe("executeDatasets http", () => {
     datasets: [{ name: "orders", type: "http", url: "https://mes.example.com/o/{{ params.no }}", headers: { Authorization: "Bearer {{ secrets.MES_TOKEN }}" }, rowsPath: "data" }] });
   it("runs the request through the connector and applies rowsPath and maxRows", async () => {
     const f = fakeFetch((url) => json({ data: [{ NO: url }, { NO: "2" }] }));
-    const connectors = { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) };
+    const connectors = { http: createFetchHttpConnector({ allow: ["mes.example.com=MES_TOKEN"], fetch: f }) };
     const ok = await executeDatasets(report, { params: { no: "A" }, connectors, secrets });
     expect(ok.errors).toEqual([]);
     expect((ok.context.orders as { NO: string }).NO).toBe("https://mes.example.com/o/A");
@@ -95,27 +95,28 @@ describe("executeDatasets http", () => {
   });
   it("masks secret values in error messages and never puts secrets in the context", async () => {
     const f = fakeFetch(() => { throw new Error("connect failed for Bearer s3cr3t"); });
-    const { context, errors } = await executeDatasets(report, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) }, secrets });
+    const { context, errors } = await executeDatasets(report, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com=MES_TOKEN"], fetch: f }) }, secrets });
     expect(errors[0].message).toContain("***");
     expect(errors[0].message).not.toContain("s3cr3t");
     expect(JSON.stringify(context)).not.toContain("s3cr3t");
     expect(context.secrets).toBeUndefined();
   });
-  it("masks a secret's URL-encoded form too, when a fetch error embeds the built url", async () => {
+  it("rejects a secret in the url before any request, without leaking it", async () => {
     const encodedReport = parseReport({ id: "r2", version: 1, page: { width: 10, height: 10 }, params: [{ name: "no" }],
       datasets: [{ name: "orders", type: "http", url: "https://mes.example.com/o/{{ params.no }}?t={{ secrets.SPECIAL }}" }] });
     const specialSecrets = (name: string) => ({ SPECIAL: "a+b/c=" } as Record<string, string>)[name];
-    const f = fakeFetch((url) => { throw new Error("connect failed for " + url); });
-    const { errors } = await executeDatasets(encodedReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) }, secrets: specialSecrets });
+    const f = fakeFetch(() => json({}));
+    const { errors } = await executeDatasets(encodedReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com=SPECIAL"], fetch: f }) }, secrets: specialSecrets });
+    expect(errors[0].code).toBe("BAD_PARAM");
+    expect(f).not.toHaveBeenCalled();
     expect(errors[0].message).not.toContain("a+b/c=");
-    expect(errors[0].message).not.toContain("a%2Bb%2Fc%3D");
   });
-  it("masks secrets even when a header template fails to evaluate (syntax error)", async () => {
+  it("rejects a header template that uses secrets inside an expression, without leaking it", async () => {
     const badReport = parseReport({ id: "r3", version: 1, page: { width: 10, height: 10 }, params: [{ name: "no" }],
       datasets: [{ name: "orders", type: "http", url: "https://mes.example.com/o/{{ params.no }}", headers: { Authorization: "Bearer {{ secrets.MES_TOKEN + }}" } }] });
     const f = fakeFetch(() => json({}));
-    const { errors } = await executeDatasets(badReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) }, secrets });
-    expect(errors[0].code).toBe("HTTP_STATUS");
+    const { errors } = await executeDatasets(badReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com=MES_TOKEN"], fetch: f }) }, secrets });
+    expect(errors[0].code).toBe("BAD_PARAM");
     expect(errors[0].message).not.toContain("s3cr3t");
   });
 });

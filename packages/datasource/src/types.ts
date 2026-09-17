@@ -2,7 +2,7 @@ import type { FieldType } from "@daport/core";
 
 export type DatasetErrorCode =
   | "TIMEOUT" | "HOST_NOT_ALLOWED" | "HTTP_STATUS" | "BAD_JSON" | "ROWS_PATH" | "TOO_LARGE" | "TOO_MANY_ROWS"
-  | "SQL_NOT_CONFIGURED" | "SQL_ERROR" | "BAD_DATA";
+  | "SQL_NOT_CONFIGURED" | "SQL_ERROR" | "BAD_DATA" | "BAD_PARAM";
 export type DatasetError = { dataset: string; code: DatasetErrorCode; message: string };
 
 /** 데이터셋 하나의 실행 실패. executeDatasets가 errors 항목으로 바꾼다 */
@@ -16,7 +16,8 @@ export class DatasetFailure extends Error {
 export type Limits = { timeoutMs: number; maxBytes: number; maxRows: number };
 export const DEFAULT_LIMITS: Limits = { timeoutMs: 30_000, maxBytes: 20 * 1024 * 1024, maxRows: 10_000 };
 
-export type HttpRequest = { method: "GET" | "POST"; url: string; headers: Record<string, string>; body?: string };
+/** secretNames: 헤더·본문에 치환해 넣은 비밀값 이름. 커넥터는 이 이름들이 대상 호스트에 묶여 있을 때만 보낸다 */
+export type HttpRequest = { method: "GET" | "POST"; url: string; headers: Record<string, string>; body?: string; secretNames?: string[] };
 /** 파싱된 JSON을 돌려준다. 실패는 DatasetFailure */
 export interface HttpConnector { request(req: HttpRequest, limits: Limits): Promise<unknown> }
 

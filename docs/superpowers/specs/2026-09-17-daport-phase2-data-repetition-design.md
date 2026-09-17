@@ -137,7 +137,10 @@ apps/studio   + 데이터 패널, 필드 트리 드래그, 표·반복 영역 �
 ```
 
 - URL 템플릿 값은 `encodeURIComponent`로 인코딩한다. 헤더·본문 템플릿 값은 그대로 넣는다.
-- `secrets.이름`은 서버 전용 컨텍스트에서만 해석된다(5.4).
+- `url`은 스킴·호스트(·포트)를 리터럴로 쓰고 템플릿은 경로·쿼리에만 둔다. 치환 결과 경로에 `.`·`..` 조각이 생기면 `BAD_PARAM`.
+- 헤더 값의 CR·LF는 `BAD_PARAM`.
+- `body`는 JSON이어야 하며, 문자열 값 안의 템플릿만 평가한다(값 전체가 템플릿 하나면 원래 타입 유지). 파라미터 값이 JSON 구조를 깨뜨릴 수 없다. `content-type`이 없으면 `application/json`.
+- 비밀값은 표현식 컨텍스트에 **없다**. 헤더·본문 문자열 안의 `{{ secrets.NAME }}` 토큰만, 나머지 템플릿 평가가 끝난 뒤 그 자리에 치환한다. url의 비밀값, 식 안에서 `secrets`를 읽거나 가공하는 참조는 `BAD_PARAM`(2026-09-17 보안 수정: 인증 없는 요청 본문 레포트로 비밀값을 한 글자씩 알아내는 경로 차단).
 
 ### 4.8 필드 추론: `inferFields(rows, { sampleSize = 200 })`
 
@@ -218,12 +221,12 @@ executeDatasets(report, opts): Promise<{ context: DataContext; errors: DatasetEr
 - 파라미터는 core `resolveParams`로 정규화한다.
 - 데이터셋마다: `data[name]`이 있으면 그 값(객체면 `[객체]`로 감쌈). 없으면 type별 실행. `data`에만 있는 이름도 컨텍스트에 넣는다.
 - 결과 행은 core `rowsProxy`로 감싼다(1단계와 같은 `ds.FIELD` 접근).
-- 실패는 `errors`에 `{ dataset, message, code }`로 모은다. `code`: `TIMEOUT | HOST_NOT_ALLOWED | HTTP_STATUS | BAD_JSON | ROWS_PATH | TOO_LARGE | TOO_MANY_ROWS | SQL_NOT_CONFIGURED | SQL_ERROR`. 호출자가 실패를 치명으로 볼지 정한다(미리보기·PDF는 치명, 샘플은 부분 허용).
+- 실패는 `errors`에 `{ dataset, message, code }`로 모은다. `code`: `TIMEOUT | HOST_NOT_ALLOWED | HTTP_STATUS | BAD_JSON | ROWS_PATH | TOO_LARGE | TOO_MANY_ROWS | SQL_NOT_CONFIGURED | SQL_ERROR | BAD_DATA | BAD_PARAM`. 호출자가 실패를 치명으로 볼지 정한다(미리보기·PDF는 치명, 샘플은 부분 허용).
 
 ### 6.2 http 커넥터
 
 - 기본 구현은 전역 `fetch`를 쓴다. 테스트에서는 가짜 fetch를 주입한다.
-- 호스트 허용 목록: 환경변수 `DAPORT_HTTP_ALLOW`(쉼표 구분 호스트, `host:port` 허용). 비어 있으면 모든 http 데이터셋이 `HOST_NOT_ALLOWED`. 리다이렉트는 따라가지 않는다(`redirect: "manual"`, 3xx는 `HTTP_STATUS`).
+- 호스트 허용 목록: 환경변수 `DAPORT_HTTP_ALLOW`(쉼표 구분 `host[:port][=NAME|NAME]`). 비교는 hostname(소문자, 끝 점·IPv6 괄호 제거)과 포트(없으면 스킴 기본값)로 한다. 포트 없는 항목은 모든 포트를 허용한다. userinfo가 있는 URL과 http·https 외 스킴은 거부한다. 요청에 쓴 비밀값 이름이 그 호스트 항목에 묶여 있지 않으면 보내지 않고 `HOST_NOT_ALLOWED`. 비어 있으면 모든 http 데이터셋이 `HOST_NOT_ALLOWED`. 리다이렉트는 따라가지 않는다(`redirect: "manual"`, 3xx는 `HTTP_STATUS`).
 - 한도: 타임아웃 30초(`AbortSignal.timeout`), 응답 20MB(스트림을 읽으며 초과 시 중단), 1만 행.
 - `rowsPath`는 점 경로(`data.items`). 결과가 배열이 아니면 객체는 `[객체]`로 감싸고 그 밖은 `ROWS_PATH`.
 
