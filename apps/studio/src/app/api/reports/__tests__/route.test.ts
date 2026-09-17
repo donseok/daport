@@ -61,4 +61,14 @@ describe("reports API (memory store)", () => {
     expect(res.status).toBe(400);
     expect((await getReport(new Request(`${base}/r1`), ctx("r1"))).status).toBe(200); // untouched
   });
+
+  it("returns 413 for a 21MB body on POST and PUT, and 400 for a null or non-object body (Finding 4: sample.data가 커진 이후 두 라우트에도 20MB 한도)", async () => {
+    const big = `{"pad":"${"x".repeat(21 * 1024 * 1024)}"}`;
+    expect((await createReport(post(big))).status).toBe(413);
+    expect((await updateReport(put("r1", big), ctx("r1"))).status).toBe(413);
+    expect((await createReport(post("null"))).status).toBe(400);
+    expect((await createReport(post("5"))).status).toBe(400);
+    expect((await updateReport(put("r1", "null"), ctx("r1"))).status).toBe(400);
+    expect((await updateReport(put("r1", "5"), ctx("r1"))).status).toBe(400);
+  });
 });
