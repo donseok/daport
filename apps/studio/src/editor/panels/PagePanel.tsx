@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import type { Preset } from "@daport/core";
+import { OutputSchema } from "@daport/core";
 import { useEditor } from "../store";
 import { NumberField, TextField, CheckField, Field } from "./Field";
 import { defaultSource } from "./ElementPalette";
@@ -34,9 +35,11 @@ export function PagePanel() {
   useEffect(() => { void refresh(); }, []);
 
   const presets = [...BUILTIN_PRESETS, ...userPresets];
-  // 크기·여백·출력이 모두 같은 프리셋만 "선택됨"으로 본다
-  const current = presets.find((p) => samePage(p.page, page) && JSON.stringify(p.output) === JSON.stringify(report.output))?.id ?? "custom";
-  const options = ["custom", ...presets.map((p) => p.id)];
+  // 크기·여백·출력이 모두 같은 프리셋만 "선택됨"으로 본다.
+  // output은 필드 순서가 달라도(예: patch 병합 순서) 같은 값이면 같은 프리셋으로 인식하도록
+  // 비교 전에 OutputSchema로 정규화해 JSON.stringify의 키 순서 의존성을 없앤다.
+  const normalizeOutput = (o: Preset["output"]) => JSON.stringify(OutputSchema.parse(o));
+  const current = presets.find((p) => samePage(p.page, page) && normalizeOutput(p.output) === normalizeOutput(report.output))?.id ?? "custom";
   const labelOf = (id: string) => (id === "custom" ? "사용자 정의" : presets.find((p) => p.id === id)!.name);
 
   const save = async () => {
@@ -59,7 +62,13 @@ export function PagePanel() {
       <Field label="프리셋">
         <select aria-label="프리셋" value={current} className="w-full border rounded px-1 py-0.5"
           onChange={(e) => { const p = presets.find((x) => x.id === e.target.value); if (p) applyPreset(p); }}>
-          {options.map((id) => <option key={id} value={id}>{labelOf(id)}</option>)}
+          <option value="custom">{labelOf("custom")}</option>
+          <optgroup label="내장">
+            {BUILTIN_PRESETS.map((p) => <option key={p.id} value={p.id}>{labelOf(p.id)}</option>)}
+          </optgroup>
+          <optgroup label="사용자 정의">
+            {userPresets.map((p) => <option key={p.id} value={p.id}>{labelOf(p.id)}</option>)}
+          </optgroup>
         </select>
       </Field>
       {userPresets.some((p) => p.id === current) && <button className={btn + " self-start"} onClick={remove}>프리셋 삭제</button>}

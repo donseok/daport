@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { parseReport, ElementSchema, type Element } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../store";
 import { ElementPalette } from "../panels/ElementPalette";
@@ -86,12 +86,55 @@ describe("PagePanel presets", () => {
     const post = calls.find((c) => c.init?.method === "POST")!;
     expect(JSON.parse(String(post.init!.body))).toMatchObject({ id: "saved-one", name: "저장한 것", page: { width: 80, height: 50 } });
   });
+  it("groups builtin and user presets under separate optgroups", async () => {
+    const preset = { id: "my-tag", name: "내 Tag", page: { width: 80, height: 50, margin: [1, 1, 1, 1], unit: "mm" }, output: { kind: "pdf" }, builtin: false };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([preset]), { status: 200 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "내 Tag" })).toBeTruthy());
+    const select = screen.getByLabelText("프리셋") as HTMLSelectElement;
+    const groups = Array.from(select.querySelectorAll("optgroup"));
+    expect(groups.map((g) => g.label)).toEqual(["내장", "사용자 정의"]);
+    expect(within(groups[0]).getByRole("option", { name: "A4 세로" })).toBeTruthy();
+    expect(within(groups[1]).getByRole("option", { name: "내 Tag" })).toBeTruthy();
+  });
+  it("detects the current preset even when darkness/speed appear in a different key order after patch merging", async () => {
+    const preset = {
+      id: "tag-label", name: "라벨 태그",
+      page: { width: 100, height: 100, margin: [10, 10, 10, 10], unit: "mm" },
+      output: { kind: "label", label: { language: "zpl", dpi: 203, threshold: 128, darkness: 10, speed: 4, copies: 1 } },
+      builtin: false,
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([preset]), { status: 200 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByRole("option", { name: "라벨 태그" })).toBeTruthy());
+    fireEvent.change(screen.getByLabelText("프리셋"), { target: { value: "tag-label" } });
+    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("tag-label");
+    // OutputPanel의 { ...(label ?? DEFAULT_LABEL), ...patch } 병합처럼 필드 순서가 달라져도
+    // (darkness/speed 값 자체는 그대로) 여전히 같은 프리셋으로 인식돼야 한다
+    store.getState().setOutput({ kind: "label", label: { language: "zpl", dpi: 203, threshold: 128, copies: 1, speed: 4, darkness: 10 } });
+    expect((screen.getByLabelText("프리셋") as HTMLSelectElement).value).toBe("tag-label");
+  });
   it("shows an error when the initial preset list fails to load, but keeps builtin presets usable", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 500 })));
     const store = createEditorStore(report);
     mount(store, <PagePanel />);
     await waitFor(() => expect(screen.getByText("프리셋 목록을 불러오지 못했습니다")).toBeTruthy());
     expect(screen.getByRole("option", { name: "A4 세로" })).toBeTruthy();
+  });
+});
+
+describe("PagePanel size guards", () => {
+  it("ignores empty or non-positive size input instead of committing it", () => {
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    const before = store.getState().history.past.length;
+    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText("너비(mm)"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "-5" } });
+    expect(store.getState().report.page).toMatchObject({ width: 100, height: 100 });
+    expect(store.getState().history.past.length).toBe(before);
   });
 });
 
