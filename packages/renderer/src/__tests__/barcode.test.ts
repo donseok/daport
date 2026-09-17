@@ -27,7 +27,8 @@ describe("renderBarcode", () => {
     expect(() => renderBarcode("code128", "", opts)).toThrow(BarcodeError);
     expect(() => renderBarcode("ean13", "4006381333930", opts)).toThrow(BarcodeError);
     expect(() => renderBarcode("code39", "abc", opts)).toThrow(BarcodeError);
-    try { renderBarcode("ean13", "12", opts); } catch (e) { expect(e).toMatchObject({ name: "BarcodeError", format: "ean13", value: "12" }); }
+    expect(() => renderBarcode("ean13", "12", opts))
+      .toThrow(expect.objectContaining({ name: "BarcodeError", format: "ean13", value: "12" }));
   });
 });
 

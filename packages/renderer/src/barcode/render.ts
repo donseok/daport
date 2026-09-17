@@ -31,6 +31,8 @@ export function renderBarcode(format: BarcodeFormat, value: string, opts: Barcod
       bcid: BCID[format], text: value, scale: 2,
       // 1D 모듈 높이(mm 단위 bwip 기본). 상자에 맞춰 늘리므로 비율만 의미 있다. bwip-js는 height:undefined도 거부하므로 2D는 키 자체를 뺀다
       ...(is2d ? {} : { height: 10 }),
+      // textsize는 bwip-js 좌표계(스케일 2) 기준 값이다. 1D 포맷은 SVG가 preserveAspectRatio="none"으로
+      // 상자에 맞춰 늘어나므로, 실제 렌더링된 글자 크기는 절대 포인트가 아니라 바코드 높이 대비 비율로 동작한다.
       includetext: !is2d && opts.showText, textxalign: "center", textsize: opts.fontSize,
     });
   } catch (e) {
