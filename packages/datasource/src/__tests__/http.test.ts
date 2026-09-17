@@ -101,4 +101,21 @@ describe("executeDatasets http", () => {
     expect(JSON.stringify(context)).not.toContain("s3cr3t");
     expect(context.secrets).toBeUndefined();
   });
+  it("masks a secret's URL-encoded form too, when a fetch error embeds the built url", async () => {
+    const encodedReport = parseReport({ id: "r2", version: 1, page: { width: 10, height: 10 }, params: [{ name: "no" }],
+      datasets: [{ name: "orders", type: "http", url: "https://mes.example.com/o/{{ params.no }}?t={{ secrets.SPECIAL }}" }] });
+    const specialSecrets = (name: string) => ({ SPECIAL: "a+b/c=" } as Record<string, string>)[name];
+    const f = fakeFetch((url) => { throw new Error("connect failed for " + url); });
+    const { errors } = await executeDatasets(encodedReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) }, secrets: specialSecrets });
+    expect(errors[0].message).not.toContain("a+b/c=");
+    expect(errors[0].message).not.toContain("a%2Bb%2Fc%3D");
+  });
+  it("masks secrets even when a header template fails to evaluate (syntax error)", async () => {
+    const badReport = parseReport({ id: "r3", version: 1, page: { width: 10, height: 10 }, params: [{ name: "no" }],
+      datasets: [{ name: "orders", type: "http", url: "https://mes.example.com/o/{{ params.no }}", headers: { Authorization: "Bearer {{ secrets.MES_TOKEN + }}" } }] });
+    const f = fakeFetch(() => json({}));
+    const { errors } = await executeDatasets(badReport, { params: { no: "A" }, connectors: { http: createFetchHttpConnector({ allow: ["mes.example.com"], fetch: f }) }, secrets });
+    expect(errors[0].code).toBe("HTTP_STATUS");
+    expect(errors[0].message).not.toContain("s3cr3t");
+  });
 });

@@ -17,14 +17,20 @@ export function maskSecrets(message: string, values: string[]): string {
   return out;
 }
 
+/** url·헤더·본문 템플릿에 나오는 secrets.NAME 참조만 미리 읽어 평탄한 객체로 만든다. 없는 이름은 "" */
+export function referencedSecrets(ds: HttpDataset, secrets: SecretResolver): Record<string, string> {
+  const templates = [ds.url, ...Object.values(ds.headers), ds.body ?? ""];
+  const secretObj: Record<string, string> = {};
+  for (const t of templates) for (const m of t.matchAll(SECRET_REF_RE)) secretObj[m[1]] = secrets(m[1]) ?? "";
+  return secretObj;
+}
+
 /**
  * 데이터셋 정의와 파라미터로 요청을 만든다. URL 템플릿 값은 encodeURIComponent, 헤더·본문은 그대로.
  * secrets는 템플릿에 나오는 이름만 미리 읽어 평탄한 객체로 넣는다(레이아웃 컨텍스트에는 절대 들어가지 않는다)
  */
 export function buildHttpRequest(ds: HttpDataset, params: Record<string, unknown>, secrets: SecretResolver): { request: HttpRequest; usedSecrets: string[] } {
-  const templates = [ds.url, ...Object.values(ds.headers), ds.body ?? ""];
-  const secretObj: Record<string, string> = {};
-  for (const t of templates) for (const m of t.matchAll(SECRET_REF_RE)) secretObj[m[1]] = secrets(m[1]) ?? "";
+  const secretObj = referencedSecrets(ds, secrets);
   const tctx = { params, secrets: secretObj };
   const str = (v: unknown) => (v === null || v === undefined ? "" : String(v));
   const url = ds.url.replace(TEMPLATE_RE, (_m, expr: string) => encodeURIComponent(str(evaluate(expr, tctx))));
@@ -108,11 +114,15 @@ export function createFetchHttpConnector(opts: { allow: string[]; fetch?: typeof
 
 export async function runHttp(ds: HttpDataset, params: Record<string, unknown>, connectors: Connectors, secrets: SecretResolver, limits: Limits): Promise<Record<string, unknown>[]> {
   if (!connectors.http) throw new DatasetFailure("HOST_NOT_ALLOWED", "http connector not configured");
-  const { request, usedSecrets } = buildHttpRequest(ds, params, secrets);
+  const secretObj = referencedSecrets(ds, secrets);
+  // URL 템플릿 값은 encodeURIComponent를 거치므로 원본 값과 인코딩된 형태를 모두 마스킹 대상에 넣는다
+  const masks = [...new Set(Object.values(secretObj).filter((v) => v !== "").flatMap((v) => [v, encodeURIComponent(v)]))];
   try {
+    // buildHttpRequest도 try 안에서 호출한다 — 템플릿 평가 실패(ExpressionError)도 비밀값을 담을 수 있으므로 마스킹 대상이다(HTTP_STATUS로 분류)
+    const { request } = buildHttpRequest(ds, params, secrets);
     return pickRows(await connectors.http.request(request, limits), ds.rowsPath);
   } catch (e) {
-    const message = maskSecrets(e instanceof Error ? e.message : String(e), usedSecrets);
+    const message = maskSecrets(e instanceof Error ? e.message : String(e), masks);
     throw new DatasetFailure(e instanceof DatasetFailure ? e.code : "HTTP_STATUS", message);
   }
 }
