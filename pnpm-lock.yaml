@@ -146,9 +146,6 @@ importers:
       pdf-to-img:
         specifier: ^4.4.0
         version: 4.5.0
-      pixelmatch:
-        specifier: ^7.1.0
-        version: 7.2.0
 
   packages/pdf:
     dependencies:
@@ -158,9 +155,6 @@ importers:
       '@daport/renderer':
         specifier: workspace:*
         version: link:../renderer
-      playwright:
-        specifier: ^1.55.0
-        version: 1.63.0
     devDependencies:
       '@daport/core':
         specifier: workspace:*

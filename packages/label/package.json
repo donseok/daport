@@ -15,7 +15,6 @@
     "@daport/core": "workspace:*",
     "@daport/pdf": "workspace:*",
     "@types/pngjs": "^6.0.5",
-    "pdf-to-img": "^4.4.0",
-    "pixelmatch": "^7.1.0"
+    "pdf-to-img": "^4.4.0"
   }
 }

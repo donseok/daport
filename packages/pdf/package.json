@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "@daport/browser": "workspace:*",
-    "@daport/renderer": "workspace:*",
-    "playwright": "^1.55.0"
+    "@daport/renderer": "workspace:*"
   },
   "devDependencies": {
     "@daport/core": "workspace:*",
