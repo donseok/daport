@@ -2,7 +2,8 @@ import type { ComponentBody } from "./component";
 
 /**
  * 정규 JSON: 객체 키를 코드 단위 순서로 정렬하고 값이 undefined인 속성을 지우며 배열 순서는 유지한다.
- * 배열 안의 undefined·함수는 JSON.stringify와 같게 null로 쓴다. 해시 입력이므로 공백을 넣지 않는다
+ * 배열 안의 undefined·함수는 JSON.stringify와 같게 null로 쓴다. 해시 입력이므로 공백을 넣지 않는다.
+ * plain 객체·배열·스칼라만 지원한다. Date·Map·Set은 `{}`가 되고 `toJSON`은 호출하지 않는다
  */
 export function canonicalJson(value: unknown): string {
   if (value === null || typeof value !== "object") {

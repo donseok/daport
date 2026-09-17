@@ -15,3 +15,6 @@ export * from "./expression/template";
 export * from "./expression/source";
 export * from "./data/resolve";
 export * from "./data/infer";
+export * from "./ops/geometry";
+export * from "./ops/components";
+export * from "./ops/group";
