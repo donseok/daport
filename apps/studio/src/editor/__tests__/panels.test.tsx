@@ -86,6 +86,13 @@ describe("PagePanel presets", () => {
     const post = calls.find((c) => c.init?.method === "POST")!;
     expect(JSON.parse(String(post.init!.body))).toMatchObject({ id: "saved-one", name: "저장한 것", page: { width: 80, height: 50 } });
   });
+  it("shows an error when the initial preset list fails to load, but keeps builtin presets usable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, { status: 500 })));
+    const store = createEditorStore(report);
+    mount(store, <PagePanel />);
+    await waitFor(() => expect(screen.getByText("프리셋 목록을 불러오지 못했습니다")).toBeTruthy());
+    expect(screen.getByRole("option", { name: "A4 세로" })).toBeTruthy();
+  });
 });
 
 describe("palette (phase 2)", () => {

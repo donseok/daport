@@ -25,10 +25,11 @@ export function PagePanel() {
   const refresh = async () => {
     try {
       const r = await fetch("/api/presets");
-      if (!r.ok) return;
+      if (!r.ok) { setError("프리셋 목록을 불러오지 못했습니다"); return; }
       const list = (await r.json()) as Preset[];
       setUserPresets(list.filter((p) => !p.builtin));
-    } catch { /* 목록을 못 받아도 내장 프리셋은 쓸 수 있다 */ }
+      setError(null);
+    } catch { setError("프리셋 목록을 불러오지 못했습니다"); }   // 목록을 못 받아도 내장 프리셋은 쓸 수 있다
   };
   useEffect(() => { void refresh(); }, []);
 
