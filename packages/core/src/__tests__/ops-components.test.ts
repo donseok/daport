@@ -11,20 +11,26 @@ const hdrV1: ComponentBody = {
   elements: [ElementSchema.parse({ id: "t", type: "text", x: 0, y: 0, w: 180, h: 10, value: "{{ props.title }}" })],
 };
 const hdrV2: ComponentBody = {
-  name: "헤더", w: 180, h: 30,
+  name: "헤더", w: 170, h: 30,
   props: [{ name: "title", type: "string", default: "제목" }],
-  elements: [ElementSchema.parse({ id: "t", type: "text", x: 0, y: 0, w: 180, h: 12, value: "{{ props.title }}" })],
+  elements: [ElementSchema.parse({ id: "t", type: "text", x: 0, y: 0, w: 170, h: 12, value: "{{ props.title }}" })],
 };
 const sign: ComponentBody = { name: "서명", w: 50, h: 20, props: [], elements: [ElementSchema.parse({ id: "s", type: "rect", x: 0, y: 0, w: 50, h: 20 })] };
+/** 그룹 안에서만 쓰인다 */
+const badge: ComponentBody = { name: "배지", w: 30, h: 12, props: [], elements: [ElementSchema.parse({ id: "b", type: "rect", x: 0, y: 0, w: 30, h: 12 })] };
+/** 반복 영역 템플릿 안에서만 쓰인다 */
+const cell: ComponentBody = { name: "칸", w: 40, h: 16, props: [], elements: [ElementSchema.parse({ id: "c", type: "rect", x: 0, y: 0, w: 40, h: 16 })] };
 
 function sample(): Report {
-  return parseReport({ id: "r", page, components: { "hdr@1": hdrV1, "sign@1": sign, "sign@2": sign }, elements: [
+  return parseReport({ id: "r", page, components: { "hdr@1": hdrV1, "sign@1": sign, "sign@2": sign, "badge@1": badge, "cell@1": cell }, elements: [
     { id: "top", type: "ref", ref: "hdr", version: 1, x: 15, y: 10, w: 180, h: 24, props: { title: "{{ record.T }}", showLogo: false } },
     { id: "g", type: "group", x: 0, y: 100, w: 200, h: 50, children: [
       { id: "inner", type: "ref", ref: "hdr", version: 1, x: 5, y: 5, w: 180, h: 24, props: { showLogo: true } },
+      { id: "group-badge", type: "ref", ref: "badge", version: 1, x: 150, y: 30, w: 30, h: 12 },
     ]},
     { id: "cards", type: "repeater", x: 0, y: 160, w: 200, h: 100, source: "rows", item: { w: 190, h: 30, children: [
       { id: "card-hdr", type: "ref", ref: "hdr", version: 1, x: 0, y: 0, w: 180, h: 24 },
+      { id: "row-cell", type: "ref", ref: "cell", version: 1, x: 140, y: 0, w: 40, h: 16 },
     ]}},
     { id: "sig", type: "ref", ref: "sign", version: 1, x: 150, y: 270, w: 50, h: 20 },
   ]});
@@ -47,14 +53,14 @@ describe("upgradeRefs", () => {
   it("rule 2: moves every instance to the new version and size, keeps declared values and drops undeclared ones", () => {
     const out = upgradeRefs(sample(), "hdr", 2, hdrV2);
     const refs = refsTo(out, "hdr");
-    expect(refs.map((r) => [r.id, r.version, r.w, r.h])).toEqual([["top", 2, 180, 30], ["inner", 2, 180, 30], ["card-hdr", 2, 180, 30]]);
+    expect(refs.map((r) => [r.id, r.version, r.w, r.h])).toEqual([["top", 2, 170, 30], ["inner", 2, 170, 30], ["card-hdr", 2, 170, 30]]);
     expect(refs[0].props).toEqual({ title: "{{ record.T }}" });   // showLogo는 v2 선언에 없다
     expect(refs[1].props).toEqual({});
     expect(refs[0]).toMatchObject({ x: 15, y: 10 });                // 위치는 그대로
   });
   it("rule 3: removes old versions of this component only, leaving other components' entries (even unused ones)", () => {
     const out = upgradeRefs(sample(), "hdr", 2, hdrV2);
-    expect(Object.keys(out.components).sort()).toEqual(["hdr@2", "sign@1", "sign@2"]);
+    expect(Object.keys(out.components).sort()).toEqual(["badge@1", "cell@1", "hdr@2", "sign@1", "sign@2"]);
     expect(refsTo(out, "sign")[0]).toMatchObject({ version: 1, w: 50, h: 20 });
   });
   it("does not mutate the input report and the result passes the report schema", () => {
@@ -74,13 +80,16 @@ describe("upgradeRefs", () => {
 describe("pruneComponents", () => {
   it("drops entries no ref points at, including refs inside groups and repeater templates", () => {
     const out = pruneComponents(sample());
-    expect(Object.keys(out.components).sort()).toEqual(["hdr@1", "sign@1"]);
+    // badge@1은 그룹 안에서만, cell@1은 반복 영역 템플릿 안에서만 쓰인다(최상위에는 없다)
+    expect(Object.keys(out.components).sort()).toEqual(["badge@1", "cell@1", "hdr@1", "sign@1"]);
+    expect(out.components["badge@1"]).toEqual(badge);
+    expect(out.components["cell@1"]).toEqual(cell);
   });
   it("returns a new report without touching the input", () => {
     const input = sample();
     const out = pruneComponents(input);
     expect(out).not.toBe(input);
-    expect(Object.keys(input.components).sort()).toEqual(["hdr@1", "sign@1", "sign@2"]);
+    expect(Object.keys(input.components).sort()).toEqual(["badge@1", "cell@1", "hdr@1", "sign@1", "sign@2"]);
   });
   it("empties components when there are no refs", () => {
     const r = parseReport({ id: "r", page, components: { "sign@1": sign }, elements: [{ id: "a", type: "rect", x: 0, y: 0, w: 1, h: 1 }] });
