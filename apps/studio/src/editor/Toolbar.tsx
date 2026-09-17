@@ -4,6 +4,9 @@ import { requestBody } from "@/lib/data";
 import { EditorContext, useEditor } from "./store";
 import { PageSelector } from "./PageSelector";
 import { MakeComponentDialog, makeComponentCheck } from "./library/MakeComponentDialog";
+import { editReportToComponent, samplePropsContext } from "@/lib/component-edit";
+import { saveComponent, fetchUsage, applyLatest } from "./library/api";
+import type { Usage } from "@/lib/component-usage";
 
 /** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
 async function failureMessage(r: Response, label: string): Promise<string> {
@@ -26,12 +29,18 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const setLiveData = useEditor((s) => s.setLiveData);
   const bitmapPreview = useEditor((s) => s.bitmapPreview);
   const setBitmapPreview = useEditor((s) => s.setBitmapPreview);
-  const isLabel = report.output.kind === "label";
   const selection = useEditor((s) => s.selection);
   const componentMode = useEditor((s) => s.componentMode);
+  // 컴포넌트 편집 화면에서는 라벨·PDF 동작을 두지 않는다 (편집용 레포트의 출력 설정은 저장되지 않는다)
+  const isLabel = report.output.kind === "label" && !componentMode;
+  const sampleProps = componentMode ? samplePropsContext(componentMode) : undefined;
   // 스펙 7.3: 조건이 안 맞으면 비활성, 사유는 툴팁
   const makeCheck = makeComponentCheck(report, selection, !!componentMode);
   const [making, setMaking] = useState(false);
+  /** 컴포넌트 저장 결과("v6 저장됨"·"변경 없음")와 저장 뒤 사용처 (스펙 7.5) */
+  const [componentStatus, setComponentStatus] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Usage[] | null>(null);
+  const [applying, setApplying] = useState(false);
   const [printers, setPrinters] = useState<string[]>([]);
   const [printer, setPrinter] = useState("");
   const [printing, setPrinting] = useState(false);
@@ -62,6 +71,44 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
       setSaving(false);
     }
   };
+  /** 컴포넌트 모드 저장: PUT /api/components/:id. 같은 내용이면 서버가 버전을 올리지 않는다(created: false) */
+  const saveComponentVersion = async () => {
+    const mode = store.getState().componentMode;
+    if (!mode) return;
+    const saved = store.getState().report;
+    setSaving(true);
+    setComponentStatus(null);
+    try {
+      const res = await saveComponent(mode.componentId, editReportToComponent(saved, mode.props));
+      markSaved(saved);
+      const now = store.getState().componentMode;
+      if (now) {
+        // 요청 중에 입력값 선언을 고쳤으면 그 변경은 저장되지 않았다. markSaved는 report만 비교하므로 여기서 dirty로 남긴다
+        store.setState({ componentMode: { ...now, version: res.version }, ...(now.props !== mode.props ? { dirty: true } : {}) });
+      }
+      setComponentStatus(res.created ? `v${res.version} 저장됨` : "변경 없음");
+      setUsage(await fetchUsage(mode.componentId).catch(() => null));
+    } catch (e) {
+      alert(`저장 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+  const applyAll = async () => {
+    const mode = store.getState().componentMode;
+    if (!mode || !usage) return;
+    if (!confirm(`${usage.length}개 레포트의 인스턴스를 v${mode.version}(최신)으로 올립니다. 계속할까요?`)) return;
+    setApplying(true);
+    try {
+      const res = await applyLatest(mode.componentId);
+      alert([`${res.updated.length}개 레포트에 적용했습니다`, ...res.skipped.map((s) => `건너뜀 ${s.reportId}: ${s.error}`)].join("\n"));
+      setUsage(await fetchUsage(mode.componentId).catch(() => usage));
+    } catch (e) {
+      alert(`적용 실패: ${e instanceof Error ? e.message : String(e)}`);
+    } finally {
+      setApplying(false);
+    }
+  };
   /** 응답을 파일로 내려받는다 (PDF·라벨 공용). 파일 이름은 content-disposition, 없으면 fallback */
   const download = async (r: Response, fallback: string) => {
     const cd = r.headers.get("content-disposition") ?? "";
@@ -75,7 +122,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
     setExporting(true);
     try {
       const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/pdf`, { method: "POST", headers: { "content-type": "application/json" },
-        body: JSON.stringify(requestBody(report, liveData)) });
+        body: JSON.stringify(requestBody(report, liveData, sampleProps)) });
       if (!r.ok) { alert(await failureMessage(r, "PDF")); return; }
       await download(r, `${report.name || report.id}.pdf`);
     } catch (e) {
@@ -87,7 +134,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const label = async () => {
     setExporting(true);
     try {
-      const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/label`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(requestBody(report, liveData)) });
+      const r = await fetch(`/api/reports/${encodeURIComponent(reportId)}/label`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(requestBody(report, liveData, sampleProps)) });
       if (!r.ok) { alert(await failureMessage(r, "라벨")); return; }
       await download(r, `${report.id}.zpl`);
     } catch (e) { alert(`라벨 실패: ${e instanceof Error ? e.message : String(e)}`); }
@@ -96,7 +143,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   const print = async () => {
     setPrinting(true);
     try {
-      const r = await fetch("/api/print", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ printer, ...requestBody(report, liveData) }) });
+      const r = await fetch("/api/print", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ printer, ...requestBody(report, liveData, sampleProps) }) });
       if (!r.ok) { alert(await failureMessage(r, "인쇄")); return; }
       const res = (await r.json()) as { printer: string; bytes: number; pages: number };
       alert(`${res.printer}로 ${res.pages}장(${res.bytes} bytes) 보냈습니다`);
@@ -107,6 +154,7 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
   return (
     <div className="flex items-center gap-2 px-3 py-2 border-b bg-white">
       <span className="font-semibold text-sm">{report.name || report.id}{dirty ? " *" : ""}</span>
+      {componentMode && <span data-testid="component-version" className="text-xs text-neutral-500">{`v${componentMode.version} (저장하면 v${componentMode.version + 1})`}</span>}
       <button className={btn} onClick={undo}>되돌리기</button>
       <button className={btn} onClick={redo}>다시하기</button>
       <button className={btn} onClick={() => setMode(mode === "design" ? "preview" : "design")}>{mode === "design" ? "미리보기" : "디자인"}</button>
@@ -124,8 +172,13 @@ export function Toolbar({ reportId, zoom, setZoom }: { reportId: string; zoom: n
         </>}
         <button className={btn} disabled={exporting} onClick={label} data-testid="label-download">라벨 다운로드</button>
       </>}
-      <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>
-      <button className={btn} disabled={saving || !dirty} onClick={save} data-testid="save">저장</button>
+      {!componentMode && <button className={btn} disabled={exporting} onClick={pdf}>PDF</button>}
+      {componentMode && componentStatus && <span data-testid="component-status" className="text-xs text-neutral-600">{componentStatus}</span>}
+      {componentMode && usage && <>
+        <span data-testid="component-usage" className="text-xs text-neutral-600">사용하는 레포트 {usage.length}개</span>
+        <button className={btn} disabled={applying || usage.length === 0} onClick={applyAll}>모든 레포트에 최신 적용</button>
+      </>}
+      <button className={btn} disabled={saving || !dirty} onClick={componentMode ? saveComponentVersion : save} data-testid="save">저장</button>
     </div>
   );
 }
