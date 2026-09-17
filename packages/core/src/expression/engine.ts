@@ -25,6 +25,20 @@ const FORBIDDEN_KEYS = new Set<PropertyKey>(["constructor", "__proto__", "protot
 
 function toNumber(v: unknown): number { const n = Number(v); return Number.isFinite(n) ? n : 0; }
 
+/** 숫자로 볼 수 있는 값만 모은다. null·undefined·빈 문자열·불리언·NaN 문자열은 건너뛴다 (sum과 달리 0으로 세지 않는다) */
+function numericValues(rows: unknown, field: string): number[] {
+  if (!Array.isArray(rows)) return [];
+  const key = checkKey(field) as string;
+  const out: number[] = [];
+  for (const r of rows) {
+    const v = (r as Record<string, unknown> | null | undefined)?.[key];
+    if (v === null || v === undefined || v === "" || typeof v === "boolean") continue;
+    const n = Number(v);
+    if (Number.isFinite(n)) out.push(n);
+  }
+  return out;
+}
+
 export function formatNumber(value: unknown, pattern = "#,##0"): string {
   const n = toNumber(value);
   const dec = pattern.includes(".") ? pattern.split(".")[1].length : 0;
@@ -75,6 +89,9 @@ function createJexl(): JexlInstance {
   j.addFunction("sum", (rows: unknown, field: string) =>
     Array.isArray(rows) ? rows.reduce((a, r) => a + toNumber((r as Record<string, unknown>)?.[checkKey(field) as string]), 0) : 0);
   j.addFunction("count", (rows: unknown) => (Array.isArray(rows) ? rows.length : 0));
+  j.addFunction("avg", (rows: unknown, field: string) => { const ns = numericValues(rows, field); return ns.length ? ns.reduce((a, b) => a + b, 0) / ns.length : null; });
+  j.addFunction("min", (rows: unknown, field: string) => { const ns = numericValues(rows, field); return ns.length ? Math.min(...ns) : null; });
+  j.addFunction("max", (rows: unknown, field: string) => { const ns = numericValues(rows, field); return ns.length ? Math.max(...ns) : null; });
   j.addFunction("formatNumber", formatNumber);
   j.addFunction("formatDate", formatDate);
   j.addFunction("pad", (v: unknown, len: number, ch = " ") => {
@@ -88,6 +105,22 @@ function createJexl(): JexlInstance {
 }
 
 const engine = createJexl();
+
+type Compiled = ReturnType<JexlInstance["compile"]>;
+const MAX_CACHE = 2000;
+/** 표현식 문자열 → guardAst를 거친 컴파일 결과. jexl Expression은 AST를 한 번만 만들고 재사용하므로 행 1만 건도 파싱은 한 번이다 */
+const compiled = new Map<string, Compiled>();
+
+function compileCached(expression: string): Compiled {
+  let c = compiled.get(expression);
+  if (!c) {
+    c = engine.compile(expression);   // 구문 오류를 확실히 던지게 한다
+    guardAst(c._getAst());            // 금지 노드는 여기서 던지고, 필터 키 검사는 AST에 남는다
+    if (compiled.size >= MAX_CACHE) compiled.clear();
+    compiled.set(expression, c);
+  }
+  return c;
+}
 
 /**
  * 컴파일된 AST를 검사하고 고친다. jexl이 속성을 읽는 경로는 두 가지뿐이다.
@@ -155,9 +188,7 @@ export function evaluate(expression: string, context: DataContext): unknown {
   }
   let result: unknown;
   try {
-    const compiled = engine.compile(expression);   // 구문 오류를 확실히 던지게 한다
-    guardAst(compiled._getAst());
-    result = compiled.evalSync(context);
+    result = compileCached(expression).evalSync(context);
   } catch (e) {
     throw new ExpressionError(expression, e);
   }

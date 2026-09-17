@@ -8,4 +8,5 @@ export * from "./schema/report";
 export * from "./schema/json-schema";
 export * from "./expression/engine";
 export * from "./expression/template";
+export * from "./expression/source";
 export * from "./data/resolve";
