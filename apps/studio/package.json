@@ -19,6 +19,7 @@
     "@daport/datasource": "workspace:*",
     "@daport/renderer": "workspace:*",
     "@daport/pdf": "workspace:*",
+    "@daport/label": "workspace:*",
     "@neondatabase/serverless": "^1.0.0",
     "@vercel/blob": "^1.1.0",
     "drizzle-orm": "^0.44.0",

@@ -26,6 +26,9 @@ importers:
       '@daport/datasource':
         specifier: workspace:*
         version: link:../../packages/datasource
+      '@daport/label':
+        specifier: workspace:*
+        version: link:../../packages/label
       '@daport/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
