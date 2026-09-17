@@ -167,6 +167,21 @@ describe("MakeComponentDialog", () => {
     await waitFor(() => expect(screen.getByRole("alert").textContent!.length).toBeGreaterThan(0));
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  it("keeps the dialog open with the reason when the canvas replacement fails after registration", async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((r) => { release = r; });
+    vi.stubGlobal("fetch", vi.fn(async () => { await gate; return Response.json({ version: 1, hash: "h1" }); }));
+    const { store, onClose } = open(["a", "b"]);
+    fireEvent.change(input("이름"), { target: { value: "Company Header" } });
+    fireEvent.click(makeButton());
+    // 등록 요청이 도는 사이 선택 요소가 사라지면 캔버스 치환이 실패한다 (라이브러리에는 이미 등록되어 있다)
+    act(() => { store.getState().select(["a"]); store.getState().deleteSelected(); });
+    await act(async () => { release(); });
+    await waitFor(() => expect(screen.getByRole("alert").textContent!.length).toBeGreaterThan(0));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(store.getState().findElement("company-header-1")).toBeUndefined();
+  });
 });
 
 describe("Toolbar 컴포넌트로 만들기", () => {

@@ -58,7 +58,9 @@ export function MakeComponentDialog({ onClose }: { onClose: () => void }) {
     setBusy(true); setError(null);
     try {
       const created = await createComponent(id, body);
-      store.getState().replaceWithComponent(ids, id, created.version, body, box);
+      // 등록은 끝났다. 그 사이 선택 요소가 바뀌어 치환이 안 되면 대화상자를 닫지 않고 사유를 보인다 (쓰이지 않는 컴포넌트가 라이브러리에 남는다)
+      const res = store.getState().replaceWithComponent(ids, id, created.version, body, box);
+      if (!res.ok) { setError(`${id}는 라이브러리에 만들었지만 캔버스를 바꾸지 못했습니다: ${res.error}`); return; }
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));

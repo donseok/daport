@@ -63,8 +63,11 @@ export type EditorState = {
   insertComponent(id: string, version: number, body: ComponentBody, x: number, y: number): void;
   /** 이 레포트의 인스턴스를 모두 version으로 올린다(core upgradeRefs, 스펙 7.2) */
   updateInstances(id: string, version: number, body: ComponentBody): void;
-  /** 선택 요소들을 부모 배열에서 지우고 첫 선택 자리에 ref(box 위치)를 넣는다(스펙 7.3의 4). 조건이 안 맞으면 아무것도 하지 않는다 */
-  replaceWithComponent(ids: string[], id: string, version: number, body: ComponentBody, box: Box): void;
+  /**
+   * 선택 요소들을 부모 배열에서 지우고 첫 선택 자리에 ref(box 위치)를 넣는다(스펙 7.3의 4).
+   * 조건이 안 맞으면 아무것도 하지 않고 사유를 돌려준다 — 호출자(대화상자)는 이미 라이브러리에 등록한 뒤라 실패를 알아야 한다
+   */
+  replaceWithComponent(ids: string[], id: string, version: number, body: ComponentBody, box: Box): ActionResult;
   groupSelected(): ActionResult;
   ungroupSelected(): ActionResult;
 };
@@ -220,11 +223,15 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         r.elements = next.elements; r.components = next.components;
       }),
       replaceWithComponent: (ids, id, version, body, box) => {
-        if (get().componentMode) return;   // 스펙 4.1·7.5: 중첩 컴포넌트 금지
+        // 스펙 4.1·7.5: 중첩 컴포넌트 금지
+        if (get().componentMode) return { ok: false, error: "컴포넌트 편집 화면에서는 컴포넌트를 만들 수 없습니다" };
+        const opts = { allowInTemplate: false, allowRefs: false };
+        const check = sameParent(get().report.elements, ids, opts);
+        if ("error" in check) return { ok: false, error: check.error };
         const refId = get().allocateId(id);
         let replaced = false;
         apply((r) => {
-          const info = sameParent(r.elements, ids, { allowInTemplate: false, allowRefs: false });
+          const info = sameParent(r.elements, ids, opts);
           if ("error" in info) return;
           const ref = ElementSchema.parse({ id: refId, type: "ref", ref: id, version, x: box.x, y: box.y, w: body.w, h: body.h, flow: "once", props: {} });
           for (const i of [...info.indices].reverse()) info.parent.splice(i, 1);
@@ -232,7 +239,9 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
           r.components[componentKey(id, version)] = structuredClone(body);
           replaced = true;
         });
-        if (replaced) set({ selection: [refId] });
+        if (!replaced) return { ok: false, error: "선택한 요소를 바꾸지 못했습니다" };
+        set({ selection: [refId] });
+        return { ok: true };
       },
       groupSelected: () => {
         const { report, selection } = get();

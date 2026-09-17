@@ -365,6 +365,16 @@ describe("editor store (phase 3b: components)", () => {
     expect(s.getState().report.components).toEqual({});
   });
 
+  it("replaceWithComponent reports success or the reason it did nothing", () => {
+    const s = createEditorStore(rep);
+    const { body, box } = extractComponent(s.getState().report.elements, ["l", "a"], "머리");
+    const bad = s.getState().replaceWithComponent(["a", "b"], "x", 1, body, box);   // 부모가 다르다
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.error.length).toBeGreaterThan(0);
+    expect(s.getState().history.past).toHaveLength(0);
+    expect(s.getState().replaceWithComponent(["l", "a"], "head", 1, body, box)).toEqual({ ok: true });
+  });
+
   it("replaceWithComponent replaces group children inside their group and ignores selections that break the rules", () => {
     const s = createEditorStore(rep);
     const { body, box } = extractComponent((s.getState().findElement("g") as Extract<Element, { type: "group" }>).children, ["b"], "상자");
@@ -484,7 +494,9 @@ describe("component mode guards (중첩 금지, 스펙 4.1·7.5)", () => {
   it("ignores insertComponent and replaceWithComponent while editing a component", () => {
     const s = createEditorStore(report, { componentMode: mode });
     s.getState().insertComponent("hdr", 1, body, 10, 10);
-    s.getState().replaceWithComponent(["a"], "hdr", 1, body, { x: 10, y: 10, w: 20, h: 5 });
+    const res = s.getState().replaceWithComponent(["a"], "hdr", 1, body, { x: 10, y: 10, w: 20, h: 5 });
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.error).toContain("컴포넌트");
     expect(s.getState().report).toBe(report);
     expect(s.getState().history.past).toHaveLength(0);
   });
