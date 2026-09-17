@@ -9,6 +9,10 @@ export * from "./flow/types";
 export * from "./flow/paginate";
 export * from "./flow/groups";
 export * from "./flow/table";
+export * from "./layout/place";
+export * from "./flow/paint";
+export * from "./flow/children";
+export * from "./flow/repeater";
 export * from "./paint/css";
 export * from "./html";
 // pdf 등 renderer 소비자가 core에 직접 의존하지 않도록 모델·데이터 타입을 함께 내보낸다 (스펙 3장 의존 방향)
