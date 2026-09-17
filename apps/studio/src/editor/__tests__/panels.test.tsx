@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { render, screen, fireEvent, cleanup } from "@testing-library/react";
-import { parseReport, ElementSchema } from "@daport/core";
+import { parseReport, ElementSchema, type Element } from "@daport/core";
 import { createEditorStore, EditorContext, type EditorStore } from "../store";
 import { ElementPalette } from "../panels/ElementPalette";
 import { PagePanel } from "../panels/PagePanel";
@@ -78,5 +78,43 @@ describe("PagePanel", () => {
     fireEvent.change(screen.getByLabelText("높이(mm)"), { target: { value: "-5" } });
     expect(store.getState().report.page).toMatchObject({ width: 100, height: 100 });
     expect(store.getState().history.past.length).toBe(before);
+  });
+});
+
+describe("palette (phase 2)", () => {
+  it("adds a table and a repeater with a default template child", () => {
+    const store = createEditorStore(report);
+    const { getByRole } = render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
+    fireEvent.click(getByRole("button", { name: "+ 표" }));
+    expect(store.getState().findElement("table-1")).toMatchObject({ type: "table", source: "", columns: [{ header: "열 1" }] });
+    fireEvent.click(getByRole("button", { name: "+ 반복 영역" }));
+    const rep = store.getState().findElement("repeater-1") as Extract<Element, { type: "repeater" }>;
+    expect(rep).toMatchObject({ type: "repeater", layout: "list", item: { w: 60, h: 20 } });
+    expect(rep.item.children[0]).toMatchObject({ type: "text", value: "항목 {{ index + 1 }}" });
+    expect(store.getState().selection).toEqual(["repeater-1"]);
+  });
+  it("adds into the selected repeater's template", () => {
+    const store = createEditorStore(report);
+    const { getByRole } = render(<EditorContext.Provider value={store}><ElementPalette /></EditorContext.Provider>);
+    fireEvent.click(getByRole("button", { name: "+ 반복 영역" }));
+    fireEvent.click(getByRole("button", { name: "+ 사각형" }));
+    const rep = store.getState().findElement("repeater-1") as Extract<Element, { type: "repeater" }>;
+    expect(rep.item.children.map((c) => c.id)).toEqual(["text-1", "rect-1"]);
+    store.getState().select(["rect-1"]);                                       // 템플릿 자식이 선택돼도 같은 템플릿에
+    fireEvent.click(getByRole("button", { name: "+ 텍스트" }));
+    expect((store.getState().findElement("repeater-1") as Extract<Element, { type: "repeater" }>).item.children.map((c) => c.id)).toEqual(["text-1", "rect-1", "text-2"]);
+  });
+});
+
+describe("page panel repeat switch", () => {
+  it("toggles repeat with a source expression", () => {
+    const store = createEditorStore(report);
+    const { getByLabelText } = render(<EditorContext.Provider value={store}><PagePanel /></EditorContext.Provider>);
+    fireEvent.click(getByLabelText("레코드마다 한 부씩"));
+    expect(store.getState().report.repeat).toEqual({ source: "", as: "record" });
+    fireEvent.change(getByLabelText("반복 소스"), { target: { value: "shipments" } });
+    expect(store.getState().report.repeat).toEqual({ source: "shipments", as: "record" });
+    fireEvent.click(getByLabelText("레코드마다 한 부씩"));
+    expect(store.getState().report.repeat).toBeUndefined();
   });
 });

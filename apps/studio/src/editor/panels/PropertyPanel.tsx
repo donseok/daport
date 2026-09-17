@@ -3,6 +3,7 @@ import type { Element, Style } from "@daport/core";
 import { useEditor, lineBox } from "../store";
 import { NumberField, TextField, SelectField, CheckField } from "./Field";
 import { TablePanel } from "./TablePanel";
+import { RepeaterPanel } from "./RepeaterPanel";
 
 export function PropertyPanel() {
   const selection = useEditor((s) => s.selection);
@@ -34,6 +35,7 @@ export function PropertyPanel() {
         <SelectField label="fit" value={el.fit} options={["contain", "cover", "stretch"]} onChange={(fit) => set({ fit })} /></>}
       <TextField label="visible" value={el.visible ?? ""} onChange={(v) => set({ visible: v || undefined })} />
       {el.type === "table" && <TablePanel el={el} />}
+      {el.type === "repeater" && <RepeaterPanel el={el} />}
       {el.type !== "table" && el.type !== "repeater" && <>
         <div className="text-xs font-semibold mt-2">스타일</div>
         {(el.type === "text" || el.type === "pageNumber") && <>
