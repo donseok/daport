@@ -12,6 +12,7 @@ import { PropertyPanel } from "./panels/PropertyPanel";
 import { PagePanel } from "./panels/PagePanel";
 import { JsonEditor } from "./json/JsonEditor";
 import { EditorErrorBoundary } from "./EditorErrorBoundary";
+import { DataPanel } from "./data/DataPanel";
 
 function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   const mode = useEditor((s) => s.mode);
@@ -38,14 +39,22 @@ function useUnsavedChangesWarning(store: EditorStore) {
 export function Editor({ initial }: { initial: Report }) {
   const store = useMemo(() => createEditorStore(initial), [initial]);
   const [zoom, setZoom] = useState(1);
+  const [tab, setTab] = useState<"elements" | "data">("elements");
   useKeyboard(store);
   useUnsavedChangesWarning(store);
   return (
     <EditorContext.Provider value={store}>
       <div className="h-screen flex flex-col">
         <Toolbar reportId={initial.id} zoom={zoom} setZoom={setZoom} />
-        <div className="flex-1 grid grid-cols-[200px_1fr_260px] min-h-0">
-          <aside className="border-r bg-white overflow-auto"><ElementPalette /></aside>
+        <div className="flex-1 grid grid-cols-[260px_1fr_280px] min-h-0">
+          <aside className="border-r bg-white overflow-auto flex flex-col">
+            <div className="flex border-b text-xs">
+              {(["elements", "data"] as const).map((t) => (
+                <button key={t} className={`flex-1 py-1 ${tab === t ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setTab(t)}>{t === "elements" ? "요소" : "데이터"}</button>
+              ))}
+            </div>
+            {tab === "elements" ? <ElementPalette /> : <DataPanel reportId={initial.id} />}
+          </aside>
           <main className="min-w-0 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 overflow-auto"><Body reportId={initial.id} zoom={zoom} /></div>
             <div className="h-64 border-t bg-white"><JsonEditor /></div>
