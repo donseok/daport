@@ -34,7 +34,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const origin = new URL(req.url).origin;
     const resolved = resolveAssetUrls(report, origin);
     if (new URL(req.url).searchParams.get("preview") === "png") {
-      const [first] = await rasterizePages(resolved, data, report.output.label.dpi, report.output.label.threshold);
+      // 클라이언트는 디바운스 편집 중 이전 미리보기 요청을 AbortController로 취소한다.
+      // 취소된 요청이면 브라우저를 띄우는 무거운 rasterizePages를 아예 시작하지 않는다.
+      // (499는 표준 상태 코드는 아니지만 nginx 등에서 "클라이언트가 요청을 닫음"을 뜻하는 관례로 쓴다)
+      if (req.signal.aborted) return new Response(null, { status: 499 });
+      const pages = await rasterizePages(resolved, data, report.output.label.dpi, report.output.label.threshold);
+      const [first] = pages;
+      if (!first) return NextResponse.json({ error: "라벨 페이지가 없습니다" }, { status: 400 });
+      // 렌더링 도중 취소됐다면 이미 끝난 rasterizePages 결과라도 PNG 인코딩은 건너뛴다
+      if (req.signal.aborted) return new Response(null, { status: 499 });
       return new NextResponse(new Uint8Array(bitmapToPng(first)), { headers: { "content-type": "image/png" } });
     }
     const res = await renderLabel(resolved, data);
