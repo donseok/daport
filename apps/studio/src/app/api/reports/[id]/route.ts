@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import type { ReportInput } from "@daport/core";
+import { parseReport, type ReportInput } from "@daport/core";
 import { getStore, ready, NotFoundError } from "@/lib/report-store";
 import { readJsonBody, MAX_BODY_BYTES } from "@/lib/body";
+import { checkReportComponents, WARNINGS_HEADER } from "@/lib/report-guard";
 
 type Ctx = { params: Promise<{ id: string }> };
 
@@ -17,8 +18,13 @@ export async function PUT(req: Request, { params }: Ctx) {
   if (!parsed.ok) return parsed.response;
   try {
     await ready();
-    // getStore().update도 실제로 parseReport(unknown)에 넘길 뿐이라, 검증 전 본문은 형태를 확정할 수 없다
-    return NextResponse.json(await getStore().update((await params).id, parsed.body as ReportInput));
+    const id = (await params).id;
+    // URL id가 본문 id보다 우선한다(저장소 update와 같은 규칙). 스키마 오류는 던져 400, 검사는 검증된 모델에만 한다 (스펙 6.3)
+    const guard = await checkReportComponents(parseReport({ ...parsed.body, id }));
+    if (!guard.ok) return NextResponse.json(guard.body, { status: guard.status });
+    const res = NextResponse.json(await getStore().update(id, guard.report as ReportInput));
+    if (guard.warnings.length) res.headers.set(WARNINGS_HEADER, JSON.stringify(guard.warnings));
+    return res;
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: e instanceof NotFoundError ? 404 : 400 });
