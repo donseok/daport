@@ -9942,7 +9942,7 @@ exports[`golden: phase 2 examples > inspection-cert lays out without errors and 
         },
         "w": 180,
         "x": 15,
-        "y": 274.4138888888889,
+        "y": 254.4138888888889,
       },
       {
         "elementId": "results",
@@ -9970,7 +9970,7 @@ exports[`golden: phase 2 examples > inspection-cert lays out without errors and 
         },
         "w": 180,
         "x": 15,
-        "y": 274.4138888888889,
+        "y": 254.4138888888889,
       },
       {
         "elementId": "sign",

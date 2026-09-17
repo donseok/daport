@@ -1,7 +1,7 @@
 import { evaluateSource, ExpressionError, StyleSchema, type Report, type DataContext, type Style } from "@daport/core";
 import { flatten, type FlatElement } from "./flatten";
 import { placeStatic, isVisible, errorItem } from "./place";
-import { LayoutLimitError, MAX_PAGES } from "./errors";
+import { LayoutLimitError, MAX_PAGES, RegionTooSmallError } from "./errors";
 import type { Page, PlacedItem, PlacedText } from "./types";
 import { lineHeightMm } from "../text/measure";
 import { createMeasureCache } from "../text/cache";
@@ -22,9 +22,24 @@ function flowVisible(flow: "once" | "every" | "last", p: number, n: number): boo
   return flow === "every" || (flow === "once" ? p === 0 : p === n - 1);
 }
 
-function regions(el: FlowEl, report: Report): { first: Region; next: Region } {
+/**
+ * 첫 영역은 템플릿 상자 그대로. 이어지는 페이지 영역은 원래 x·y·w를 유지하고 아랫단 B까지 쓴다.
+ * B = min(하단 여백선, 템플릿 하단 아래에 있고 가로로 겹치는 every·last 고정 요소들의 윗변). 마지막 페이지를 미리 모르므로 last 자리도
+ * 모든 이어지는 페이지에서 비운다. 다른 continue 흐름 요소는 넣지 않는다(겹침 허용, pushDown은 이후 단계)
+ */
+function regions(el: FlowEl, report: Report, flat: FlatElement[]): { first: Region; next: Region } {
   const first = { x: el.x, y: el.y, w: el.w, h: el.h };
-  return { first, next: { ...first, h: report.page.height - report.page.margin[2] - el.y } };
+  const EPS = 1e-6;
+  let bottom = report.page.height - report.page.margin[2];
+  for (const s of flat) {
+    if (s === el || isContinueFlow(s) || s.flow === "once") continue;
+    const top = s.type === "line" ? Math.min(s.y, s.y2) : s.y;
+    const left = s.type === "line" ? Math.min(s.x, s.x2) : s.x;
+    const width = s.type === "line" ? Math.abs(s.x2 - s.x) : s.w;
+    const overlaps = left < el.x + el.w - EPS && left + Math.max(width, EPS) > el.x + EPS;
+    if (top >= el.y + el.h - EPS && overlaps) bottom = Math.min(bottom, top);
+  }
+  return { first, next: { ...first, h: bottom - el.y } };
 }
 
 /** 여백 좌상단의 안내 항목 (#NODATA, repeat 소스 #ERR) */
@@ -87,13 +102,13 @@ export function layout(report: Report, data: DataContext, opts: { maxPages?: num
       if (vis !== true) { flows.set(el, vis); continue; }
       try {
         const input = el.type === "table" ? tableFlow(el, ctx, fopts) : repeaterFlow(el, ctx, fopts);
-        const pages = paginate(input, { ...regions(el, report), repeatHeader: el.type === "table" ? el.repeatHeader : false, clip: false });
+        const pages = paginate(input, { ...regions(el, report, flat), repeatHeader: el.type === "table" ? el.repeatHeader : false, clip: false });
         if (total + pages.length > maxPages) throw new LayoutLimitError(total + pages.length, maxPages);
         flows.set(el, pages);
         nPages = Math.max(nPages, pages.length);
       } catch (e) {
-        if (!(e instanceof ExpressionError) || mode === "fail") throw e;
-        flows.set(el, errorItem(el, e.message));   // 소스 오류·배열 아님: 흐름 요소 전체를 #ERR 한 칸
+        if (!(e instanceof ExpressionError || e instanceof RegionTooSmallError) || mode === "fail") throw e;
+        flows.set(el, errorItem(el, e.message));   // 소스 오류·배열 아님·영역 부족: 흐름 요소 전체를 #ERR 한 칸
       }
     }
     total += nPages;

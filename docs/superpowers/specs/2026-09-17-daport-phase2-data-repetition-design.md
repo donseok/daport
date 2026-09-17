@@ -174,7 +174,7 @@ type PageFlowContext = { page: number; total: number; sheet: number; sheets: num
 
 ### 5.2 페이지 나누기: `paginate(blocks, regions)`
 
-입력: 조각 목록, 첫 페이지 영역 `{x, y, w, h}`, 이어지는 페이지 영역(원래 x, y, w 유지, 높이 = `page.height - margin.bottom - y`). 출력: 페이지마다 `{ blocks: {block, y}[] , pageRows }`.
+입력: 조각 목록, 첫 페이지 영역 `{x, y, w, h}`, 이어지는 페이지 영역(원래 x, y, w 유지, 높이 = `B - y`. B = min(하단 여백선, 템플릿 하단 아래에 있고 가로로 겹치는 `flow: every`·`last` 고정 요소들의 윗변). 마지막 페이지를 미리 모르므로 `last` 자리도 모든 이어지는 페이지에서 비운다). 출력: 페이지마다 `{ blocks: {block, y}[] , pageRows }`.
 
 규칙:
 
@@ -185,6 +185,7 @@ type PageFlowContext = { page: number; total: number; sheet: number; sheets: num
 5. 조각 하나가 빈 페이지 영역(머리행·페이지 소계 예약분 제외)보다 크면 그 페이지에 단독으로 두고 영역 하단에서 잘린다. 해당 배치 항목에 `overflow: true`를 표시한다. 무한 페이지 생성을 막는다.
 6. `overflow: "clip"`이면 첫 페이지 영역에 들어가는 조각까지만 두고 나머지는 버린다(잘림 표시 `clipped: true`를 요소 단위로 남긴다).
 7. `footer`는 마지막 페이지의 마지막 행 뒤에 둔다. 자리가 없으면 새 페이지로 넘긴다.
+8. 이어지는 페이지가 필요한데 남은 조각 중 가장 작은 것도 빈 이어지는 페이지(머리행·페이지 소계 예약 뒤)에 들어가지 않으면, 조각마다 잘린 페이지를 만들지 않고 흐름 요소 전체를 `#ERR` 한 칸(사유 `continuation region too small`)으로 두며 그 요소의 페이지 수는 1로 친다. `onExpressionError: "fail"`이면 `RegionTooSmallError`를 던진다. 조각 하나만 큰 경우는 5번 규칙을 따른다.
 
 ### 5.3 페이지 조립
 

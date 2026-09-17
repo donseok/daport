@@ -80,10 +80,17 @@ describe("layout (phase 2)", () => {
     expect(cells(pages[0].items).filter((i) => i!.startsWith("t#"))).toEqual(["t#h", "t#0", "t#1", "t#2"]);
     expect(pages[0].items.find((i) => i.elementId === "t2" && i.role === "flowBox")?.clipped).toBeUndefined();
   });
-  it("marks overflow on the flowBox when a block is taller than an empty page", () => {
-    const pages = layout(mk([table({ rowHeight: 200 })]), { params: {}, items: rows(2) });
+  it("marks overflow on the flowBox when one block is taller than an empty page and the rest fit", () => {
+    const pages = layout(mk([table()]), { params: {}, items: [{ N: "가".repeat(400) }, { N: 1 }] });
     expect(pages).toHaveLength(2);
     expect(pages[0].items[0]).toMatchObject({ role: "flowBox", overflow: true });
+    expect(pages[1].items[0]).toMatchObject({ role: "flowBox" });
+    expect(pages[1].items[0].overflow).toBeFalsy();
+  });
+  it("renders #ERR instead of one cut page per row when no remaining block fits a continuation page", () => {
+    const pages = layout(mk([table({ rowHeight: 200 })]), { params: {}, items: rows(2) });
+    expect(pages).toHaveLength(1);
+    expect(pages[0].items.find((i) => i.elementId === "t" && i.error)).toMatchObject({ lines: ["#ERR"] });
   });
   it("throws LayoutLimitError above maxPages (default 2000) before painting", () => {
     expect(() => layout(mk([table()], {}), { params: {}, items: rows(100) }, { maxPages: 2 })).toThrow(LayoutLimitError);
