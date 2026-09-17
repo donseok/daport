@@ -19,13 +19,16 @@ export function parsePrinters(value: string | undefined): Printer[] {
   return out;
 }
 
-/** raw TCP 전송. 연결·쓰기가 timeoutMs 안에 끝나지 않으면 거부한다. 재시도하지 않는다(중복 인쇄 방지) */
+/**
+ * raw TCP 전송. 연결·쓰기가 timeoutMs 안에 끝나지 않으면 거부한다. 재시도하지 않는다(중복 인쇄 방지)
+ * 거부 메시지에는 프린터 이름만 담는다 — 원본 Node 오류(호스트·포트 포함)는 cause로만 넘겨 서버 로그에서만 보이게 한다
+ */
 export function sendRaw(printer: Printer, data: Buffer, timeoutMs = 10_000): Promise<number> {
   return new Promise((resolve, reject) => {
     const sock = net.createConnection({ host: printer.host, port: printer.port });
-    const fail = (e: Error) => { sock.destroy(); reject(e); };
-    sock.setTimeout(timeoutMs, () => fail(new Error(`printer ${printer.name} timed out after ${timeoutMs}ms`)));
-    sock.on("error", fail);
+    const fail = (message: string, cause: unknown) => { sock.destroy(); reject(new Error(message, { cause })); };
+    sock.setTimeout(timeoutMs, () => fail(`프린터 "${printer.name}" 응답 시간 초과 (${timeoutMs}ms)`, new Error(`socket timeout after ${timeoutMs}ms`)));
+    sock.on("error", (e) => fail(`프린터 "${printer.name}"에 연결하지 못했습니다`, e));
     sock.on("connect", () => {
       sock.end(data, () => { sock.destroy(); resolve(data.length); });
     });

@@ -33,12 +33,14 @@ describe("POST /api/print", () => {
     expect((await call({ printer: "가짜", report: { ...label, output: { kind: "pdf" } } })).status).toBe(400);
     expect(renderLabel).not.toHaveBeenCalled();
   });
-  it("returns 502 when the printer cannot be reached and never retries", async () => {
+  it("returns 502 when the printer cannot be reached and never retries, without leaking the host/port", async () => {
     await new Promise<void>((r) => server.close(() => r()));
     server = net.createServer();   // afterEach가 닫을 수 있게 빈 서버로 바꿔 둔다 (listen 안 함)
     const res = await call({ printer: "가짜", report: label });
     expect(res.status).toBe(502);
-    expect((await res.json()).printer).toBe("가짜");
+    const body = await res.json();
+    expect(body.printer).toBe("가짜");
+    expect(body.error).not.toMatch(/127\.0\.0\.1|:\d{4,5}/);
     expect(renderLabel).toHaveBeenCalledTimes(1);
   });
 });

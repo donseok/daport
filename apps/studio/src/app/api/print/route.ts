@@ -34,6 +34,8 @@ export async function POST(req: Request) {
       const bytes = await sendRaw(printer, res.data);
       return NextResponse.json({ printer: printer.name, bytes, pages: res.pages });
     } catch (e) {
+      // e.message는 printers.ts가 이미 프린터 이름만 담게 정제한다. 호스트·포트가 담긴 원본 오류는 cause로만 서버 로그에 남긴다
+      console.error(`printer send failed: ${printer.name}`, e instanceof Error ? (e.cause ?? e) : e);
       return NextResponse.json({ error: e instanceof Error ? e.message : String(e), printer: printer.name }, { status: 502 });
     }
   } catch (e) {

@@ -24,10 +24,14 @@ describe("sendRaw", () => {
     expect(Buffer.concat(received).toString()).toBe("^XA^XZ\n");
     await new Promise<void>((r) => server.close(() => r()));
   });
-  it("rejects when the printer refuses the connection", async () => {
+  it("rejects when the printer refuses the connection, with a sanitized message and the original error as cause", async () => {
     const server = net.createServer(); await new Promise<void>((r) => server.listen(0, "127.0.0.1", r));
     const port = (server.address() as net.AddressInfo).port;
     await new Promise<void>((r) => server.close(() => r()));   // 닫힌 포트
-    await expect(sendRaw({ name: "t", host: "127.0.0.1", port }, Buffer.from("x"), 2000)).rejects.toThrow();
+    const err = await sendRaw({ name: "t", host: "127.0.0.1", port }, Buffer.from("x"), 2000).catch((e) => e);
+    expect(err).toBeInstanceOf(Error);
+    expect(err.message).toBe('프린터 "t"에 연결하지 못했습니다');
+    expect(err.message).not.toMatch(/127\.0\.0\.1|:\d{4,5}/);
+    expect(err.cause).toBeInstanceOf(Error);
   });
 });
