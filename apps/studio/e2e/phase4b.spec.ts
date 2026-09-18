@@ -1,6 +1,7 @@
 // dev 서버에 DAPORT_SECRET_E2E_AGENT=e2e-agent-token-0123456789abcdef, 에이전트에 같은 AGENT_TOKEN과 AGENT_FAKE=1이 있어야 한다 (playwright.config webServer가 넣는다)
 // 이미 :3000에 dev 서버가 떠 있으면(reuseExistingServer) DAPORT_SECRET_E2E_AGENT가 없어 연결 테스트가 400이 된다 — 실행 전 기존 프로세스를 내려야 한다
 import { test, expect, type Page } from "@playwright/test";
+import { E2E_AGENT_PORT } from "../playwright.config";
 
 const MIME = "application/x-daport-field";
 
@@ -19,7 +20,7 @@ test("register an agent connection, test it, run a sql dataset through it, bind 
   await page.getByLabel("방식").selectOption("agent");
   // "이름"이 "비밀값 이름"의 부분 문자열이라 strict mode 충돌을 피하려면 exact가 필요하다
   await page.getByLabel("이름", { exact: true }).fill(name);
-  await page.getByLabel("URL").fill("http://localhost:8433");
+  await page.getByLabel("URL").fill(`http://localhost:${E2E_AGENT_PORT}`);
   await page.getByLabel("비밀값 이름").fill("E2E_AGENT");
   await page.getByRole("button", { name: "연결 저장" }).click();
   const row = page.getByTestId(`conn-${name}`);
