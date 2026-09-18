@@ -3,23 +3,26 @@ import { withPage, fontBaseUrl, isBrowserCrash } from "@daport/browser";
 import { fontsDir } from "./fonts-dir";
 export { closePool } from "@daport/browser";
 
-export async function renderPdf(report: Report, data: DataContext, attempt = 0): Promise<Buffer> {
+/** allowHosts: 렌더 중 Chromium이 요청할 수 있는 호스트(포트 포함). 생략하면 제한하지 않는다 (4단계 스펙 5.6) */
+export type RenderOptions = { allowHosts?: string[] };
+
+export async function renderPdf(report: Report, data: DataContext, opts: RenderOptions = {}, attempt = 0): Promise<Buffer> {
   const html = renderToHtml(report, data, { fontBaseUrl });
   try {
-    return await withPage(html, { fontsDir }, (page) => page.pdf({
+    return await withPage(html, { fontsDir, allowHosts: opts.allowHosts }, (page) => page.pdf({
       width: `${report.page.width}mm`, height: `${report.page.height}mm`,
       printBackground: true, preferCSSPageSize: true, margin: { top: 0, right: 0, bottom: 0, left: 0 },
     }));
   } catch (e) {
-    if (attempt === 0 && isBrowserCrash(e)) return renderPdf(report, data, 1);     // Chromium 크래시·끊김만 1회 재시도
+    if (attempt === 0 && isBrowserCrash(e)) return renderPdf(report, data, opts, 1);     // Chromium 크래시·끊김만 1회 재시도
     throw e;
   }
 }
 
 /** 테스트·미리보기 비교용: pageIndex번째(0부터) 페이지를 96dpi PNG로 */
-export async function renderHtmlScreenshot(report: Report, data: DataContext, opts: { pageIndex?: number } = {}): Promise<Buffer> {
+export async function renderHtmlScreenshot(report: Report, data: DataContext, opts: { pageIndex?: number; allowHosts?: string[] } = {}): Promise<Buffer> {
   const html = renderToHtml(report, data, { fontBaseUrl });
-  return withPage(html, { fontsDir }, async (page) => {
+  return withPage(html, { fontsDir, allowHosts: opts.allowHosts }, async (page) => {
     await page.setViewportSize({ width: Math.round(report.page.width / 25.4 * 96), height: Math.round(report.page.height / 25.4 * 96) });
     return page.locator(".dp-page").nth(opts.pageIndex ?? 0).screenshot({ type: "png" });
   });

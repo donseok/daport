@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { MemoryReportStore, NotFoundError } from "../report-store";
+import { reportHash, parseReport } from "@daport/core";
 
 const input = { id: "a", name: "A", version: 1, page: { width: 100, height: 100 } };
 
@@ -87,5 +88,70 @@ describe("getStore", () => {
     expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("seed failed: quality-cert"), "boom");
     createSpy.mockRestore();
     errorSpy.mockRestore();
+  });
+});
+
+describe("MemoryReportStore versions", () => {
+  const draft = { id: "v", name: "V", version: 1, page: { width: 100, height: 100 } };
+  async function withReport() { const s = new MemoryReportStore(); await s.create(draft); return s; }
+
+  it("publish stores an immutable version N+1 and moves the pointer", async () => {
+    const s = await withReport();
+    const v1 = await s.publish("v", parseReport(draft), "첫 배포");
+    expect(v1.version).toBe(1);
+    await s.update("v", { ...draft, name: "V2" });
+    const v2 = await s.publish("v", parseReport({ ...draft, name: "V2" }));
+    expect(v2.version).toBe(2);
+    expect((await s.getPublished("v"))?.version).toBe(2);
+    expect((await s.getVersion("v", 1))?.name).toBe("V");
+    expect((await s.getVersion("v", 3))).toBeNull();
+    const list = await s.listVersions("v");
+    expect(list?.versions.map((x) => [x.version, x.published, x.note])).toEqual([[1, false, "첫 배포"], [2, true, null]]);
+    expect(list?.publishedVersion).toBe(2);
+  });
+  it("setPublished moves only the pointer; draft and versions stay", async () => {
+    const s = await withReport();
+    await s.publish("v", parseReport(draft));
+    await s.update("v", { ...draft, name: "V2" });
+    await s.publish("v", parseReport({ ...draft, name: "V2" }));
+    await s.setPublished("v", 1);
+    expect((await s.getPublished("v"))?.report.name).toBe("V");
+    expect((await s.get("v"))?.name).toBe("V2");
+    expect((await s.listVersions("v"))?.versions).toHaveLength(2);
+    await expect(s.setPublished("v", 9)).rejects.toBeInstanceOf(NotFoundError);
+    await expect(s.setPublished("zz", 1)).rejects.toBeInstanceOf(NotFoundError);
+  });
+  it("reports hashes: draftHash matches reportHash(draft), version hash matches its model", async () => {
+    const s = await withReport();
+    await s.publish("v", parseReport(draft));
+    const list = await s.listVersions("v");
+    expect(list?.draftHash).toBe(reportHash(parseReport(draft)));
+    expect(list?.versions[0].hash).toBe(reportHash(parseReport(draft)));
+    expect((await s.list())[0]).toMatchObject({ publishedVersion: 1, modified: false });
+    await s.update("v", { ...draft, name: "V2" });
+    expect((await s.list())[0]).toMatchObject({ publishedVersion: 1, modified: true });
+  });
+  it("getPublished is null before the first publish and listVersions is null for an unknown id", async () => {
+    const s = await withReport();
+    expect(await s.getPublished("v")).toBeNull();
+    expect((await s.list())[0]).toMatchObject({ publishedVersion: null, modified: false });
+    expect(await s.listVersions("zz")).toBeNull();
+    await expect(s.publish("zz", parseReport(draft))).rejects.toBeInstanceOf(NotFoundError);
+  });
+  it("addVersion adds a version without moving the pointer", async () => {
+    const s = await withReport();
+    await s.publish("v", parseReport(draft));
+    const added = await s.addVersion("v", parseReport({ ...draft, name: "imported" }), "가져옴: x.zip");
+    expect(added.version).toBe(2);
+    expect((await s.getPublished("v"))?.version).toBe(1);
+    expect((await s.listVersions("v"))?.versions[1]).toMatchObject({ version: 2, published: false, note: "가져옴: x.zip" });
+    await expect(s.addVersion("zz", parseReport(draft))).rejects.toBeInstanceOf(NotFoundError);
+  });
+  it("versions are immutable copies", async () => {
+    const s = await withReport();
+    const model = parseReport(draft);
+    await s.publish("v", model);
+    model.name = "mutated";
+    expect((await s.getVersion("v", 1))?.name).toBe("V");
   });
 });
