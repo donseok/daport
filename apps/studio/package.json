@@ -16,6 +16,7 @@
     "postinstall": "node scripts/copy-fonts.mjs"
   },
   "dependencies": {
+    "@daport/ai": "workspace:*",
     "@daport/core": "workspace:*",
     "@daport/datasource": "workspace:*",
     "@daport/renderer": "workspace:*",

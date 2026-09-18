@@ -42,6 +42,9 @@ importers:
 
   apps/studio:
     dependencies:
+      '@daport/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@daport/core':
         specifier: workspace:*
         version: link:../../packages/core
