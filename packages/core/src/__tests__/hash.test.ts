@@ -93,7 +93,7 @@ describe("componentHash", () => {
 });
 
 describe("reportHash", () => {
-  const base = { id: "r", name: "R", version: 1, page: { width: 100, height: 100 }, elements: [{ id: "t", type: "text", x: 0, y: 0, w: 10, h: 5, text: "a" }] };
+  const base = { id: "r", name: "R", version: 1, page: { width: 100, height: 100 }, elements: [{ id: "t", type: "text", x: 0, y: 0, w: 10, h: 5, value: "a" }] };
   it("is stable across key order and whitespace", () => {
     const a = parseReport(base);
     const b = parseReport(JSON.parse(JSON.stringify({ elements: base.elements, page: { height: 100, width: 100 }, version: 1, name: "R", id: "r" })));
@@ -103,6 +103,11 @@ describe("reportHash", () => {
   it("changes when the model changes", () => {
     const a = parseReport(base);
     const b = parseReport({ ...base, name: "S" });
+    expect(reportHash(a)).not.toBe(reportHash(b));
+  });
+  it("changes when a text element's value changes", () => {
+    const a = parseReport(base);
+    const b = parseReport({ ...base, elements: [{ ...base.elements[0], value: "b" }] });
     expect(reportHash(a)).not.toBe(reportHash(b));
   });
 });

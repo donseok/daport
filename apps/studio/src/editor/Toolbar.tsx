@@ -8,13 +8,7 @@ import { editReportToComponent, samplePropsContext } from "@/lib/component-edit"
 import { saveComponent, fetchUsage, applyLatest } from "./library/api";
 import type { Usage } from "@/lib/component-usage";
 import { PublishControls } from "./PublishControls";
-
-/** 실패 응답의 오류 메시지. 프록시·서버 오류 페이지는 JSON이 아니고, error가 문자열이 아닐 수도 있어 HTTP 상태로 대신한다 */
-async function failureMessage(r: Response, label: string): Promise<string> {
-  const body: unknown = await r.json().catch(() => null);
-  const error = body && typeof body === "object" ? (body as { error?: unknown }).error : undefined;
-  return typeof error === "string" ? error : `${label} 실패 (HTTP ${r.status})`;
-}
+import { failureMessage } from "./failure-message";
 
 /**
  * 레포트 저장 응답의 경고 헤더 (스펙 6.3). 값은 문자열의 JSON 배열이다.

@@ -157,7 +157,9 @@ export class DbReportStore implements ReportStore {
     return res;
   }
   async setPublished(id: string, version: number) {
-    if (!(await this.getVersion(id, version))) throw new NotFoundError(`${id}@${version}`);
+    // getVersion은 model(jsonb) 전체를 읽어 parseReport까지 한다. 존재 확인만 하면 되니 버전 컬럼만 본다
+    const [row] = await db().select({ version: reportVersions.version }).from(reportVersions).where(and(eq(reportVersions.reportId, id), eq(reportVersions.version, version)));
+    if (!row) throw new NotFoundError(`${id}@${version}`);
     const res = await db().update(reports).set({ publishedVersion: version }).where(eq(reports.id, id)).returning({ id: reports.id });
     if (res.length === 0) throw new NotFoundError(id);
   }

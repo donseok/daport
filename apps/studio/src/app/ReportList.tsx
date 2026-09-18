@@ -23,8 +23,9 @@ export function ReportList({ reports }: { reports: ReportSummary[] }) {
       if (!r.ok) { alert(((await r.json().catch(() => null)) as { error?: string } | null)?.error ?? `내보내기 실패 (HTTP ${r.status})`); return; }
       const name = /filename="([^"]+)"/.exec(r.headers.get("content-disposition") ?? "")?.[1] ?? "daport-export.zip";
       const url = URL.createObjectURL(await r.blob());
-      Object.assign(document.createElement("a"), { href: url, download: name }).click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      const a = Object.assign(document.createElement("a"), { href: url, download: name });
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);   // 클릭 직후 바로 해제하면 일부 브라우저에서 다운로드가 시작되기 전에 URL이 사라진다 (Toolbar.download와 동일)
     } catch (e) { alert(`내보내기 실패: ${e instanceof Error ? e.message : String(e)}`); }
     finally { setBusy(false); }
   };

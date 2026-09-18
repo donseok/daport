@@ -20,9 +20,9 @@ export async function renderPdf(report: Report, data: DataContext, opts: RenderO
 }
 
 /** 테스트·미리보기 비교용: pageIndex번째(0부터) 페이지를 96dpi PNG로 */
-export async function renderHtmlScreenshot(report: Report, data: DataContext, opts: { pageIndex?: number } = {}): Promise<Buffer> {
+export async function renderHtmlScreenshot(report: Report, data: DataContext, opts: { pageIndex?: number; allowHosts?: string[] } = {}): Promise<Buffer> {
   const html = renderToHtml(report, data, { fontBaseUrl });
-  return withPage(html, { fontsDir }, async (page) => {
+  return withPage(html, { fontsDir, allowHosts: opts.allowHosts }, async (page) => {
     await page.setViewportSize({ width: Math.round(report.page.width / 25.4 * 96), height: Math.round(report.page.height / 25.4 * 96) });
     return page.locator(".dp-page").nth(opts.pageIndex ?? 0).screenshot({ type: "png" });
   });

@@ -1,15 +1,11 @@
 "use client";
 import { useCallback, useEffect, useState } from "react";
 import { useEditor } from "./store";
+import { failureMessage } from "./failure-message";
 
 type VersionRow = { version: number; createdAt: string; note: string | null; hash: string; published: boolean };
 type Versions = { versions: VersionRow[]; publishedVersion: number | null; draftHash: string };
 
-async function failureMessage(r: Response, label: string): Promise<string> {
-  const body: unknown = await r.json().catch(() => null);
-  const error = body && typeof body === "object" ? (body as { error?: unknown }).error : undefined;
-  return typeof error === "string" ? error : `${label} 실패 (HTTP ${r.status})`;
-}
 const fmt = (iso: string) => (iso ? new Date(iso).toLocaleString("ko-KR") : "");
 
 /** 툴바 배포 영역 (4단계 스펙 7.1): 상태 배지, 배포, 버전 패널(되돌리기·보기), 연동 안내 */
