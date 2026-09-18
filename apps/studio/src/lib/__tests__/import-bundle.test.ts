@@ -1,9 +1,10 @@
 // @vitest-environment node
 import { describe, it, expect } from "vitest";
-import { parseReport } from "@daport/core";
+import { parseReport, parseComponentBody } from "@daport/core";
 import { MemoryReportStore } from "../report-store";
 import { buildBundle, type BundleAsset } from "../bundle";
 import { importBundle } from "../import-bundle";
+import { getComponentStore } from "../component-store";
 
 const base = (id: string, value = "hi") => parseReport({ id, name: id.toUpperCase(), version: 1, page: { width: 100, height: 100 },
   datasets: [{ name: "s", type: "sql", connection: "dev", query: "select 1" }],
@@ -48,5 +49,21 @@ describe("importBundle", () => {
     expect(res.imported).toEqual([{ id: "ok", action: "created" }]);
     expect(res.skipped).toEqual([{ id: "bad", reason: expect.any(String) }]);
     expect(res.warnings.some((w) => w.includes("에셋"))).toBe(true);
+  });
+  it("skips a report whose embedded component body hash differs from the library (COMPONENT_MISMATCH) and creates nothing", async () => {
+    delete process.env.DATABASE_URL;   // 메모리 컴포넌트 저장소
+    const rawBody = { name: "헤더", w: 50, h: 10, props: [{ name: "title", type: "string", default: "T" }],
+      elements: [{ id: "t", type: "text", x: 0, y: 0, w: 50, h: 10, value: "{{ props.title }}" }] };
+    await getComponentStore().create("ib-hdr", parseComponentBody(rawBody));   // 라이브러리 v1
+    const tampered = { ...rawBody, elements: [{ ...rawBody.elements[0], value: "변조됨" }] };
+    const report = parseReport({ id: "mismatch", name: "M", version: 1, page: { width: 100, height: 100 },
+      components: { "ib-hdr@1": tampered },
+      elements: [{ id: "h1", type: "ref", ref: "ib-hdr", version: 1, x: 10, y: 10, w: 50, h: 10 }] });
+    const store = new MemoryReportStore();
+    const zip = buildBundle([{ report, source: "draft" }], [], []);
+    const res = await importBundle(zip, { filename: "z.zip" }, { store, assets: null });
+    expect(res.skipped).toEqual([{ id: "mismatch", reason: "COMPONENT_MISMATCH" }]);
+    expect(res.imported).toEqual([]);
+    expect(await store.get("mismatch")).toBeNull();
   });
 });

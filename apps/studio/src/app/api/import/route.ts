@@ -7,7 +7,11 @@ import { assetStorageEnabled, hasAsset, putAsset } from "@/lib/asset-io";
 
 /** 번들 가져오기 (4단계 스펙 6.3). multipart: file(zip), connectionMap(JSON, 선택) */
 export async function POST(req: Request) {
-  const declared = Number(req.headers.get("content-length"));
+  const raw = req.headers.get("content-length");
+  // 헤더가 없으면 Number(null)이 0이 되어 상한 검사를 그냥 통과한다 — 청크 전송으로 크기 검사를 우회해 formData()가
+  // 본문 전체를 버퍼링하게 만들 수 있으니, 읽기 전에 먼저 막는다
+  if (raw === null) return NextResponse.json({ error: "content-length가 필요합니다" }, { status: 411 });
+  const declared = Number(raw);
   if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) return NextResponse.json({ error: `요청 본문이 ${MAX_BODY_BYTES} 바이트를 넘습니다` }, { status: 413 });
   let form: FormData;
   try { form = await req.formData(); } catch { return NextResponse.json({ error: "multipart 본문이 아닙니다" }, { status: 400 }); }
