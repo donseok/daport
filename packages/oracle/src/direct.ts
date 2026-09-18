@@ -1,3 +1,4 @@
+/// <reference path="./oracledb.d.ts" /> 소비자 tsconfig의 include와 무관하게 앰비언트 선언을 끌어들인다
 import oracledb from "oracledb";
 import { guardSql, DatasetFailure, type DirectConnection, type SqlColumn } from "@daport/datasource";
 import { convertColumnType, convertRow, mapOracleError, type OracleMeta } from "./convert";
