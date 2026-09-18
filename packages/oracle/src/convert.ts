@@ -9,7 +9,8 @@ export function convertColumnType(dbTypeName: string): FieldType | null {
   if (/^(N?VARCHAR2|N?CHAR|N?CLOB|LONG)$/.test(t)) return "string";
   if (/^(NUMBER|FLOAT|BINARY_FLOAT|BINARY_DOUBLE)$/.test(t)) return "number";
   if (t === "DATE" || t.startsWith("TIMESTAMP")) return "date";
-  if (t === "BOOLEAN") return "boolean";
+  // BOOLEAN(Oracle 23c)은 4b 스펙 4.3 표에 없다 — convertRow의 문자열 폴백을 타면 "boolean" 컬럼에 "true" 문자열이
+  // 담기는 모순이 생기므로, 지원 타입에서 빼서 나머지 미지원 타입과 같은 SQL_ERROR 경로로 보낸다
   return null;
 }
 export const isTzType = (dbTypeName: string) => /TIME ZONE/i.test(dbTypeName);

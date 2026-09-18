@@ -23,6 +23,8 @@ export function poolFor(conn: DirectConnection, password: string): Promise<oracl
   return p;
 }
 
+// 이 프로세스에서만 유효하다: PUT/DELETE로 연결이 바뀌어도 다른 인스턴스·람다는 재활용될 때까지 옛 풀을 계속 쓴다.
+// 단일 인스턴스 direct 배포를 전제로 한 타협이며, 클러스터 전체 무효화가 필요해지면 이 함수만으로는 부족하다
 export async function closeConnector(name: string): Promise<void> {
   const p = pools().get(name);
   if (!p) return;

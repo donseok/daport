@@ -60,6 +60,14 @@ describe("createDirectConnector", () => {
     expect(err.code).toBe("SQL_ERROR"); expect(err.message).not.toContain("(pw)"); expect(err.message).toContain("***");
     expect(connection.close).toHaveBeenCalled();   // 실패해도 반납
   });
+  it("maps pool-creation failures too, masking the password", async () => {
+    createPool.mockRejectedValueOnce(new Error("NJS-503: connect failed pw=pw"));
+    const c = createDirectConnector(conn, "pw");
+    const err = await c.query("SELECT 1 FROM DUAL", {}, opts).catch((e) => e);
+    expect(err.code).toBe("SQL_ERROR");
+    expect(err.message).toMatch(/^연결 실패: /);
+    expect(err.message).not.toContain("pw=pw");
+  });
   it("ping runs SELECT 1 FROM DUAL and close shuts the pool", async () => {
     const c = createDirectConnector(conn, "pw");
     await c.ping();

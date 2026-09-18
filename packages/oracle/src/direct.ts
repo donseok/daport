@@ -15,9 +15,9 @@ function fetchTypeHandler(meta: { name: string; dbTypeName?: string }): { type: 
 
 export function createDirectConnector(conn: DirectConnection, password: string): ManagedConnector {
   const run = async <T>(timeoutMs: number, fn: (c: oracledb.Connection) => Promise<T>): Promise<T> => {
-    const pool = await poolFor(conn, password);
     let c: oracledb.Connection | undefined;
     try {
+      const pool = await poolFor(conn, password);
       c = await pool.getConnection();
       c.callTimeout = timeoutMs;
       return await fn(c);

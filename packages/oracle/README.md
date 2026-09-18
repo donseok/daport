@@ -50,6 +50,22 @@ daport는 Oracle 연결을 **읽기 전용**으로만 사용한다. 이를 코�
    위한 방어선이고, 최종적으로 신뢰하는 경계는 DB 권한이다. INSERT/UPDATE/DELETE/DDL 권한을 가진 계정으로
    daport를 연결하지 않는다.
 
+## 운영 노출
+
+`/settings/connections`와 데이터셋 관련 라우트(연결 테스트, sql 데이터셋 샘플)는 4b 스펙 §7.1이 정한 대로
+**무인증·동일 출처**다 — 로그인(§11)이 들어오기 전까지는 이 인스턴스에 네트워크로 닿을 수 있는 누구나
+설정된 연결로 가드를 통과하는 임의의 SELECT를 실행할 수 있다. 그래서 `DAPORT_SECRET_*`로 운영 Oracle에
+붙는 studio 인스턴스는 **운영자만 접근 가능한 네트워크**(사내망·VPN 등)에만 두어야 하고, 공인 인터넷에
+노출하면 안 된다. 이 문서 앞의 "가드 3단계"는 애플리케이션이 쓰기를 막는 방어선이고, 이 노출 범위 제한과
+읽기 전용 DB 계정이 실제로 신뢰하는 경계다.
+
+## 의존성 설치 메모
+
+루트 `package.json`의 `pnpm.onlyBuiltDependencies`에는 `oracledb`가 없다 — 의도적이다. thin 모드는 순수 JS라
+네이티브 빌드 스크립트가 필요 없고, `pnpm install`이 "ignored build scripts" 경고를 내는 것도 정상이다.
+나중에 thick 모드(Instant Client 바이너리)가 필요해져 `oracledb`를 그 목록에 추가하면 설치 때마다 바이너리를
+받기 시작하므로, 이 패키지가 thin 모드를 전제하는 한 추가하지 않는다.
+
 ## 통합 테스트 (`ORACLE_IT=1`)
 
 기본 `pnpm --filter @daport/oracle test`(`vitest.config.ts`)는 `src/__it__/**`를 제외하므로 컨테이너 Oracle

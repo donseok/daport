@@ -7,8 +7,8 @@ describe("convert", () => {
     expect(convertColumnType("VARCHAR2")).toBe("string"); expect(convertColumnType("NCLOB")).toBe("string");
     expect(convertColumnType("NUMBER")).toBe("number"); expect(convertColumnType("BINARY_DOUBLE")).toBe("number");
     expect(convertColumnType("DATE")).toBe("date"); expect(convertColumnType("TIMESTAMP(6) WITH TIME ZONE")).toBe("date");
-    expect(convertColumnType("BOOLEAN")).toBe("boolean");
     expect(convertColumnType("BLOB")).toBeNull(); expect(convertColumnType("RAW")).toBeNull(); expect(convertColumnType("XMLTYPE")).toBeNull();
+    expect(convertColumnType("BOOLEAN")).toBeNull();   // 4b 스펙 4.3 표에 없는 타입 — 나머지 미지원 타입과 같은 취급 (Minor 3)
     expect(isTzType("TIMESTAMP(6) WITH TIME ZONE")).toBe(true); expect(isTzType("TIMESTAMP WITH LOCAL TIME ZONE")).toBe(true); expect(isTzType("DATE")).toBe(false);
   });
   it("dateToIso reads wall-clock components as UTC for DATE/TIMESTAMP and the instant for TZ types", () => {
