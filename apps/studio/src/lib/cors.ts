@@ -11,7 +11,7 @@ export function corsHeaders(req: Request): Record<string, string> {
     "access-control-allow-origin": origin,
     "access-control-allow-headers": "content-type, x-api-key",
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-expose-headers": "x-daport-version, content-disposition",
+    "access-control-expose-headers": "x-daport-version, content-disposition, x-daport-pages",
     "vary": "origin",
   };
 }

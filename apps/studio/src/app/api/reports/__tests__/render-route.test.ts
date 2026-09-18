@@ -35,6 +35,7 @@ describe("POST /api/reports/:id/render", () => {
     expect(res.headers.get("content-type")).toBe("application/pdf");
     expect(res.headers.get("x-daport-version")).toBe("1");
     expect(res.headers.get("content-disposition")).toContain(`filename="${id}.pdf"`);
+    expect(res.headers.get("cache-control")).toBe("no-store");
   });
   it("never renders the draft: edits after publish are invisible until republished; version pins an old version", async () => {
     await getStore().publish(id, (await getStore().get(id))!);

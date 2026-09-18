@@ -86,5 +86,8 @@ export function renderErrorResponse(e: unknown): NextResponse {
   if (e instanceof RenderRequestError) return NextResponse.json({ error: e.message, code: e.code, ...e.details }, { status: 400 });
   if (e instanceof LabelTooLargeError || e instanceof LayoutLimitError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });
   if (e instanceof ExpressionError || e instanceof BarcodeError || e instanceof ZodError) return NextResponse.json({ error: e.message }, { status: 400 });
-  return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });
+  // render는 이제 인증된 외부 호출자(MES)가 닿는 마지막 catch다. 데이터셋 드라이버·DB·Playwright 경로 문자열이 담긴
+  // e.message를 그대로 돌려주면 외부로 새어나간다. 서버 로그에만 원문을 남기고 본문은 고정 문구로 감춘다
+  console.error("[render]", e);
+  return NextResponse.json({ error: "렌더에 실패했습니다", code: "RENDER_FAILED" }, { status: 500 });
 }

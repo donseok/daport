@@ -37,11 +37,13 @@ describe("POST /api/reports/[id]/pdf", () => {
     expect(renderPdf).not.toHaveBeenCalled();
   });
 
-  it("returns 500 when rendering fails for another reason such as a Chromium crash", async () => {
+  it("returns 500 when rendering fails for another reason such as a Chromium crash, without leaking the internal message (I1)", async () => {
     renderPdf.mockRejectedValue(new Error("Target page, context or browser has been closed"));
     const res = await call({ report, params: { lot: "L1" } });
     expect(res.status).toBe(500);
-    expect((await res.json()).error).toContain("closed");
+    const body = await res.json();
+    expect(body.error).not.toContain("closed");
+    expect(body).toEqual({ error: "렌더에 실패했습니다", code: "RENDER_FAILED" });
   });
 
   it("passes request data to the renderer and returns 400 with datasetErrors when a dataset fails", async () => {

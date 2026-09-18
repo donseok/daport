@@ -21,6 +21,6 @@ describe("cors", () => {
     const res = withCors(req("https://mes.example.com"), new Response("x", { status: 401 }));
     expect(res.status).toBe(401);
     expect(res.headers.get("access-control-allow-origin")).toBe("https://mes.example.com");
-    expect(res.headers.get("access-control-expose-headers")).toBe("x-daport-version, content-disposition");
+    expect(res.headers.get("access-control-expose-headers")).toBe("x-daport-version, content-disposition, x-daport-pages");
   });
 });

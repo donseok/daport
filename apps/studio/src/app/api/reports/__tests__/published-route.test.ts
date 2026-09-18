@@ -22,11 +22,14 @@ describe("GET /api/reports/:id/published", () => {
     const res = await get(id);
     expect(res.status).toBe(200);
     expect(res.headers.get("x-daport-version")).toBe("1");
+    expect(res.headers.get("cache-control")).toBe("no-store");
     const body = await res.json();
     expect(body.elements[0].src).toBe("http://studio.local/api/assets/logo1");
     expect((await get(id, "?version=1")).status).toBe(200);
     expect((await get(id, "?version=2")).status).toBe(404);
     expect((await get(id, "?version=x")).status).toBe(400);
+    // 빈 값은 버전 미지정(=배포본)으로 본다. Number("")가 0이 되어 없는 버전으로 404가 나면 안 된다
+    expect((await get(id, "?version=")).status).toBe(200);
     expect((await get(id, "", null)).status).toBe(401);
   });
 });

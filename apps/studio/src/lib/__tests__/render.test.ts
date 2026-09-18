@@ -70,7 +70,9 @@ describe("helpers", () => {
     expect(isRenderFormat("pdf")).toBe(true); expect(isRenderFormat("docx")).toBe(false); expect(isRenderFormat(1)).toBe(false);
     expect(contentDisposition(doc, "pdf")).toBe(`attachment; filename="d.pdf"; filename*=UTF-8''${encodeURIComponent("문서")}.pdf`);
   });
-  it("renderErrorResponse maps unknown errors to 500", async () => {
-    expect(renderErrorResponse(new Error("boom")).status).toBe(500);
+  it("renderErrorResponse maps unknown errors to 500 without leaking the message", async () => {
+    const res = renderErrorResponse(new Error("boom: postgres://user:pass@host/db"));
+    expect(res.status).toBe(500);
+    expect(await res.json()).toEqual({ error: "렌더에 실패했습니다", code: "RENDER_FAILED" });
   });
 });

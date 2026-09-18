@@ -25,7 +25,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const picked = await pickVersion(id, body.version as number | undefined);
     if ("error" in picked) return withCors(req, picked.error);
     const out = await renderReport(picked.report, { format: body.format, params: objectField(body, "params"), data: objectField(body, "data"), origin: new URL(req.url).origin });
-    const headers: Record<string, string> = { "content-type": out.mime, "x-daport-version": String(picked.version) };
+    // API 키로 구분되는 본문이라, 앞단 캐시·CDN이 있으면 키 A의 응답이 키 B로 갈 수 있다
+    const headers: Record<string, string> = { "content-type": out.mime, "x-daport-version": String(picked.version), "cache-control": "no-store" };
     if (body.format !== "html") headers["content-disposition"] = contentDisposition(picked.report, out.filename.split(".").pop()!);
     if (out.pages !== undefined) headers["x-daport-pages"] = String(out.pages);
     return withCors(req, new NextResponse(typeof out.body === "string" ? out.body : new Uint8Array(out.body), { headers }));
