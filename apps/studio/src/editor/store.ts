@@ -50,8 +50,12 @@ export type EditorState = {
   markSaved(saved: Report): void;
   setView(v: Partial<View>): void;
   setLiveData(v: boolean): void;
-  setProposal(p: Proposal | null): void;
-  /** proposal.next를 report에 통째로 반영한다. 한 커밋(되돌리기 한 단위)이며, 끝나면 proposal은 null */
+  /**
+   * p가 null이면 제안을 비운다(늘 true). p가 있으면 p.base가 지금 report와 같을 때만 저장한다 — 참조가 같은지로 비교한다
+   * (커밋은 늘 새 report 객체를 만들므로). 요청이 오가는 동안 다른 편집이 있었으면 저장하지 않고 false를 돌려준다(호출자가 알려야 한다)
+   */
+  setProposal(p: Proposal | null): boolean;
+  /** proposal.next를 report에 통째로 반영한다. 한 커밋(되돌리기 한 단위)이며, 끝나면 proposal은 null. base가 지금 report와 다르면(오래된 제안) 반영하지 않고 버린다 */
   applyProposal(): void;
   /** 반영하지 않고 proposal만 비운다 */
   rejectProposal(): void;
@@ -214,16 +218,24 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
       markSaved: (saved) => set({ dirty: get().report !== saved }),   // 커밋·undo·redo는 늘 새 객체를 만든다
       setView: (v) => set((s) => ({ view: { ...s.view, ...v } })),
       setLiveData: (liveData) => set({ liveData }),
-      setProposal: (proposal) => set({ proposal }),
+      setProposal: (p) => {
+        if (p === null) { set({ proposal: null }); return true; }
+        // base가 지금 report와 다르면(요청이 오가는 동안 다른 편집이 있었다) 오래된 제안이라 저장하지 않는다
+        if (p.base !== get().report) { set({ proposal: null }); return false; }
+        set({ proposal: p });
+        return true;
+      },
       applyProposal: () => {
         const p = get().proposal;
         if (!p) return;
+        if (p.base !== get().report) { set({ proposal: null }); return; }   // 오래된 제안: 반영하지 않고 버린다
         set({ proposal: null });   // apply 전에 비워야 apply 안의 "다른 편집이면 폐기" 처리가 이 반영 자체를 지우지 않는다
         apply((r) => {
           const next = structuredClone(p.next);
           for (const k of Object.keys(r)) delete (r as Record<string, unknown>)[k];
           Object.assign(r, next);
         });
+        pruneSelection();   // 제안이 지운 id가 선택에 남지 않게 한다 (replaceReport와 같은 처리)
       },
       rejectProposal: () => set({ proposal: null }),
       setSample: (sample) => apply((r) => { if (sample) r.sample = sample; else delete r.sample; }),

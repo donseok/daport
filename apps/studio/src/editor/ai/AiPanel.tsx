@@ -74,7 +74,12 @@ export function AiPanel({ reportId }: { reportId: string }) {
   function handleResult<T extends { explanation: string; warnings: string[] }>(res: Awaited<ReturnType<typeof postAi<T>>>, toProposal: (data: T) => Proposal) {
     if (res.ok) {
       try {
-        setProposal(toProposal(res.data));
+        const proposal = toProposal(res.data);
+        // 요청이 오가는 동안 다른 편집이 있었으면(base가 지금 report와 다르면) 스토어가 저장을 거절한다
+        if (!setProposal(proposal)) {
+          setTurns((prev) => [...prev, { role: "error", text: "편집 중 레포트가 바뀌어 제안을 버렸습니다. 다시 요청하세요." }]);
+          return;
+        }
         setTurns((prev) => [...prev, { role: "assistant", text: res.data.explanation, warnings: res.data.warnings }]);
       } catch (e) {
         setTurns((prev) => [...prev, { role: "error", text: e instanceof Error ? e.message : String(e) }]);

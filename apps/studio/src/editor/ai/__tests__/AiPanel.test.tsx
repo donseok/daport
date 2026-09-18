@@ -46,6 +46,19 @@ describe("AiPanel", () => {
     fireEvent.click(screen.getByTestId("ai-send"));
     await waitFor(() => expect(screen.getByTestId("ai-not-configured").textContent).toContain("GEMINI_API_KEY"));
   });
+  it("shows an error turn and drops the proposal when the report changed while the request was in flight", async () => {
+    let resolveFetch: ((v: Response) => void) | undefined;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    act(() => { store.getState().updateElement("a", { x: 5 }); });   // 응답을 기다리는 동안 다른 편집
+    act(() => { resolveFetch!(json({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: [] })); });
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("편집 중 레포트가 바뀌어"));
+    expect(store.getState().proposal).toBeNull();
+  });
   it("shows errors as a turn and supports cancel", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => json({ error: "요청 한도", code: "AI_RATE_LIMIT" }, 429)));
     mount();
