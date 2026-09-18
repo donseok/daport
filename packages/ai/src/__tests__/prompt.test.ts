@@ -47,6 +47,7 @@ describe("buildGeneratePrompt", () => {
     const p = buildGeneratePrompt({ report: parseReport({ ...base, elements: [] }), fields: ctx.fields, library: ctx.library }, "품질보증서: 헤더, 품목 표, 서명란");
     expect(p.system).toContain("elements");
     expect(p.system).toContain("라이브러리");                      // 컴포넌트 우선 사용 지시
+    expect(p.messages.at(-1)!.text).toContain("page 210×297mm");   // 페이지 크기·여백
     expect(p.messages.at(-1)!.text).toContain("품질보증서: 헤더, 품목 표, 서명란");
     expect(p.schema).toBe(GENERATE_RESPONSE_SCHEMA);
   });
