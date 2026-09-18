@@ -20,6 +20,8 @@ describe("guardSql", () => {
     "SELECT q'[;]' FROM DUAL",
     "SELECT \"FOR UPDATE\" FROM T",
     "/* update t */ SELECT 1 FROM DUAL",
+    "(SELECT 1 FROM DUAL)",
+    "(SELECT 1 FROM DUAL) UNION (SELECT 2 FROM DUAL)",
   ])("allows %s", (sql) => { expect(() => guardSql(sql)).not.toThrow(); });
 
   it.each([
@@ -38,6 +40,7 @@ describe("guardSql", () => {
     ["SELECT * FROM T FOR\n  UPDATE NOWAIT", /FOR UPDATE/i],
     ["", /비어/],
     ["   -- only comment", /비어/],
+    ["SELECT 1 FROM DUAL /* ; DROP TABLE T", /닫히지 않은/],
   ])("rejects %s", (sql, why) => {
     expect(() => guardSql(sql)).toThrow(DatasetFailure);
     try { guardSql(sql); } catch (e) { expect((e as DatasetFailure).code).toBe("SQL_NOT_ALLOWED"); expect((e as Error).message).toMatch(why); }
