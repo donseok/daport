@@ -3,6 +3,7 @@ import { describe, it, expect } from "vitest";
 import { unzipSync, strFromU8, zipSync, strToU8 } from "fflate";
 import { parseReport } from "@daport/core";
 import { buildBundle, readBundle, collectConnections, collectAssetIds, applyConnectionMap, BundleInvalidError, MAX_ENTRY_BYTES } from "../bundle";
+import { MAX_ASSET_BYTES } from "../asset-io";
 
 const r1 = parseReport({ id: "a", name: "A", version: 1, page: { width: 100, height: 100 },
   datasets: [{ name: "s", type: "sql", connection: "mes", query: "select 1" }, { name: "h", type: "http", url: "https://mes.example.com/api/x" }],
@@ -45,5 +46,36 @@ describe("bundle", () => {
     };
     const zip = zipSync(files, { level: 9 });
     expect(() => readBundle(zip)).toThrow(BundleInvalidError);
+  });
+  it("drops assets.json entries that fail id/name/mime/size validation, warning instead of throwing (I2)", () => {
+    const manifest = { format: "daport-bundle", version: 1, reports: [] };
+    const bad = [
+      { id: "bad id", name: "ok.png", mime: "image/png" },              // id 형식 위반
+      { id: "n2", name: "../evil.png", mime: "image/png" },             // name 경로 이탈
+      { id: "n3", name: "ok.png", mime: "text/html" },                  // mime 미허용
+      { id: "n4", name: "ok.png", mime: "image/png" },                  // 크기 초과
+    ];
+    const files: Record<string, Uint8Array> = {
+      "manifest.json": strToU8(JSON.stringify(manifest)),
+      "assets.json": strToU8(JSON.stringify(bad)),
+      "assets/bad id.png": new Uint8Array([1]),
+      "assets/n2.png": new Uint8Array([1]),
+      "assets/n3.png": new Uint8Array([1]),
+      "assets/n4.png": new Uint8Array(MAX_ASSET_BYTES + 1),
+    };
+    const { manifest: out, assets } = readBundle(zipSync(files));
+    expect(assets).toEqual([]);
+    expect(out.warnings).toHaveLength(4);
+    for (const id of ["bad id", "n2", "n3", "n4"]) expect(out.warnings.some((w) => w.includes(id))).toBe(true);
+  });
+  it("treats a non-array assets.json as empty, a non-array manifest.warnings as empty, and rejects a report entry without an id (I3)", () => {
+    const withBadAssets = zipSync({ "manifest.json": strToU8(JSON.stringify({ format: "daport-bundle", version: 1, reports: [] })), "assets.json": strToU8(JSON.stringify({ oops: true })) });
+    expect(readBundle(withBadAssets).assets).toEqual([]);
+
+    const withBadWarnings = zipSync({ "manifest.json": strToU8(JSON.stringify({ format: "daport-bundle", version: 1, reports: [], warnings: "not-an-array" })) });
+    expect(readBundle(withBadWarnings).manifest.warnings).toEqual([]);
+
+    const withBadReportId = zipSync({ "manifest.json": strToU8(JSON.stringify({ format: "daport-bundle", version: 1, reports: [{ name: "x", source: "draft" }] })) });
+    expect(() => readBundle(withBadReportId)).toThrow(BundleInvalidError);
   });
 });

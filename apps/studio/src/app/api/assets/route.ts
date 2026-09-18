@@ -1,16 +1,15 @@
 import { NextResponse } from "next/server";
 import { put, list } from "@vercel/blob";
+import { IMAGE_TYPES, MAX_ASSET_BYTES } from "@/lib/asset-io";
 
 const notConfigured = () => NextResponse.json({ error: "asset storage not configured" }, { status: 503 });
-const MAX_BYTES = 5 * 1024 * 1024;
-const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
 
 export async function POST(req: Request) {
   if (!process.env.BLOB_READ_WRITE_TOKEN) return notConfigured();
   const form = await req.formData();
   const file = form.get("file");
   if (!(file instanceof File)) return NextResponse.json({ error: "file required" }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ error: "file too large" }, { status: 413 });
+  if (file.size > MAX_ASSET_BYTES) return NextResponse.json({ error: "file too large" }, { status: 413 });
   if (!IMAGE_TYPES.has(file.type)) return NextResponse.json({ error: "unsupported file type" }, { status: 415 });
   const id = crypto.randomUUID();
   const blob = await put(`assets/${id}-${file.name}`, file, { access: "public", addRandomSuffix: false, contentType: file.type });

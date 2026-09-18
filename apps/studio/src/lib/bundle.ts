@@ -1,5 +1,6 @@
 import { zipSync, unzipSync, strToU8, strFromU8 } from "fflate";
 import { walkElements, type Report } from "@daport/core";
+import { IMAGE_TYPES, MAX_ASSET_BYTES } from "./asset-io";
 
 export type BundleSource = "draft" | { version: number };
 export type BundleManifest = {
@@ -89,6 +90,10 @@ function parseJson(bytes: Uint8Array | undefined, what: string): unknown {
   try { return JSON.parse(strFromU8(bytes)); } catch { throw new BundleInvalidError(`${what}이(가) JSON이 아닙니다`); }
 }
 
+/** 에셋 id: 업로드 라우트가 만드는 crypto.randomUUID() 형태를 포괄한다. name: 경로 이탈(`../`, 구분자) 방지 */
+const ASSET_ID_RE = /^[A-Za-z0-9_-]{1,64}$/;
+const isSafeAssetName = (name: string) => typeof name === "string" && name.length > 0 && !/[/\\]/.test(name) && !name.includes("..");
+
 export function readBundle(zip: Uint8Array): { manifest: BundleManifest; reports: unknown[]; assets: BundleAsset[] } {
   let files: Record<string, Uint8Array>;
   try { files = unzipGuarded(zip); }
@@ -97,14 +102,23 @@ export function readBundle(zip: Uint8Array): { manifest: BundleManifest; reports
   if (manifest.format !== "daport-bundle") throw new BundleInvalidError("daport 번들이 아닙니다");
   if (manifest.version !== 1) throw new BundleInvalidError(`지원하지 않는 번들 version: ${String(manifest.version)}`);
   if (!Array.isArray(manifest.reports)) throw new BundleInvalidError("manifest.reports가 배열이 아닙니다");
+  for (const r of manifest.reports) if (typeof (r as { id?: unknown })?.id !== "string") throw new BundleInvalidError("manifest.reports 항목에 id가 없습니다");
   const reports = manifest.reports.map((r) => parseJson(files[`reports/${r.id}.json`], `reports/${r.id}.json`));
-  const meta = files["assets.json"] ? (parseJson(files["assets.json"], "assets.json") as { id: string; name: string; mime: string }[]) : [];
+  const warnings = Array.isArray(manifest.warnings) ? manifest.warnings.filter((w): w is string => typeof w === "string") : [];
+  const rawMeta = files["assets.json"] ? parseJson(files["assets.json"], "assets.json") : [];
+  const meta = Array.isArray(rawMeta) ? (rawMeta as { id: string; name: string; mime: string; size?: number }[]) : [];
   const assets: BundleAsset[] = [];
   for (const m of meta) {
     const data = files[`assets/${m.id}${ext(m.name)}`];
-    if (data) assets.push({ id: m.id, name: m.name, mime: m.mime, data });
+    if (!data) continue;
+    // 업로드 라우트보다 느슨한 검증으로 임의 mime을 공개 Blob에 쓰거나 경로를 이탈시키지 않도록, 못 미더운 항목은 담지 않고 경고만 남긴다
+    if (!ASSET_ID_RE.test(m.id)) { warnings.push(`에셋 id가 올바르지 않아 건너뜁니다: ${JSON.stringify(m.id)}`); continue; }
+    if (!isSafeAssetName(m.name)) { warnings.push(`에셋 이름이 올바르지 않아 건너뜁니다: ${m.id}`); continue; }
+    if (!IMAGE_TYPES.has(m.mime)) { warnings.push(`에셋 ${m.id}의 형식(${m.mime})을 지원하지 않아 건너뜁니다`); continue; }
+    if (data.length > MAX_ASSET_BYTES) { warnings.push(`에셋 ${m.id}이(가) 너무 커서 건너뜁니다 (${MAX_ASSET_BYTES}바이트 상한)`); continue; }
+    assets.push({ id: m.id, name: m.name, mime: m.mime, data });
   }
-  return { manifest: { warnings: [], connections: { sql: [], httpHosts: [] }, ...manifest } as BundleManifest, reports, assets };
+  return { manifest: { ...manifest, warnings, connections: manifest.connections ?? { sql: [], httpHosts: [] } } as BundleManifest, reports, assets };
 }
 
 /** sql 데이터셋의 connection 이름을 치환한 복제본. 그 밖은 그대로 */

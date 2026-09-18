@@ -4,6 +4,10 @@ import type { BundleAsset } from "./bundle";
 /** 에셋 저장소(Vercel Blob)가 설정됐는지. dev에서는 보통 없다 */
 export function assetStorageEnabled(): boolean { return !!process.env.BLOB_READ_WRITE_TOKEN; }
 
+/** 업로드 라우트가 허용하는 이미지 mime과 크기 상한. 번들 가져오기도 같은 규칙을 써야 한다 (스펙 6.3 I2) */
+export const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/svg+xml"]);
+export const MAX_ASSET_BYTES = 5 * 1024 * 1024;
+
 const prefix = (id: string) => `assets/${id}-`;
 
 export async function hasAsset(id: string): Promise<boolean> {
