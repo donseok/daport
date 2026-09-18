@@ -26,6 +26,8 @@ describe("POST /api/print", () => {
     expect(await res.json()).toEqual({ printer: "가짜", bytes: 14, pages: 2 });
     await new Promise((r) => setTimeout(r, 50));
     expect(Buffer.concat(received).toString()).toBe("^XA^XZ\n^XA^XZ\n");
+    // 회귀 가드: 이 라우트도 다른 렌더 경로처럼 Chromium 외부 요청 허용 목록을 renderLabel에 넘겨야 한다 (스펙 5.6)
+    expect(renderLabel.mock.calls[0][2]).toEqual({ allowHosts: expect.arrayContaining([expect.any(String)]) });
   });
   it("returns 400 for an unknown printer, a missing report, or a pdf report", async () => {
     expect((await call({ printer: "없음", report: label })).status).toBe(400);
