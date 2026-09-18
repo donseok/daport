@@ -9,3 +9,4 @@ playwright-report
 next-env.d.ts
 *.tsbuildinfo
 apps/studio/public/fonts
+apps/agent/dist
