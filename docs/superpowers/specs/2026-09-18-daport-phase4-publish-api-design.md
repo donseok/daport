@@ -58,7 +58,7 @@ apps/studio   + report_versions·api_keys 테이블, 버전 저장소, API 키 �
 
 | 메서드 | 동작 |
 |---|---|
-| `publish(id, note?) → { version, createdAt }` | draft를 읽어 저장 때와 같은 컴포넌트 검사(`checkReportComponents`: 해시 불일치 409, 미등록은 경고)와 미사용 컴포넌트 정리를 거친 뒤 버전 N으로 저장하고 포인터를 N으로 |
+| `publish(id, model, note?) → { version, createdAt }` | 컴포넌트 검사(`checkReportComponents`: 해시 불일치 409, 미등록은 경고)와 미사용 컴포넌트 정리를 거친 모델을 버전 N으로 저장하고 포인터를 N으로. `addVersion(id, model, note?)`도 같은 시그니처 — 라우트가 컴포넌트 검사를 마친 모델을 넘긴다 |
 | `setPublished(id, version)` | 포인터만 이동. 없는 버전이면 `NotFoundError`. draft는 건드리지 않음 |
 | `listVersions(id) → { versions: [{ version, createdAt, note, hash, published }], draftHash }` | `hash`는 4.4의 `reportHash(model)`. draft 해시와 비교해 "배포본과 다름" 표시에 쓴다 |
 | `getVersion(id, version) → Report \| null` | 지정 버전 모델 |
@@ -130,7 +130,7 @@ renderReport(report, { format, params, data?, props?, origin }) → { body: Buff
 
 ### 5.5 CORS
 
-MES 프론트가 브라우저에서 `published`·`render`를 부르면 `X-API-Key` 때문에 preflight가 필요하다. `DAPORT_CORS_ORIGINS`(쉼표 목록)에 있는 origin에만 `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Headers: content-type, x-api-key`, `Access-Control-Allow-Methods: GET, POST`, `Access-Control-Expose-Headers: x-daport-version, content-disposition`를 붙이고 `OPTIONS`에 204로 답한다. 목록에 없는 origin에는 헤더를 붙이지 않는다(브라우저가 막는다). 두 라우트에만 적용한다.
+MES 프론트가 브라우저에서 `published`·`render`를 부르면 `X-API-Key` 때문에 preflight가 필요하다. `DAPORT_CORS_ORIGINS`(쉼표 목록)에 있는 origin에만 `Access-Control-Allow-Origin: <origin>`, `Access-Control-Allow-Headers: content-type, x-api-key`, `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Expose-Headers: x-daport-version, content-disposition, x-daport-pages`를 붙이고 `OPTIONS`에 204로 답한다. 목록에 없는 origin에는 헤더를 붙이지 않는다(브라우저가 막는다). 두 라우트에만 적용한다.
 
 ### 5.6 서버 Chromium 외부 요청 허용 목록 (browser)
 
