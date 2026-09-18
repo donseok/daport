@@ -1,0 +1,11 @@
+{
+  "name": "@daport/oracle",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": { ".": "./src/index.ts", "./testing": "./src/testing.ts" },
+  "scripts": { "build": "tsc -p tsconfig.json --noEmit", "typecheck": "tsc -p tsconfig.json --noEmit", "test": "vitest run", "test:it": "ORACLE_IT=1 vitest run --config vitest.it.config.ts" },
+  "dependencies": { "@daport/datasource": "workspace:*", "oracledb": "^6.5.0" },
+  "devDependencies": { "@daport/core": "workspace:*", "@testcontainers/oraclefree": "^11.0.0", "testcontainers": "^11.0.0" }
+}
