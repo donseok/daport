@@ -61,11 +61,17 @@ function fit(parts: { system: string; history: ChatTurn[]; body: (opts: FitOpts)
   return { history, body: result.body, truncated };
 }
 
-/** 현재 모델(요소 트리) 섹션. maxLines가 있으면 앞에서부터 그만큼만 남긴다 */
+/**
+ * 현재 모델(요소 트리) 섹션. 맨 위에 페이지 크기·여백 한 줄을 붙인다(compactReport는
+ * 첫 줄이 반드시 요소 줄이어야 해서 페이지 정보를 넣지 않으므로 여기서 보충한다).
+ * maxLines가 있으면 요소 줄만 앞에서부터 그만큼 남긴다
+ */
 function renderModel(ctx: Pick<EditContext, "report">, opts: FitOpts): string {
+  const { width, height, margin } = ctx.report.page;
+  const pageLine = `page ${width}×${height}mm margin ${margin.join(",")}`;
   const compacted = compactReport(ctx.report, { text: opts.text, depth: opts.depth });
-  if (opts.maxLines === undefined) return compacted;
-  return compacted.split("\n").slice(0, opts.maxLines).join("\n");
+  const elementLines = opts.maxLines === undefined ? compacted : compacted.split("\n").slice(0, opts.maxLines).join("\n");
+  return elementLines.length > 0 ? `${pageLine}\n${elementLines}` : pageLine;
 }
 
 /** 편집·생성 프롬프트가 공유하는 섹션(현재 모델/데이터 필드/파라미터/컴포넌트 라이브러리) */

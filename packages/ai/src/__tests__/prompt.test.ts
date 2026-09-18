@@ -22,6 +22,7 @@ describe("buildEditPrompt", () => {
     expect(p.system).toContain("text:");                          // 축약 스키마가 들어 있다
     const last = p.messages.at(-1)!;
     expect(last.role).toBe("user");
+    expect(last.text).toContain("page 210×297mm");                // 페이지 크기·여백
     expect(last.text).toContain("t1 text 10,10 80×8");            // 압축된 모델
     expect(last.text).toContain("items.NO: string");
     expect(last.text).toContain("header 회사 헤더 v2");
