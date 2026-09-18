@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseReport } from "@daport/core";
-import { buildEditPrompt, validateEditPatch, MAX_INSTRUCTION_CHARS, type ChatTurn } from "@daport/ai";
+import { buildEditPrompt, validateEditPatch, estimateTokens, MAX_INSTRUCTION_CHARS, type ChatTurn } from "@daport/ai";
 import { readJsonBody, MAX_BODY_BYTES } from "@/lib/body";
 import { getLlmClient, aiErrorResponse, buildContext } from "@/lib/ai";
 
@@ -26,7 +26,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const raw = await client.complete({ system: prompt.system, messages: prompt.messages, schema: prompt.schema, signal: req.signal });
     const { patch, warnings } = validateEditPatch(report, raw);
     const explanation = typeof (raw as { explanation?: unknown }).explanation === "string" ? (raw as { explanation: string }).explanation : "";
-    console.log(`[ai] edit report=${id} ms=${Date.now() - started} ops=${patch.length}`);
+    // 스펙 6.1: 시각·레포트 id·종류·경과 시간·추정 토큰·op 수만 남긴다. 지시문·레포트 내용은 절대 로그에 넣지 않는다
+    const tokens = estimateTokens(prompt.system + prompt.messages.map((m) => m.text).join(""));
+    console.log(`[ai] ts=${new Date().toISOString()} id=${id} kind=edit ms=${Date.now() - started} tokens=${tokens} ops=${patch.length}`);
     return NextResponse.json({ patch, explanation, warnings: [...prompt.truncated.map((t) => `컨텍스트를 줄였습니다: ${t}`), ...warnings] });
   } catch (e) {
     return aiErrorResponse(e);

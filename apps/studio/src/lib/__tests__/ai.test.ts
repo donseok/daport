@@ -13,6 +13,12 @@ describe("lib/ai", () => {
     (globalThis as { __daportLlm?: unknown }).__daportLlm = undefined;
     expect(getLlmClient()).not.toBeNull();
   });
+  it("getLlmClient: AI_FAKE=1 is ignored in production without a key", async () => {
+    const { getLlmClient } = await import("../ai");
+    vi.stubEnv("NODE_ENV", "production"); vi.stubEnv("AI_FAKE", "1"); vi.stubEnv("GEMINI_API_KEY", "");
+    (globalThis as { __daportLlm?: unknown }).__daportLlm = undefined;
+    expect(getLlmClient()).toBeNull();
+  });
   it("buildContext collects fields from sample data (names/types only), params and the component library", async () => {
     const { buildContext } = await import("../ai");
     const { getComponentStore } = await import("../component-store");

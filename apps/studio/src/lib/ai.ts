@@ -7,10 +7,13 @@ import { getComponentStore } from "./component-store";
 
 const holder = globalThis as typeof globalThis & { __daportLlm?: LlmClient | null };
 
-/** AI_FAKE=1이면 E2E용 가짜, 키가 없으면 null(라우트가 503) */
+/** AI_FAKE=1이면 E2E용 가짜, 키가 없으면 null(라우트가 503). 프로덕션에서는 AI_FAKE를 무시한다(E2E는 `pnpm dev`로 돌아 NODE_ENV가 production이 아니다) */
 export function getLlmClient(): LlmClient | null {
   if (holder.__daportLlm !== undefined) return holder.__daportLlm;
-  if (process.env.AI_FAKE === "1") return (holder.__daportLlm = new FakeLlmClient(fakeScript));
+  if (process.env.AI_FAKE === "1") {
+    if (process.env.NODE_ENV !== "production") return (holder.__daportLlm = new FakeLlmClient(fakeScript));
+    console.warn("[ai] AI_FAKE는 프로덕션에서 무시됩니다");
+  }
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return null;   // 캐시하지 않는다 — 키를 넣고 재시작 없이 붙게 하려면 다음 요청에서 다시 본다
   return (holder.__daportLlm = createGeminiClient({ apiKey, model: process.env.GEMINI_MODEL || "gemini-3.8-flash", timeoutMs: Number(process.env.AI_TIMEOUT_MS) > 0 ? Number(process.env.AI_TIMEOUT_MS) : 60_000 }));

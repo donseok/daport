@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseReport } from "@daport/core";
-import { buildGeneratePrompt, validateGenerated, MAX_BRIEF_CHARS } from "@daport/ai";
+import { buildGeneratePrompt, validateGenerated, estimateTokens, MAX_BRIEF_CHARS } from "@daport/ai";
 import { readJsonBody, MAX_BODY_BYTES } from "@/lib/body";
 import { getLlmClient, aiErrorResponse, buildContext } from "@/lib/ai";
 import { getComponentStore } from "@/lib/component-store";
@@ -30,7 +30,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
     const { elements, components, warnings } = await validateGenerated(report, raw, lookup);
     const explanation = typeof (raw as { explanation?: unknown }).explanation === "string" ? (raw as { explanation: string }).explanation : "";
-    console.log(`[ai] generate report=${id} ms=${Date.now() - started} elements=${elements.length}`);
+    // 스펙 6.1: 시각·레포트 id·종류·경과 시간·추정 토큰·요소 수만 남긴다. brief·레포트 내용은 절대 로그에 넣지 않는다
+    const tokens = estimateTokens(prompt.system + prompt.messages.map((m) => m.text).join(""));
+    console.log(`[ai] ts=${new Date().toISOString()} id=${id} kind=generate ms=${Date.now() - started} tokens=${tokens} elements=${elements.length}`);
     return NextResponse.json({ elements, components, explanation, warnings: [...prompt.truncated.map((t) => `컨텍스트를 줄였습니다: ${t}`), ...warnings] });
   } catch (e) {
     return aiErrorResponse(e);
