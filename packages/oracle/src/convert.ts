@@ -1,7 +1,7 @@
-import type { FieldType } from "@daport/core";
-import { DatasetFailure } from "@daport/datasource";
+import { DatasetFailure, type SqlColumn } from "@daport/datasource";
 
 export type OracleMeta = { name: string; dbTypeName?: string };
+type FieldType = SqlColumn["type"];
 
 /** Oracle 컬럼 타입 → core FieldType. 지원하지 않는 타입은 null (4b 스펙 4.3) */
 export function convertColumnType(dbTypeName: string): FieldType | null {
