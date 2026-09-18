@@ -48,6 +48,7 @@ export function ReportList({ reports }: { reports: ReportSummary[] }) {
         <button className={btn} disabled={busy || checked.size === 0} onClick={exportZip}>내보내기</button>
         <label className={`${btn} cursor-pointer`}>가져오기<input type="file" accept=".zip,application/zip" aria-label="번들 파일" className="hidden" disabled={busy} onChange={(e) => { const f = e.target.files?.[0]; if (f) void importZip(f); e.target.value = ""; }} /></label>
         <Link className="text-xs text-blue-700 hover:underline ml-auto" href="/settings/keys">API 키</Link>
+        <Link className="text-xs text-blue-700 hover:underline" href="/settings/connections">연결</Link>
       </div>
       <ul className="divide-y bg-white border rounded mb-3">
         {reports.map((r) => (

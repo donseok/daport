@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/react";
 import { DatasetEditor } from "../DatasetEditor";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 
 describe("DatasetEditor", () => {
   it("static: commits valid JSON object arrays and shows an error otherwise", () => {
@@ -38,10 +38,12 @@ describe("DatasetEditor", () => {
     fireEvent.change(getByLabelText("rowsPath"), { target: { value: "data.items" } });
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ rowsPath: "data.items" }));
   });
-  it("sql: read-only notice, remove button calls onRemove", () => {
+  it("sql: shows the query form (connection select, bind hint), remove button calls onRemove", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify([]), { status: 200 })));
     const onRemove = vi.fn();
-    const { getByText, getByRole } = render(<DatasetEditor dataset={{ name: "q", type: "sql", connection: "mes", query: "SELECT 1" }} onChange={() => {}} onRemove={onRemove} />);
-    expect(getByText(/커넥터 미설정/)).toBeTruthy();
+    const { findByLabelText, getByTestId, getByRole } = render(<DatasetEditor dataset={{ name: "q", type: "sql", connection: "mes", query: "SELECT 1" }} onChange={() => {}} onRemove={onRemove} />);
+    expect(await findByLabelText("연결")).toBeTruthy();
+    expect(getByTestId("binds")).toBeTruthy();
     fireEvent.click(getByRole("button", { name: "삭제" }));
     expect(onRemove).toHaveBeenCalled();
   });

@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { inferFields, type Dataset, type FieldNode } from "@daport/core";
+import { inferFields, type Dataset, type FieldNode, type FieldType } from "@daport/core";
 import { useEditor } from "../store";
 
 /** sample 라우트의 오류 항목. 클라이언트 번들이 @daport/datasource를 끌어오지 않도록 여기서 모양만 적는다 (T15와 같은 레인이 아니다) */
@@ -24,6 +24,7 @@ export function DataPanel({ reportId }: { reportId: string }) {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<DatasetError[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const [columnTypes, setColumnTypes] = useState<Record<string, Record<string, FieldType>>>({});
   const sample = report.sample;
   const sampleParams = sample?.params ?? {};
 
@@ -31,9 +32,9 @@ export function DataPanel({ reportId }: { reportId: string }) {
     setSample({ params: { ...sampleParams, [name]: value }, data: sample?.data ?? {}, capturedAt: sample?.capturedAt ?? new Date(0).toISOString() });
   const replaceDataset = (i: number, ds: Dataset) => setDatasets(report.datasets.map((d, k) => (k === i ? ds : d)));
   const removeDataset = (i: number) => setDatasets(report.datasets.filter((_, k) => k !== i));
-  const add = (type: "static" | "http") => {
+  const add = (type: "static" | "http" | "sql") => {
     const name = newDatasetName(report.datasets);
-    setDatasets([...report.datasets, type === "static" ? { name, type, rows: [] } : { name, type, url: "", method: "GET", headers: {} }]);
+    setDatasets([...report.datasets, type === "static" ? { name, type, rows: [] } : type === "sql" ? { name, type, connection: "", query: "" } : { name, type, url: "", method: "GET", headers: {} }]);
   };
   const fetchSample = async () => {
     setBusy(true); setFailure(null);
@@ -45,6 +46,9 @@ export function DataPanel({ reportId }: { reportId: string }) {
       // 성공한 데이터셋만 덮어쓴다(실패한 것은 이전 샘플 유지). 되돌리기 한 단위
       setSample({ params: sampleParams, data: { ...(sample?.data ?? {}), ...res.data }, capturedAt: res.capturedAt });
       setErrors(res.errors);
+      if (res.columns) {
+        setColumnTypes((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(res.columns).map(([ds, cols]) => [ds, Object.fromEntries(cols.map((c) => [c.name, c.type as FieldType]))])) }));
+      }
     } catch (e) {
       setFailure(e instanceof Error ? e.message : String(e));
     } finally {
@@ -63,10 +67,11 @@ export function DataPanel({ reportId }: { reportId: string }) {
       </section>
       <section className="flex flex-col gap-1">
         <div className="text-xs font-semibold">데이터셋</div>
-        {report.datasets.map((ds, i) => <DatasetEditor key={i} dataset={ds} onChange={(d) => replaceDataset(i, d)} onRemove={() => removeDataset(i)} />)}
+        {report.datasets.map((ds, i) => <DatasetEditor key={i} dataset={ds} params={report.params} onChange={(d) => replaceDataset(i, d)} onRemove={() => removeDataset(i)} />)}
         <div className="flex gap-1">
           <button className={btn} onClick={() => add("static")}>+ static</button>
           <button className={btn} onClick={() => add("http")}>+ http</button>
+          <button className={btn} onClick={() => add("sql")}>+ sql</button>
         </div>
       </section>
       <section className="flex flex-col gap-1">
@@ -77,7 +82,7 @@ export function DataPanel({ reportId }: { reportId: string }) {
       </section>
       <section className="flex flex-col gap-2">
         <div className="text-xs font-semibold">필드</div>
-        {report.datasets.map((ds) => <FieldTree key={ds.name} dataset={ds.name} nodes={inferFields(rowsFor(ds))} />)}
+        {report.datasets.map((ds) => <FieldTree key={ds.name} dataset={ds.name} nodes={inferFields(rowsFor(ds), { columnTypes: columnTypes[ds.name] })} />)}
       </section>
     </div>
   );
