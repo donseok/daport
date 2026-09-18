@@ -30,7 +30,8 @@ export function PublishControls({ reportId }: { reportId: string }) {
       if (j && typeof j === "object" && Array.isArray((j as { versions?: unknown }).versions)) setInfo(j as Versions);
     } catch { /* 배지는 마지막 값을 유지한다 */ }
   }, [base]);
-  useEffect(() => { void refresh(); }, [refresh]);
+  // 저장이 끝나 dirty가 false로 돌아올 때 draftHash를 다시 읽어 "수정됨" 배지를 맞춘다 (마운트 시에도 한 번 읽는다)
+  useEffect(() => { if (!dirty) void refresh(); }, [dirty, refresh]);
 
   const published = info?.versions.find((v) => v.version === info.publishedVersion) ?? null;
   const modified = !!published && published.hash !== info!.draftHash;

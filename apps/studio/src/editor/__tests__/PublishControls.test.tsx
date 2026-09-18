@@ -77,4 +77,27 @@ describe("PublishControls", () => {
     expect(snippet).toContain("<API_KEY>");
     expect(snippet).toContain("/api/reports/r/published");
   });
+  it("re-fetches versions and shows 수정됨 once dirty returns to false after a save", async () => {
+    let draftHash = "a";   // v1의 hash와 같다 (아직 수정 없음)
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url.endsWith("/versions")) {
+        return new Response(JSON.stringify({ versions: [{ version: 1, createdAt: "", note: null, hash: "a", published: true }], publishedVersion: 1, draftHash }), { status: 200 });
+      }
+      return new Response("{}", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(report);
+    render(<EditorContext.Provider value={store}><PublishControls reportId="r" /></EditorContext.Provider>);
+    await waitFor(() => expect(screen.getByTestId("publish-badge").textContent).toContain("v1 배포됨"));
+    expect(screen.getByTestId("publish-badge").textContent).not.toContain("수정됨");
+    const versionsCallsBefore = fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/versions")).length;
+
+    draftHash = "b";   // 저장으로 draft가 바뀐 상황을 흉내낸다
+    act(() => store.setState({ dirty: true }));
+    act(() => store.setState({ dirty: false }));   // Toolbar의 저장 완료
+
+    await waitFor(() => expect(screen.getByTestId("publish-badge").textContent).toContain("v1 배포됨 · 수정됨"));
+    const versionsCallsAfter = fetchMock.mock.calls.filter(([u]) => String(u).endsWith("/versions")).length;
+    expect(versionsCallsAfter).toBeGreaterThan(versionsCallsBefore);
+  });
 });
