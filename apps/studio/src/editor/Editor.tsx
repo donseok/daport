@@ -15,6 +15,7 @@ import { EditorErrorBoundary } from "./EditorErrorBoundary";
 import { DataPanel } from "./data/DataPanel";
 import { LibraryPanel } from "./library/LibraryPanel";
 import { PropsPanel } from "./panels/PropsPanel";
+import { AiPanel } from "./ai/AiPanel";
 
 function Body({ reportId, zoom }: { reportId: string; zoom: number }) {
   const mode = useEditor((s) => s.mode);
@@ -41,12 +42,15 @@ function useUnsavedChangesWarning(store: EditorStore) {
 type Tab = "elements" | "data" | "components" | "props";
 const TAB_LABEL: Record<Tab, string> = { elements: "요소", data: "데이터", components: "컴포넌트", props: "입력값" };
 
+type BottomTab = "json" | "ai";
+
 /** componentMode가 있으면 컴포넌트 전용 편집 화면이다(스펙 7.5). 중첩 금지라 라이브러리 탭을 두지 않는다 */
 export function Editor({ initial, componentMode }: { initial: Report; componentMode?: EditorState["componentMode"] }) {
   const store = useMemo(() => createEditorStore(initial, componentMode ? { componentMode } : undefined), [initial, componentMode]);
   const report = useStore(store, (s) => s.report);
   const [zoom, setZoom] = useState(1);
   const [tab, setTab] = useState<Tab>("elements");
+  const [bottomTab, setBottomTab] = useState<BottomTab>("json");
   const tabs: Tab[] = componentMode ? ["elements", "props"] : ["elements", "data", "components"];
   useKeyboard(store);
   useUnsavedChangesWarning(store);
@@ -71,7 +75,18 @@ export function Editor({ initial, componentMode }: { initial: Report; componentM
           </aside>
           <main className="min-w-0 min-h-0 flex flex-col">
             <div className="flex-1 min-h-0 overflow-auto"><Body reportId={initial.id} zoom={zoom} /></div>
-            <div className="h-64 border-t bg-white"><JsonEditor /></div>
+            <div className="h-64 border-t bg-white flex flex-col">
+              {/* 컴포넌트 편집 화면에서는 AI 탭을 숨긴다(컴포넌트 내용 편집은 범위 밖) */}
+              {!componentMode && (
+                <div className="flex border-b text-xs shrink-0">
+                  <button className={`flex-1 py-1 ${bottomTab === "json" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("json")}>JSON</button>
+                  <button className={`flex-1 py-1 ${bottomTab === "ai" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("ai")}>AI</button>
+                </div>
+              )}
+              {/* Monaco는 숨길 때도 언마운트하지 않는다(편집기 상태 보존) */}
+              <div className={`flex-1 min-h-0 ${!componentMode && bottomTab === "ai" ? "hidden" : ""}`}><JsonEditor /></div>
+              {!componentMode && bottomTab === "ai" && <div className="flex-1 min-h-0"><AiPanel reportId={initial.id} /></div>}
+            </div>
           </main>
           <aside className="border-l bg-white overflow-auto"><PagePanel /><PropertyPanel /></aside>
         </div>
