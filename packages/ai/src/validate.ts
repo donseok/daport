@@ -135,6 +135,11 @@ export function validateEditPatch(report: Report, raw: unknown): { patch: Operat
       warnings.push(`금지된 경로라 건너뜀: ${o.path}`);
       continue;
     }
+    // move·copy는 목적지(path)뿐 아니라 원본(from)도 허용 경로 안이어야 한다
+    if ((o.op === "move" || o.op === "copy") && !pathAllowed(o.from)) {
+      warnings.push(`금지된 경로라 건너뜀: ${o.from}`);
+      continue;
+    }
     patch.push(o);
   }
 

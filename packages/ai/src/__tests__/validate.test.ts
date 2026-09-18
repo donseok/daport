@@ -42,6 +42,30 @@ describe("validateEditPatch", () => {
     expect(added.id).toMatch(/^text-\d+$/);
     expect(added.w).toBe(20);
   });
+  it("drops a copy whose from-path is forbidden, even though the destination path is allowed", () => {
+    const res = validateEditPatch(report, raw([{ op: "copy", from: "/output/kind", path: "/name" }]));
+    expect(res.patch).toHaveLength(0);
+    expect(res.warnings.join(" ")).toMatch(/\/output\/kind/);
+    expect(res.next.name).toBe("R");
+    expect(res.next.output.kind).toBe("pdf");
+  });
+  it("drops a move whose from-path is forbidden, leaving the forbidden field in place", () => {
+    const res = validateEditPatch(report, raw([{ op: "move", from: "/id", path: "/name" }]));
+    expect(res.patch).toHaveLength(0);
+    expect(res.warnings.join(" ")).toMatch(/\/id/);
+    expect(res.next.id).toBe("r");
+    expect(res.next.name).toBe("R");
+  });
+  it("still applies a legal move between two /elements paths", () => {
+    const res = validateEditPatch(report, raw([
+      op("add", "/elements/-", { id: "t2", type: "text", x: 0, y: 0, w: 10, h: 5, value: "b" }),
+      { op: "move", from: "/elements/1", path: "/elements/0" },
+    ]));
+    expect(res.warnings).toEqual([]);
+    expect(res.patch).toHaveLength(2);
+    expect(res.next.elements[0]).toMatchObject({ id: "t2" });
+    expect(res.next.elements[1]).toMatchObject({ id: "t1" });
+  });
   it("throws AiValidationError when the result fails the schema, and for a malformed response", () => {
     expect(() => validateEditPatch(report, raw([op("replace", "/elements/0/w", -5)]))).toThrow(AiValidationError);
     expect(() => validateEditPatch(report, raw([{ op: "frobnicate", path: "/elements/0" }]))).toThrow(AiValidationError);
