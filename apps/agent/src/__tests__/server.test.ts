@@ -6,7 +6,15 @@ import { createAgentServer } from "../server";
 
 const TOKEN = "t".repeat(32);
 let base: string; let server: ReturnType<typeof createAgentServer>; const logs: string[] = [];
-const fake = new FakeSqlConnector().when("FROM SLOW", { delayMs: 300 }).when("FROM BAD", { fail: "SQL_ERROR" }).when("FROM LATE", { fail: "TIMEOUT" });
+const fake = new FakeSqlConnector().when("FROM SLOW", { delayMs: 2_000 }).when("FROM BAD", { fail: "SQL_ERROR" }).when("FROM LATE", { fail: "TIMEOUT" });
+/** fake.calls에 n개가 쌓일 때까지 짧게 폴링한다. 고정 sleep보다 느린 CI에서도 결정적이다 */
+const waitForCalls = async (n: number, maxMs = 1_000) => {
+  const start = Date.now();
+  while (fake.calls.length < n) {
+    if (Date.now() - start > maxMs) throw new Error(`calls did not reach ${n} within ${maxMs}ms`);
+    await new Promise((r) => setTimeout(r, 10));
+  }
+};
 const post = (body: unknown, token: string | null = TOKEN, raw = false) => fetch(`${base}/query`, { method: "POST", headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), "content-type": "application/json" }, body: raw ? (body as string) : JSON.stringify(body) });
 
 beforeAll(async () => {
@@ -60,8 +68,9 @@ describe("agent server", () => {
     expect(late.status).toBe(504); expect((await late.json()).error.code).toBe("TIMEOUT");
   });
   it("returns 429 beyond maxConcurrency", async () => {
+    const before = fake.calls.length;
     const slow = [post({ sql: "SELECT 1 FROM SLOW" }), post({ sql: "SELECT 1 FROM SLOW" })];
-    await new Promise((r) => setTimeout(r, 50));
+    await waitForCalls(before + 2);   // 두 느린 요청이 커넥터에 들어갈 때까지만 기다린다 — 고정 sleep이 아니라 결정적 신호
     const third = await post({ sql: "SELECT 1 FROM DUAL" });
     expect(third.status).toBe(429); expect((await third.json()).error.code).toBe("BUSY");
     expect((await Promise.all(slow)).map((r) => r.status)).toEqual([200, 200]);

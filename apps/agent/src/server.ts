@@ -1,7 +1,7 @@
 import http from "node:http";
 import https from "node:https";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { DatasetFailure, DEFAULT_LIMITS, type DatasetErrorCode } from "@daport/datasource";
+import { DatasetFailure, DEFAULT_LIMITS, guardSql, type DatasetErrorCode } from "@daport/datasource";
 import type { ManagedConnector } from "@daport/oracle";
 
 export type AgentOptions = { connector: ManagedConnector; token: string; version: string; maxConcurrency?: number; maxBodyBytes?: number; log?: (line: string) => void; tls?: { cert: string; key: string } };
@@ -62,6 +62,7 @@ export function createAgentServer(opts: AgentOptions): http.Server | https.Serve
         const clamp = (v: unknown, max: number) => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.min(v, max) : max);
         const timeoutMs = clamp(body.timeoutMs, DEFAULT_LIMITS.timeoutMs), maxRows = clamp(body.maxRows, DEFAULT_LIMITS.maxRows);
         try {
+          guardSql(body.sql);   // 커넥터가 어차피 다시 걸지만, 서버 계약 자체가 가드를 명시하도록 (스펙 6.2)
           const result = await opts.connector.query(body.sql, binds, { timeoutMs, maxRows, signal: AbortSignal.timeout(timeoutMs) });
           rows = result.rows.length;
           return send(res, 200, result);
