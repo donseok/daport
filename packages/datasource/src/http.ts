@@ -125,7 +125,7 @@ function toFailure(e: unknown, signal: AbortSignal): DatasetFailure {
 }
 
 /** 응답 본문을 스트림으로 읽으며 maxBytes를 넘으면 중단한다 */
-async function readLimited(res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
+export async function readResponseLimited(res: Response, maxBytes: number, signal: AbortSignal): Promise<string> {
   const reader = res.body?.getReader();
   if (!reader) return res.text();
   const chunks: Uint8Array[] = [];
@@ -174,7 +174,7 @@ export function createFetchHttpConnector(opts: { allow: string[]; fetch?: typeof
         throw toFailure(e, signal);
       }
       if (!res.ok) throw new DatasetFailure("HTTP_STATUS", `HTTP ${res.status}`);   // 3xx도 manual이라 여기로 온다
-      const text = await readLimited(res, limits.maxBytes, signal);
+      const text = await readResponseLimited(res, limits.maxBytes, signal);
       try { return JSON.parse(text) as unknown; } catch { throw new DatasetFailure("BAD_JSON", "response is not valid JSON"); }
     },
   };

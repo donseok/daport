@@ -30,3 +30,12 @@ describe("inferFields", () => {
     expect(inferFields([1, 2])).toEqual([]);
   });
 });
+
+describe("inferFields columnTypes", () => {
+  it("builds nodes from column types when there are no rows and overrides inferred top-level types", () => {
+    expect(inferFields([], { columnTypes: { NO: "string", DT: "date" } })).toEqual([{ name: "NO", path: "NO", type: "string" }, { name: "DT", path: "DT", type: "date" }]);
+    const nodes = inferFields([{ NO: "123", QTY: "4" }], { columnTypes: { QTY: "number" } });
+    expect(nodes.find((n) => n.name === "QTY")?.type).toBe("number");
+    expect(nodes.find((n) => n.name === "NO")?.type).toBe("string");
+  });
+});
