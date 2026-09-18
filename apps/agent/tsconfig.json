@@ -1,1 +1,1 @@
-{ "extends": "../../tsconfig.base.json", "include": ["src", "scripts", "../../packages/oracle/src/oracledb.d.ts"], "compilerOptions": { "types": ["node"] } }
+{ "extends": "../../tsconfig.base.json", "include": ["src", "scripts"], "compilerOptions": { "types": ["node"] } }
