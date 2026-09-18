@@ -51,6 +51,9 @@ importers:
       '@daport/label':
         specifier: workspace:*
         version: link:../../packages/label
+      '@daport/oracle':
+        specifier: workspace:*
+        version: link:../../packages/oracle
       '@daport/pdf':
         specifier: workspace:*
         version: link:../../packages/pdf
@@ -184,9 +187,6 @@ importers:
         specifier: ^6.5.0
         version: 6.10.0
     devDependencies:
-      '@daport/core':
-        specifier: workspace:*
-        version: link:../core
       '@testcontainers/oraclefree':
         specifier: ^11.0.0
         version: 11.14.0
