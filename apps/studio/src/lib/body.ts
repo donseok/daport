@@ -32,6 +32,10 @@ export async function readJsonBody(req: Request, maxBytes: number): Promise<Pars
   }
   let parsed: unknown = {};
   if (text.trim() !== "") {
+    // CORS 단순 요청(text/plain 등, 프리플라이트 없이 어느 출처에서나 보낼 수 있다)으로 SQL을 실행시키는 경로를 막는다.
+    // 본문이 있을 때만 검사한다 — 빈 본문(예: 바디 없는 POST)은 content-type과 무관하게 계속 허용한다
+    const contentType = req.headers.get("content-type") ?? "";
+    if (!contentType.toLowerCase().startsWith("application/json")) return fail(415, "content-type은 application/json이어야 합니다");
     try { parsed = JSON.parse(text); } catch { return fail(400, "요청 본문이 올바른 JSON이 아닙니다"); }
   }
   if (parsed === null) parsed = {};

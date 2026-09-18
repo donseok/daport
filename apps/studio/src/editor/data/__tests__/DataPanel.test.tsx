@@ -52,6 +52,25 @@ describe("DataPanel", () => {
     expect(url).toBe("/api/reports/r/sample");
     expect(JSON.parse((init as RequestInit).body as string)).toMatchObject({ params: { no: "Z" }, report: { id: "r" } });
   });
+  it("prunes stale columnTypes hints on rename, so a later dataset reusing the name is not stuck with the old hint", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(new Response(JSON.stringify({
+      data: { items: [{ N: 1 }] }, fields: { items: [{ name: "N", path: "N", type: "string" }] },
+      columns: { items: [{ name: "N", type: "string" }] },
+      errors: [], capturedAt: "2026-09-17T00:00:00.000Z" }), { status: 200 }));
+    const { getByRole, getByTestId, getAllByLabelText } = setup();
+    fireEvent.click(getByRole("button", { name: "샘플 가져오기" }));
+    await waitFor(() => expect(getByTestId("fields-items").querySelector('[data-path="N"]')?.textContent).toContain("T"));   // 서버 힌트대로 string
+
+    // "items"를 다른 이름으로 바꾼다 — 옛 이름에 대한 힌트가 남으면 안 된다
+    fireEvent.change(getAllByLabelText("이름")[0], { target: { value: "renamed" } });
+    // 이름 "items"를 재사용하는 새 정적 데이터셋을 추가하고 숫자 값을 넣는다
+    fireEvent.click(getByRole("button", { name: "+ static" }));
+    fireEvent.change(getAllByLabelText("이름")[1], { target: { value: "items" } });
+    fireEvent.change(getAllByLabelText("행(JSON)")[1], { target: { value: JSON.stringify([{ N: 2 }]) } });
+
+    // 옛 "items" 힌트가 정리되지 않았다면 새 데이터셋의 N도 string(T)으로 보였을 것 — 실제로는 자연 추론된 number(#)
+    await waitFor(() => expect(getByTestId("fields-items").querySelector('[data-path="N"]')?.textContent).toContain("#"));
+  });
   it("shows the HTTP error message when the sample request fails", async () => {
     (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue(new Response(JSON.stringify({ error: "missing required param: no" }), { status: 400 }));
     const { getByRole, findByText } = setup();

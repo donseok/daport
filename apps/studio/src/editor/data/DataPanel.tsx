@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { inferFields, type Dataset, type FieldNode, type FieldType } from "@daport/core";
 import { useEditor } from "../store";
 
@@ -27,6 +27,19 @@ export function DataPanel({ reportId }: { reportId: string }) {
   const [columnTypes, setColumnTypes] = useState<Record<string, Record<string, FieldType>>>({});
   const sample = report.sample;
   const sampleParams = sample?.params ?? {};
+
+  // 데이터셋 이름으로 키를 매기다 보니 이름 변경/삭제 뒤에도 옛 힌트가 남는다. 나중에 그 이름을 재사용하는
+  // 데이터셋이 실제 샘플 없이 옛 컬럼 타입을 물려받지 않도록, 목록이 바뀔 때마다 없는 키를 정리한다 (Minor 8)
+  useEffect(() => {
+    const names = new Set(report.datasets.map((d) => d.name));
+    setColumnTypes((prev) => {
+      const stale = Object.keys(prev).filter((k) => !names.has(k));
+      if (stale.length === 0) return prev;
+      const next = { ...prev };
+      for (const k of stale) delete next[k];
+      return next;
+    });
+  }, [report.datasets]);
 
   const setParam = (name: string, value: string) =>
     setSample({ params: { ...sampleParams, [name]: value }, data: sample?.data ?? {}, capturedAt: sample?.capturedAt ?? new Date(0).toISOString() });
