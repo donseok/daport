@@ -59,10 +59,19 @@ function inferObjects(objs: Record<string, unknown>[], prefix: string, depth: nu
 
 /**
  * 행 배열(또는 객체 하나)의 앞 sampleSize행에서 필드 트리를 추론한다. 순수 함수.
- * 키는 처음 본 순서, 타입은 null이 아닌 가장 흔한 타입(동률이면 string). object·array는 깊이 maxDepth까지 하위 필드를 가진다
+ * 키는 처음 본 순서, 타입은 null이 아닌 가장 흔한 타입(동률이면 string). object·array는 깊이 maxDepth까지 하위 필드를 가진다.
+ * columnTypes가 있으면(sql 데이터셋의 컬럼 타입 힌트) 최상위 키의 타입을 덮어쓰고, 행이 없어도 그 키들로 노드를 만든다
  */
-export function inferFields(rows: unknown, opts: { sampleSize?: number; maxDepth?: number } = {}): FieldNode[] {
-  const { sampleSize = 200, maxDepth = 5 } = opts;
+export function inferFields(rows: unknown, opts: { sampleSize?: number; maxDepth?: number; columnTypes?: Record<string, FieldType> } = {}): FieldNode[] {
+  const { sampleSize = 200, maxDepth = 5, columnTypes } = opts;
   const list = Array.isArray(rows) ? rows.slice(0, sampleSize) : isObject(rows) ? [rows] : [];
-  return inferObjects(list.filter(isObject), "", 0, maxDepth);
+  const nodes = inferObjects(list.filter(isObject), "", 0, maxDepth);
+  if (!columnTypes) return nodes;
+  const byName = new Map(nodes.map((n) => [n.name, n]));
+  for (const [name, type] of Object.entries(columnTypes)) {
+    const node = byName.get(name);
+    if (node) node.type = type;
+    else nodes.push({ name, path: name, type });
+  }
+  return nodes;
 }

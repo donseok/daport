@@ -2,8 +2,9 @@ import type { FieldType } from "@daport/core";
 
 export type DatasetErrorCode =
   | "TIMEOUT" | "HOST_NOT_ALLOWED" | "HTTP_STATUS" | "BAD_JSON" | "ROWS_PATH" | "TOO_LARGE" | "TOO_MANY_ROWS"
-  | "SQL_NOT_CONFIGURED" | "SQL_ERROR" | "BAD_DATA" | "BAD_PARAM";
+  | "SQL_NOT_CONFIGURED" | "SQL_ERROR" | "SQL_NOT_ALLOWED" | "BAD_DATA" | "BAD_PARAM";
 export type DatasetError = { dataset: string; code: DatasetErrorCode; message: string };
+export type SqlColumn = { name: string; type: FieldType };
 
 /** 데이터셋 하나의 실행 실패. executeDatasets가 errors 항목으로 바꾼다 */
 export class DatasetFailure extends Error {
@@ -27,7 +28,7 @@ export interface HttpConnector { request(req: HttpRequest, limits: Limits): Prom
  */
 export interface SqlConnector {
   query(sql: string, binds: Record<string, unknown>, opts: { timeoutMs: number; maxRows: number; signal?: AbortSignal }):
-    Promise<{ rows: Record<string, unknown>[]; columns: { name: string; type: FieldType }[] }>;
+    Promise<{ rows: Record<string, unknown>[]; columns: SqlColumn[] }>;
 }
 export type Connectors = { http?: HttpConnector; sql?: Record<string, SqlConnector> };   // sql은 connection 이름별
 export type SecretResolver = (name: string) => string | undefined;

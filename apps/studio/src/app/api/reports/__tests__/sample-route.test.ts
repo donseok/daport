@@ -1,5 +1,10 @@
 // @vitest-environment node
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+import { FakeSqlConnector } from "@daport/oracle/testing";
+
+const fake = new FakeSqlConnector().when("FROM EMPTY", { rows: [], columns: [{ name: "NO", type: "string" }, { name: "DT", type: "date" }] });
+vi.mock("@daport/oracle", async (orig) => ({ ...(await orig<typeof import("@daport/oracle")>()), connectorFor: vi.fn(() => fake) }));
+
 import { POST } from "../[id]/sample/route";
 import { SAMPLE_ROWS } from "@/lib/datasets";
 
@@ -23,5 +28,19 @@ describe("POST /api/reports/[id]/sample", () => {
   it("returns 400 for a missing required param and 404 for an unknown stored report", async () => {
     expect((await call({ report, params: {} })).status).toBe(400);
     expect((await call({ params: {} })).status).toBe(404);
+  });
+});
+
+describe("sample columns", () => {
+  it("returns sql columns and uses them as field type hints even with no rows", async () => {
+    const { getConnectionStore } = await import("@/lib/connection-store");
+    await getConnectionStore().upsert({ name: "mes", via: "direct", host: "h", port: 1521, service: "s", user: "u", secretRef: "MES_DB" });
+    vi.stubEnv("DAPORT_SECRET_MES_DB", "pw");
+    const report = { id: "sc", version: 1, page: { width: 10, height: 10 }, datasets: [{ name: "lines", type: "sql", connection: "mes", query: "SELECT NO FROM EMPTY" }] };
+    const res = await call({ report, params: {} });
+    const body = await res.json();
+    expect(body.columns).toEqual({ lines: [{ name: "NO", type: "string" }, { name: "DT", type: "date" }] });
+    expect(body.fields.lines).toEqual([{ name: "NO", path: "NO", type: "string" }, { name: "DT", path: "DT", type: "date" }]);
+    vi.unstubAllEnvs();
   });
 });

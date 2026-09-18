@@ -65,3 +65,13 @@ describe("toRows", () => {
     for (const bad of [null, 1, "s", [1], [{ a: 1 }, null], undefined]) expect(() => toRows(bad)).toThrow(DatasetFailure);
   });
 });
+
+describe("executeDatasets columns", () => {
+  it("returns the sql connector's columns per dataset", async () => {
+    const r = parseReport({ id: "c", version: 1, page: { width: 10, height: 10 }, datasets: [{ name: "lines", type: "sql", connection: "mes", query: "SELECT 1 FROM DUAL" }] });
+    const query = async () => ({ rows: [], columns: [{ name: "NO", type: "string" as const }] });
+    const { columns, errors } = await executeDatasets(r, { params: {}, connectors: { sql: { mes: { query } } }, secrets: () => undefined });
+    expect(errors).toEqual([]);
+    expect(columns).toEqual({ lines: [{ name: "NO", type: "string" }] });
+  });
+});

@@ -2,7 +2,7 @@
 import { describe, it, expect } from "vitest";
 import { readJsonBody, propsField } from "../body";
 
-const req = (body: string | null, headers: Record<string, string> = {}) => new Request("http://x/", { method: "POST", body, headers });
+const req = (body: string | null, headers: Record<string, string> = {}) => new Request("http://x/", { method: "POST", body, headers: { "content-type": "application/json", ...headers } });
 
 describe("readJsonBody", () => {
   it("parses an object, treats empty and null as {}, rejects non-objects and bad JSON with 400", async () => {
@@ -21,6 +21,17 @@ describe("readJsonBody", () => {
     if (!byHeader.ok) expect(byHeader.response.status).toBe(413); else throw new Error("expected 413");
     const byBytes = await readJsonBody(req(JSON.stringify({ s: "x".repeat(200) })), 100);
     if (!byBytes.ok) expect(byBytes.response.status).toBe(413); else throw new Error("expected 413");
+  });
+  it("rejects a non-empty body whose content-type is not application/json with 415", async () => {
+    const plain = await readJsonBody(req('{"a":1}', { "content-type": "text/plain" }), 100);
+    expect(plain.ok).toBe(false);
+    if (!plain.ok) expect(plain.response.status).toBe(415);
+    const missing = await readJsonBody(req('{"a":1}', { "content-type": "" }), 100);
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.response.status).toBe(415);
+  });
+  it("allows an empty body regardless of content-type", async () => {
+    expect(await readJsonBody(req(null, { "content-type": "text/plain" }), 100)).toEqual({ ok: true, body: {} });
   });
 });
 

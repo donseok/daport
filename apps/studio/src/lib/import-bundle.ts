@@ -4,7 +4,11 @@ import { checkReportComponents } from "./report-guard";
 import type { ReportStore } from "./report-store";
 
 export type ImportResult = { imported: { id: string; action: "created" | { version: number } }[]; skipped: { id: string; reason: string }[]; warnings: string[] };
-export type ImportDeps = { store: ReportStore; assets: { has(id: string): Promise<boolean>; put(a: BundleAsset): Promise<void> } | null };
+export type ImportDeps = {
+  store: ReportStore;
+  assets: { has(id: string): Promise<boolean>; put(a: BundleAsset): Promise<void> } | null;
+  connections?: { list(): Promise<{ name: string }[]> };
+};
 
 /**
  * 번들 가져오기 (4단계 스펙 6.3). 에셋은 없는 것만 올리고, 레포트는 같은 id가 있으면 새 버전(배포 안 함), 없으면 draft로 만든다.
@@ -18,6 +22,7 @@ export async function importBundle(zip: Uint8Array, opts: { filename: string; co
   } else if (bundle.assets.length) {
     result.warnings.push(`에셋 저장소가 없어 에셋 ${bundle.assets.length}개를 건너뛰었습니다`);
   }
+  const known = new Set((await deps.connections?.list() ?? []).map((c) => c.name));
   for (const raw of bundle.reports) {
     const id = (raw as { id?: unknown })?.id;
     if (typeof id !== "string") { result.skipped.push({ id: "?", reason: "id가 없습니다" }); continue; }
@@ -27,6 +32,7 @@ export async function importBundle(zip: Uint8Array, opts: { filename: string; co
       const guard = await checkReportComponents(report);
       if (!guard.ok) { result.skipped.push({ id, reason: guard.body.code }); continue; }
       result.warnings.push(...guard.warnings.map((w) => `${id}: ${w}`));
+      for (const d of guard.report.datasets) if (d.type === "sql" && !known.has(d.connection)) result.warnings.push(`${id}: 연결 ${d.connection}이(가) 이 인스턴스에 없습니다`);
       const missing = deps.assets ? [] : collectAssetIds(report);
       if (missing.length) result.warnings.push(`${id}: 에셋 ${missing.join(", ")}은(는) 이 인스턴스에 없습니다`);
       if (await deps.store.get(id)) {

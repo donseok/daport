@@ -56,3 +56,11 @@ export const apiKeys = pgTable("api_keys", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
 });
+
+/** Oracle 연결 설정 (4b 스펙 4.4). 비밀값은 secretRef 이름만 body에 있고 값은 환경변수에만 있다 */
+export const connections = pgTable("connections", {
+  name: text("name").primaryKey(),
+  body: jsonb("body").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

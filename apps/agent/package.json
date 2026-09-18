@@ -1,0 +1,9 @@
+{
+  "name": "agent",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": { "dev": "tsx src/main.ts", "build": "node scripts/build.mjs", "start": "node dist/agent.mjs", "typecheck": "tsc --noEmit", "test": "vitest run" },
+  "dependencies": { "@daport/oracle": "workspace:*", "@daport/datasource": "workspace:*", "oracledb": "^6.5.0" },
+  "devDependencies": { "esbuild": "^0.24.0", "tsx": "^4.19.0", "@types/node": "^24.0.0" }
+}

@@ -1,6 +1,6 @@
 "use client";
-import { useState } from "react";
-import { inferFields, type Dataset, type FieldNode } from "@daport/core";
+import { useEffect, useState } from "react";
+import { inferFields, type Dataset, type FieldNode, type FieldType } from "@daport/core";
 import { useEditor } from "../store";
 
 /** sample 라우트의 오류 항목. 클라이언트 번들이 @daport/datasource를 끌어오지 않도록 여기서 모양만 적는다 (T15와 같은 레인이 아니다) */
@@ -9,7 +9,7 @@ import { TextField } from "../panels/Field";
 import { DatasetEditor } from "./DatasetEditor";
 import { FieldTree } from "./FieldTree";
 
-type SampleResponse = { data: Record<string, unknown[]>; fields: Record<string, FieldNode[]>; errors: DatasetError[]; capturedAt: string };
+type SampleResponse = { data: Record<string, unknown[]>; fields: Record<string, FieldNode[]>; columns: Record<string, { name: string; type: string }[]>; errors: DatasetError[]; capturedAt: string };
 
 function newDatasetName(datasets: Dataset[]): string {
   let n = 1; while (datasets.some((d) => d.name === `dataset-${n}`)) n++;
@@ -24,16 +24,30 @@ export function DataPanel({ reportId }: { reportId: string }) {
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<DatasetError[]>([]);
   const [failure, setFailure] = useState<string | null>(null);
+  const [columnTypes, setColumnTypes] = useState<Record<string, Record<string, FieldType>>>({});
   const sample = report.sample;
   const sampleParams = sample?.params ?? {};
+
+  // 데이터셋 이름으로 키를 매기다 보니 이름 변경/삭제 뒤에도 옛 힌트가 남는다. 나중에 그 이름을 재사용하는
+  // 데이터셋이 실제 샘플 없이 옛 컬럼 타입을 물려받지 않도록, 목록이 바뀔 때마다 없는 키를 정리한다 (Minor 8)
+  useEffect(() => {
+    const names = new Set(report.datasets.map((d) => d.name));
+    setColumnTypes((prev) => {
+      const stale = Object.keys(prev).filter((k) => !names.has(k));
+      if (stale.length === 0) return prev;
+      const next = { ...prev };
+      for (const k of stale) delete next[k];
+      return next;
+    });
+  }, [report.datasets]);
 
   const setParam = (name: string, value: string) =>
     setSample({ params: { ...sampleParams, [name]: value }, data: sample?.data ?? {}, capturedAt: sample?.capturedAt ?? new Date(0).toISOString() });
   const replaceDataset = (i: number, ds: Dataset) => setDatasets(report.datasets.map((d, k) => (k === i ? ds : d)));
   const removeDataset = (i: number) => setDatasets(report.datasets.filter((_, k) => k !== i));
-  const add = (type: "static" | "http") => {
+  const add = (type: "static" | "http" | "sql") => {
     const name = newDatasetName(report.datasets);
-    setDatasets([...report.datasets, type === "static" ? { name, type, rows: [] } : { name, type, url: "", method: "GET", headers: {} }]);
+    setDatasets([...report.datasets, type === "static" ? { name, type, rows: [] } : type === "sql" ? { name, type, connection: "", query: "" } : { name, type, url: "", method: "GET", headers: {} }]);
   };
   const fetchSample = async () => {
     setBusy(true); setFailure(null);
@@ -45,6 +59,9 @@ export function DataPanel({ reportId }: { reportId: string }) {
       // 성공한 데이터셋만 덮어쓴다(실패한 것은 이전 샘플 유지). 되돌리기 한 단위
       setSample({ params: sampleParams, data: { ...(sample?.data ?? {}), ...res.data }, capturedAt: res.capturedAt });
       setErrors(res.errors);
+      if (res.columns) {
+        setColumnTypes((prev) => ({ ...prev, ...Object.fromEntries(Object.entries(res.columns).map(([ds, cols]) => [ds, Object.fromEntries(cols.map((c) => [c.name, c.type as FieldType]))])) }));
+      }
     } catch (e) {
       setFailure(e instanceof Error ? e.message : String(e));
     } finally {
@@ -63,10 +80,11 @@ export function DataPanel({ reportId }: { reportId: string }) {
       </section>
       <section className="flex flex-col gap-1">
         <div className="text-xs font-semibold">데이터셋</div>
-        {report.datasets.map((ds, i) => <DatasetEditor key={i} dataset={ds} onChange={(d) => replaceDataset(i, d)} onRemove={() => removeDataset(i)} />)}
+        {report.datasets.map((ds, i) => <DatasetEditor key={i} dataset={ds} params={report.params} onChange={(d) => replaceDataset(i, d)} onRemove={() => removeDataset(i)} />)}
         <div className="flex gap-1">
           <button className={btn} onClick={() => add("static")}>+ static</button>
           <button className={btn} onClick={() => add("http")}>+ http</button>
+          <button className={btn} onClick={() => add("sql")}>+ sql</button>
         </div>
       </section>
       <section className="flex flex-col gap-1">
@@ -77,7 +95,7 @@ export function DataPanel({ reportId }: { reportId: string }) {
       </section>
       <section className="flex flex-col gap-2">
         <div className="text-xs font-semibold">필드</div>
-        {report.datasets.map((ds) => <FieldTree key={ds.name} dataset={ds.name} nodes={inferFields(rowsFor(ds))} />)}
+        {report.datasets.map((ds) => <FieldTree key={ds.name} dataset={ds.name} nodes={inferFields(rowsFor(ds), { columnTypes: columnTypes[ds.name] })} />)}
       </section>
     </div>
   );

@@ -1,5 +1,5 @@
 import { resolveParams, rowsProxy, RESERVED_CONTEXT_NAMES, FORBIDDEN_CONTEXT_KEYS, type Report, type DataContext, type Dataset } from "@daport/core";
-import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver } from "./types";
+import { DatasetFailure, DEFAULT_LIMITS, type Connectors, type DatasetError, type Limits, type SecretResolver, type SqlColumn } from "./types";
 import { runSql } from "./sql";
 import { runHttp } from "./http";
 
@@ -30,11 +30,11 @@ function checkRows(rows: Record<string, unknown>[], limits: Limits): Record<stri
   return rows;
 }
 
-/** 데이터셋 정의 하나를 실행한다 */
-async function runDataset(ds: Dataset, params: Record<string, unknown>, opts: ExecuteOptions, limits: Limits): Promise<Record<string, unknown>[]> {
+/** 데이터셋 정의 하나를 실행한다. sql만 컬럼 정보를 함께 돌려준다 */
+async function runDataset(ds: Dataset, params: Record<string, unknown>, opts: ExecuteOptions, limits: Limits): Promise<{ rows: Record<string, unknown>[]; columns?: SqlColumn[] }> {
   switch (ds.type) {
-    case "static": return ds.rows;
-    case "http": return runHttp(ds, params, opts.connectors, opts.secrets, limits);
+    case "static": return { rows: ds.rows };
+    case "http": return { rows: await runHttp(ds, params, opts.connectors, opts.secrets, limits) };
     case "sql": return runSql(ds, params, opts.connectors, limits);
   }
 }
@@ -49,16 +49,22 @@ function toError(dataset: string, e: unknown, fallback: DatasetError["code"]): D
  * 파라미터를 정규화하고 데이터셋마다 컨텍스트 값을 만든다 (스펙 6.1).
  * 필수 파라미터 누락은 던진다(요청 오류). 데이터셋 실패는 errors에 모으고 나머지는 계속한다
  */
-export async function executeDatasets(report: Report, opts: ExecuteOptions): Promise<{ context: DataContext; errors: DatasetError[] }> {
+export async function executeDatasets(report: Report, opts: ExecuteOptions): Promise<{ context: DataContext; errors: DatasetError[]; columns: Record<string, SqlColumn[]> }> {
   const limits: Limits = { ...DEFAULT_LIMITS, ...opts.limits };
   const params = resolveParams(report, opts.params);
   const context: DataContext = { params };
   const errors: DatasetError[] = [];
+  const columns: Record<string, SqlColumn[]> = {};
   const data = opts.data ?? {};
   for (const ds of report.datasets) {
     try {
-      const rows = Object.hasOwn(data, ds.name) ? toRows(data[ds.name]) : await runDataset(ds, params, opts, limits);
+      if (Object.hasOwn(data, ds.name)) {
+        context[ds.name] = rowsProxy(checkRows(toRows(data[ds.name]), limits));
+        continue;
+      }
+      const { rows, columns: cols } = await runDataset(ds, params, opts, limits);
       context[ds.name] = rowsProxy(checkRows(rows, limits));
+      if (cols) columns[ds.name] = cols;
     } catch (e) {
       errors.push(toError(ds.name, e, ds.type === "sql" ? "SQL_ERROR" : "BAD_DATA"));
     }
@@ -77,5 +83,5 @@ export async function executeDatasets(report: Report, opts: ExecuteOptions): Pro
     try { setContext(context, name, rowsProxy(checkRows(toRows(value), limits))); }
     catch (e) { errors.push(toError(name, e, "BAD_DATA")); }
   }
-  return { context, errors };
+  return { context, errors, columns };
 }
