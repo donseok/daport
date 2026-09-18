@@ -66,4 +66,11 @@ describe("importBundle", () => {
     expect(res.imported).toEqual([]);
     expect(await store.get("mismatch")).toBeNull();
   });
+  it("warns about connections missing on this instance", async () => {
+    const store = new MemoryReportStore();
+    const r = parseReport({ id: "c1", version: 1, page: { width: 10, height: 10 }, datasets: [{ name: "l", type: "sql", connection: "nowhere", query: "SELECT 1 FROM DUAL" }] });
+    const res = await importBundle(buildBundle([{ report: r, source: "draft" }], [], []), { filename: "c.zip" }, { store, assets: null });
+    expect(res.imported).toEqual([{ id: "c1", action: "created" }]);
+    expect(res.warnings).toContainEqual("c1: 연결 nowhere이(가) 이 인스턴스에 없습니다");
+  });
 });

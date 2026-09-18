@@ -9,7 +9,7 @@ import { TextField } from "../panels/Field";
 import { DatasetEditor } from "./DatasetEditor";
 import { FieldTree } from "./FieldTree";
 
-type SampleResponse = { data: Record<string, unknown[]>; fields: Record<string, FieldNode[]>; errors: DatasetError[]; capturedAt: string };
+type SampleResponse = { data: Record<string, unknown[]>; fields: Record<string, FieldNode[]>; columns: Record<string, { name: string; type: string }[]>; errors: DatasetError[]; capturedAt: string };
 
 function newDatasetName(datasets: Dataset[]): string {
   let n = 1; while (datasets.some((d) => d.name === `dataset-${n}`)) n++;

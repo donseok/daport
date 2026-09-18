@@ -4,6 +4,7 @@ import { MAX_BODY_BYTES } from "@/lib/body";
 import { importBundle } from "@/lib/import-bundle";
 import { BundleInvalidError } from "@/lib/bundle";
 import { assetStorageEnabled, hasAsset, putAsset } from "@/lib/asset-io";
+import { getConnectionStore } from "@/lib/connection-store";
 
 /** 번들 가져오기 (4단계 스펙 6.3). multipart: file(zip), connectionMap(JSON, 선택) */
 export async function POST(req: Request) {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   try {
     await ready();
     const assets = assetStorageEnabled() ? { has: hasAsset, put: putAsset } : null;
-    const result = await importBundle(new Uint8Array(await file.arrayBuffer()), { filename: file.name, connectionMap }, { store: getStore(), assets });
+    const result = await importBundle(new Uint8Array(await file.arrayBuffer()), { filename: file.name, connectionMap }, { store: getStore(), assets, connections: getConnectionStore() });
     return NextResponse.json(result);
   } catch (e) {
     if (e instanceof BundleInvalidError) return NextResponse.json({ error: e.message, code: e.code }, { status: 400 });

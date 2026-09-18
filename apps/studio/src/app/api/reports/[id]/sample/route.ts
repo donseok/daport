@@ -16,16 +16,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await ready();
     const report = body.report ? parseReport(body.report) : await getStore().get(id);
     if (!report) return NextResponse.json({ error: "not found" }, { status: 404 });
-    const { context, errors } = await runDatasets(report, { params: objectField(body, "params") });
+    const { context, errors, columns } = await runDatasets(report, { params: objectField(body, "params") });
     const data: Record<string, unknown[]> = {};
     const fields: Record<string, FieldNode[]> = {};
     for (const ds of report.datasets) {
       const rows = context[ds.name];
       if (!Array.isArray(rows)) continue;
       data[ds.name] = rows.slice(0, SAMPLE_ROWS);
-      fields[ds.name] = inferFields(data[ds.name]);
+      const hints = columns[ds.name] ? Object.fromEntries(columns[ds.name].map((c) => [c.name, c.type])) : undefined;
+      fields[ds.name] = inferFields(data[ds.name], { columnTypes: hints });
     }
-    return NextResponse.json({ data, fields, errors, capturedAt: new Date().toISOString() });
+    return NextResponse.json({ data, fields, columns, errors, capturedAt: new Date().toISOString() });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 400 });
   }
