@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { FakeSqlConnector } from "@daport/oracle/testing";
 import { createAgentServer } from "../server";
@@ -34,6 +35,21 @@ describe("agent server", () => {
     expect((await post(JSON.stringify({ sql: "SELECT '" + "x".repeat(2000) + "' FROM DUAL" }), TOKEN, true)).status).toBe(413);
     expect((await post("{not json", TOKEN, true)).status).toBe(400);
     expect((await post({ sql: 5 })).status).toBe(400);
+  });
+  it("closes the request socket after a 413 so the connection cannot hang open", async () => {
+    const { hostname, port } = new URL(base);
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error("소켓이 1초 내에 닫히지 않았습니다")), 1000);
+      const req = http.request({ hostname, port: Number(port), path: "/query", method: "POST", agent: false, headers: { authorization: `Bearer ${TOKEN}`, "content-type": "application/json" } });
+      req.on("response", (res) => {
+        expect(res.statusCode).toBe(413);
+        res.resume();
+        res.socket?.once("close", () => { clearTimeout(timer); resolve(); });
+      });
+      req.on("error", () => {});   // 소켓이 닫히며 나는 에러는 이미 응답을 받은 뒤라 무시한다
+      req.write(JSON.stringify({ sql: "SELECT '" + "x".repeat(2000) + "' FROM DUAL" }));
+      req.end();
+    });
   });
   it("maps connector failures to statuses and codes", async () => {
     const guard = await post({ sql: "DELETE FROM T" });

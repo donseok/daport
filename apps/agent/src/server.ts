@@ -51,7 +51,10 @@ export function createAgentServer(opts: AgentOptions): http.Server | https.Serve
       inFlight++;
       try {
         const text = await readBody(req, maxBodyBytes);
-        if (text === null) return fail(res, 413, "BAD_PARAM", `본문이 ${maxBodyBytes} 바이트를 넘습니다`);
+        if (text === null) {
+          res.once("finish", () => req.destroy());   // 413을 다 쓴 뒤에 요청 소켓을 닫는다 — 먼저 닫으면 클라이언트가 리셋을 본다
+          return fail(res, 413, "BAD_PARAM", `본문이 ${maxBodyBytes} 바이트를 넘습니다`);
+        }
         let body: { sql?: unknown; binds?: unknown; timeoutMs?: unknown; maxRows?: unknown };
         try { body = JSON.parse(text); } catch { return fail(res, 400, "BAD_PARAM", "본문이 JSON이 아닙니다"); }
         if (!body || typeof body.sql !== "string") return fail(res, 400, "BAD_PARAM", "sql 문자열이 필요합니다");
