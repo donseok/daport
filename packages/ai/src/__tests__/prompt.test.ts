@@ -47,9 +47,18 @@ describe("buildGeneratePrompt", () => {
     const p = buildGeneratePrompt({ report: parseReport({ ...base, elements: [] }), fields: ctx.fields, library: ctx.library }, "품질보증서: 헤더, 품목 표, 서명란");
     expect(p.system).toContain("elements");
     expect(p.system).toContain("라이브러리");                      // 컴포넌트 우선 사용 지시
+    expect(p.system).toContain("여백");                            // 배치 규칙이 여백을 반영한다
+    expect(p.system).toContain("width - marginRight");             // 여백을 뺀 경계값
     expect(p.messages.at(-1)!.text).toContain("page 210×297mm");   // 페이지 크기·여백
     expect(p.messages.at(-1)!.text).toContain("품질보증서: 헤더, 품목 표, 서명란");
     expect(p.schema).toBe(GENERATE_RESPONSE_SCHEMA);
+  });
+  it("never blames history for truncation, since generate carries none", () => {
+    const many = parseReport({ ...base, elements: Array.from({ length: 4_000 }, (_, i) => ({ id: `t${i}`, type: "text", x: 0, y: 0, w: 10, h: 5, value: "가".repeat(30) })) });
+    const p = buildGeneratePrompt({ report: many, fields: ctx.fields, library: ctx.library }, "정리해");
+    expect(p.truncated.length).toBeGreaterThan(0);
+    expect(p.truncated).not.toContain("history");
+    expect(estimateTokens(p.system + p.messages.map((m) => m.text).join(""))).toBeLessThanOrEqual(MAX_CONTEXT_TOKENS);
   });
 });
 

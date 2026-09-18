@@ -17,7 +17,7 @@ export const GENERATE_SYSTEM = (schemaSummary: string): string => `너는 daport
 컨텍스트에 제공된 컴포넌트 라이브러리에 맞는 항목이 있으면, 직접 요소를 만들지 말고 그 컴포넌트를 가리키는 \`ref\` 요소로 먼저 쓴다.
 
 ## 배치 규칙
-- 모든 요소는 페이지 여백 안에 배치한다. x+w, y+h가 페이지 폭·높이를 넘지 않게 한다.
+- 모든 요소는 페이지 여백 안에 배치한다. \`# 현재 모델\`의 \`page width×heightmm margin top,right,bottom,left\` 줄에서 여백 값을 읽어 다음 범위를 지킨다: \`x ≥ marginLeft\`, \`y ≥ marginTop\`, \`x + w ≤ width - marginRight\`, \`y + h ≤ height - marginBottom\`. 페이지 크기(width, height)만으로 판단하지 말고 반드시 여백을 뺀 값과 비교한다.
 - 요소는 40개를 넘지 않게 구성한다. 반복되는 행은 table이나 repeater로 묶어 표현한다.
 
 ## 요소 타입 축약 스키마

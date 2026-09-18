@@ -40,10 +40,12 @@ function fit(parts: { system: string; history: ChatTurn[]; body: (opts: FitOpts)
   let result = evaluate(history, opts);
   if (result.total <= MAX_CONTEXT_TOKENS) return { history, body: result.body, truncated };
 
-  history = [];
-  truncated.push("history");
-  result = evaluate(history, opts);
-  if (result.total <= MAX_CONTEXT_TOKENS) return { history, body: result.body, truncated };
+  if (history.length > 0) {
+    history = [];
+    truncated.push("history");
+    result = evaluate(history, opts);
+    if (result.total <= MAX_CONTEXT_TOKENS) return { history, body: result.body, truncated };
+  }
 
   opts = { ...opts, text: 16 };
   truncated.push("element-text");
