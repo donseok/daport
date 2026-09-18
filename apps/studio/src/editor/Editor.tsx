@@ -78,14 +78,19 @@ export function Editor({ initial, componentMode }: { initial: Report; componentM
             <div className="h-64 border-t bg-white flex flex-col">
               {/* 컴포넌트 편집 화면에서는 AI 탭을 숨긴다(컴포넌트 내용 편집은 범위 밖) */}
               {!componentMode && (
-                <div className="flex border-b text-xs shrink-0">
-                  <button className={`flex-1 py-1 ${bottomTab === "json" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("json")}>JSON</button>
-                  <button className={`flex-1 py-1 ${bottomTab === "ai" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("ai")}>AI</button>
+                <div className="flex border-b text-xs shrink-0" role="tablist" aria-label="하단 패널">
+                  <button id="bottom-tab-json" role="tab" aria-selected={bottomTab === "json"} aria-controls="bottom-panel-json"
+                    className={`flex-1 py-1 ${bottomTab === "json" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("json")}>JSON</button>
+                  <button id="bottom-tab-ai" role="tab" aria-selected={bottomTab === "ai"} aria-controls="bottom-panel-ai"
+                    className={`flex-1 py-1 ${bottomTab === "ai" ? "font-semibold bg-neutral-100" : "text-neutral-500"}`} onClick={() => setBottomTab("ai")}>AI</button>
                 </div>
               )}
               {/* Monaco는 숨길 때도 언마운트하지 않는다(편집기 상태 보존) */}
-              <div className={`flex-1 min-h-0 ${!componentMode && bottomTab === "ai" ? "hidden" : ""}`}><JsonEditor /></div>
-              {!componentMode && bottomTab === "ai" && <div className="flex-1 min-h-0"><AiPanel reportId={initial.id} /></div>}
+              <div id="bottom-panel-json" role="tabpanel" {...(!componentMode ? { "aria-labelledby": "bottom-tab-json" } : {})}
+                className={`flex-1 min-h-0 ${!componentMode && bottomTab === "ai" ? "hidden" : ""}`}><JsonEditor /></div>
+              {!componentMode && bottomTab === "ai" && (
+                <div id="bottom-panel-ai" role="tabpanel" aria-labelledby="bottom-tab-ai" className="flex-1 min-h-0"><AiPanel reportId={initial.id} /></div>
+              )}
             </div>
           </main>
           <aside className="border-l bg-white overflow-auto"><PagePanel /><PropertyPanel /></aside>

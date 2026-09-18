@@ -7,12 +7,15 @@ import { proposalFromEdit, proposalFromGenerate, type Proposal } from "./proposa
 type EditResponse = Parameters<typeof proposalFromEdit>[1];
 type GenerateResponse = Parameters<typeof proposalFromGenerate>[1];
 
-type Turn = { role: "user" | "assistant" | "error"; text: string; warnings?: string[] };
+// "cancelled"는 사용자가 요청을 취소했을 때만 붙는 조용한 턴이다. history에는 user·assistant만 실어 보내므로
+// 취소 턴은 다음 요청의 history에 절대 섞이지 않는다
+type Turn = { role: "user" | "assistant" | "error" | "cancelled"; text: string; warnings?: string[] };
 
 const HISTORY_LIMIT = 6;
 
-/** 대화 턴 하나. 오류는 빨간 글씨로, 경고는 턴 안에 목록으로 덧붙인다 */
+/** 대화 턴 하나. 오류는 빨간 글씨로, 경고는 턴 안에 목록으로 덧붙인다. 취소 턴은 접두어 없이 옅은 글씨로만 표시한다 */
 function TurnView({ turn }: { turn: Turn }) {
+  if (turn.role === "cancelled") return <div data-testid="ai-turn" className="text-xs text-neutral-400 italic">{turn.text}</div>;
   return (
     <div data-testid="ai-turn" className={`text-xs whitespace-pre-wrap ${turn.role === "user" ? "text-neutral-900" : turn.role === "error" ? "text-red-600" : "text-neutral-700"}`}>
       <span className="font-semibold">{turn.role === "user" ? "나" : turn.role === "error" ? "오류" : "AI"}: </span>
@@ -36,12 +39,15 @@ export function AiPanel({ reportId }: { reportId: string }) {
   const [notConfigured, setNotConfigured] = useState(false);
   const [generateMode, setGenerateMode] = useState(() => isEmpty);
   const controllerRef = useRef<AbortController | null>(null);
+  // 언마운트로 인한 abort는 조용한 취소 턴도 남기지 않는다 — catch·finally에서 상태를 건드리기 전에 이 값을 먼저 확인한다
+  const mountedRef = useRef(true);
 
   // 요소가 생기면(제안 적용 등) 생성 모드는 더 이상 의미가 없으므로 끄고, 토글도 숨긴다
   useEffect(() => { if (!isEmpty && generateMode) setGenerateMode(false); }, [isEmpty, generateMode]);
 
-  // 패널이 사라지면 진행 중인 요청은 취소한다
-  useEffect(() => () => controllerRef.current?.abort(), []);
+  // 패널이 사라지면 진행 중인 요청은 취소한다. mountedRef를 먼저 내려서, 이후 도착하는 abort 거부가
+  // 사라진 컴포넌트에 setState를 걸지 않게 한다(사용자가 누른 취소와 달리 조용한 턴도 남기지 않는다)
+  useEffect(() => () => { mountedRef.current = false; controllerRef.current?.abort(); }, []);
 
   const send = async () => {
     const instruction = input.trim();
@@ -63,15 +69,17 @@ export function AiPanel({ reportId }: { reportId: string }) {
         handleResult(res, (data) => proposalFromGenerate(report, data));
       }
     } catch (e) {
-      if (e instanceof Error && e.name === "AbortError") setTurns((prev) => [...prev, { role: "assistant", text: "취소됨" }]);
+      if (!mountedRef.current) return;   // 언마운트가 일으킨 abort — 사라진 패널에 턴을 남기지 않는다
+      if (e instanceof Error && e.name === "AbortError") setTurns((prev) => [...prev, { role: "cancelled", text: "취소됨" }]);
       else setTurns((prev) => [...prev, { role: "error", text: e instanceof Error ? e.message : String(e) }]);
     } finally {
-      setBusy(false);
       controllerRef.current = null;
+      if (mountedRef.current) setBusy(false);
     }
   };
 
   function handleResult<T extends { explanation: string; warnings: string[] }>(res: Awaited<ReturnType<typeof postAi<T>>>, toProposal: (data: T) => Proposal) {
+    if (!mountedRef.current) return;   // 응답이 오는 동안 패널이 사라졌으면 아무 상태도 건드리지 않는다
     if (res.ok) {
       try {
         const proposal = toProposal(res.data);
@@ -100,7 +108,7 @@ export function AiPanel({ reportId }: { reportId: string }) {
 
   return (
     <div className="h-full flex flex-col text-xs">
-      <div className="flex-1 overflow-auto p-2 flex flex-col gap-1">
+      <div className="flex-1 overflow-auto p-2 flex flex-col gap-1" aria-live="polite">
         {turns.map((t, i) => <TurnView key={i} turn={t} />)}
       </div>
       {notConfigured && (

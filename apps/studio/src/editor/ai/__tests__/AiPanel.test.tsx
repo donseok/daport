@@ -74,4 +74,22 @@ describe("AiPanel", () => {
     fireEvent.click(await screen.findByRole("button", { name: "취소" }));
     await waitFor(() => expect(aborted).toBe(true));
   });
+  it("keeps a cancelled turn quiet and out of the history sent on the next message", async () => {
+    let aborted = false;
+    vi.stubGlobal("fetch", vi.fn((_u: string, init?: RequestInit) => new Promise((_r, reject) => { init!.signal!.addEventListener("abort", () => { aborted = true; reject(Object.assign(new Error("a"), { name: "AbortError" })); }); })));
+    mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "첫 지시" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    fireEvent.click(await screen.findByRole("button", { name: "취소" }));
+    await waitFor(() => expect(aborted).toBe(true));
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("취소됨"));
+
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({ patch: [], explanation: "됐습니다", warnings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "두번째 지시" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.history).toEqual([{ role: "user", text: "첫 지시" }]);
+  });
 });
