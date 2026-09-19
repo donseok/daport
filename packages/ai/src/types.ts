@@ -23,6 +23,7 @@ export type LlmInput = {
   system: string;
   messages: { role: "user" | "model"; text: string }[];
   schema: object;
+  images?: { mimeType: string; data: string }[];   // base64. 마지막 user 메시지에 함께 실린다
   maxOutputTokens?: number;
   signal?: AbortSignal;
 };

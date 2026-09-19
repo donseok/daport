@@ -4,6 +4,8 @@ import { LlmError, MAX_OUTPUT_TOKENS, type LlmClient, type LlmInput } from "./ty
 const mask = (s: string, key: string) => (key ? s.split(key).join("***") : s);
 const RETRY_NOTE = "직전 응답이 JSON 형식에 맞지 않았습니다. 지정한 스키마에 맞는 JSON 하나만 다시 출력하세요.";
 
+type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+
 function toLlmError(e: unknown, key: string): LlmError {
   if (e instanceof LlmError) return e;
   const status = (e as { status?: number } | null)?.status;
@@ -21,7 +23,7 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
   const timeoutMs = opts.timeoutMs ?? 60_000;
   // 한 요청 안에서 재시도 두 번이 이 신호 하나를 나눠 쓴다 — 매 호출마다 새로 만들면 마감이 2배가 된다(스펙 8: 60s → AI_TIMEOUT)
-  const call = async (input: LlmInput, contents: { role: string; parts: { text: string }[] }[], signal: AbortSignal): Promise<string> => {
+  const call = async (input: LlmInput, contents: { role: string; parts: Part[] }[], signal: AbortSignal): Promise<string> => {
     try {
       const res = await ai.models.generateContent({
         model: opts.model,
@@ -44,7 +46,14 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   return {
     async complete(input) {
       const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
-      const contents = input.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
+      const contents = input.messages.map((m, i) => {
+        const parts: Part[] = [{ text: m.text }];
+        // 이미지는 마지막 메시지에만 싣는다 — 모델이 "지금 보는 그림"과 지시를 한 턴으로 읽게 한다
+        if (i === input.messages.length - 1) {
+          for (const img of input.images ?? []) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+        }
+        return { role: m.role, parts };
+      });
       const first = parse(await call(input, contents, signal));
       if (first.ok) return first.value;
       const second = parse(await call(input, [...contents, { role: "user", parts: [{ text: RETRY_NOTE }] }], signal));
