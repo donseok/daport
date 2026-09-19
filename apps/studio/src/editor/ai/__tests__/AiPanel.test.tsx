@@ -1,0 +1,121 @@
+import { StrictMode } from "react";
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
+import { parseReport } from "@daport/core";
+import { createEditorStore, EditorContext } from "../../store";
+import { AiPanel } from "../AiPanel";
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+const report = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [{ id: "a", type: "text", x: 0, y: 0, w: 30, h: 5, value: "A" }] });
+const mount = (r = report) => { const store = createEditorStore(r); render(<EditorContext.Provider value={store}><AiPanel reportId="r" /></EditorContext.Provider>); return store; };
+const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
+
+describe("AiPanel", () => {
+  it("sends instruction, selection and history to ai/edit and turns the answer into a proposal", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: ["경고"] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount();
+    act(() => store.getState().select(["a"]));
+    expect(screen.getByTestId("ai-selection").textContent).toContain("a");
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(store.getState().proposal).not.toBeNull());
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("/api/reports/r/ai/edit");
+    expect((init!.headers as Record<string, string>)["content-type"]).toBe("application/json");
+    const body = JSON.parse(String(init!.body));
+    expect(body).toMatchObject({ instruction: "값을 B로", selection: ["a"], history: [] });
+    expect(body.report.id).toBe("r");
+    const turns = screen.getAllByTestId("ai-turn").map((t) => t.textContent);
+    expect(turns[0]).toContain("값을 B로"); expect(turns[1]).toContain("바꿨습니다"); expect(turns[1]).toContain("경고");
+    expect(store.getState().report.elements[0]).toMatchObject({ value: "A" });   // 적용 전 불변
+  });
+  it("uses generate mode on an empty report and shows the not-configured notice on 503", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({ elements: [{ id: "t", type: "text", x: 0, y: 0, w: 10, h: 5, value: "생성" }], components: {}, explanation: "생성함", warnings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    expect((screen.getByTestId("ai-generate-mode") as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "품질보증서" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("generate"));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/ai/generate");
+    expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toMatchObject({ brief: "품질보증서" });
+    cleanup();
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: "키 없음", code: "AI_NOT_CONFIGURED" }, 503)));
+    mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "x" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(screen.getByTestId("ai-not-configured").textContent).toContain("GEMINI_API_KEY"));
+  });
+  it("shows an error turn and drops the proposal when the report changed while the request was in flight", async () => {
+    let resolveFetch: ((v: Response) => void) | undefined;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    act(() => { store.getState().updateElement("a", { x: 5 }); });   // 응답을 기다리는 동안 다른 편집
+    act(() => { resolveFetch!(json({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: [] })); });
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("편집 중 레포트가 바뀌어"));
+    expect(store.getState().proposal).toBeNull();
+  });
+  it("shows errors as a turn and supports cancel", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => json({ error: "요청 한도", code: "AI_RATE_LIMIT" }, 429)));
+    mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "x" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("요청 한도"));
+    cleanup();
+    let aborted = false;
+    vi.stubGlobal("fetch", vi.fn((_u: string, init?: RequestInit) => new Promise((_r, reject) => { init!.signal!.addEventListener("abort", () => { aborted = true; reject(Object.assign(new Error("a"), { name: "AbortError" })); }); })));
+    mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "x" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    fireEvent.click(await screen.findByRole("button", { name: "취소" }));
+    await waitFor(() => expect(aborted).toBe(true));
+  });
+  it("keeps a cancelled turn quiet and out of the history sent on the next message", async () => {
+    let aborted = false;
+    vi.stubGlobal("fetch", vi.fn((_u: string, init?: RequestInit) => new Promise((_r, reject) => { init!.signal!.addEventListener("abort", () => { aborted = true; reject(Object.assign(new Error("a"), { name: "AbortError" })); }); })));
+    mount();
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "첫 지시" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    fireEvent.click(await screen.findByRole("button", { name: "취소" }));
+    await waitFor(() => expect(aborted).toBe(true));
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("취소됨"));
+
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({ patch: [], explanation: "됐습니다", warnings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "두번째 지시" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.history).toEqual([{ role: "user", text: "첫 지시" }]);
+  });
+  /**
+   * 회귀 테스트: React StrictMode(개발 모드 next dev의 실제 동작)는 마운트 → 클린업 → 재마운트를
+   * 같은 컴포넌트 인스턴스에서 한 번 더 돌린다. mountedRef 초기화 effect가 클린업에서만 false를 내리고
+   * 본문에서 true로 되돌리지 않으면, 이 재마운트 이후 mountedRef.current가 영영 false로 굳어
+   * handleResult·send의 finally가 응답을 전부 무시한다(제안도, 턴도, busy 해제도 없음).
+   * 이 테스트는 고치기 전에는 실패하고 고친 뒤에는 통과해야 한다
+   */
+  it("still shows the proposal and the assistant turn after StrictMode's dev-only double mount", async () => {
+    const fetchMock = vi.fn(async () => json({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(report);
+    render(
+      <StrictMode>
+        <EditorContext.Provider value={store}><AiPanel reportId="r" /></EditorContext.Provider>
+      </StrictMode>,
+    );
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(store.getState().proposal).not.toBeNull());
+    const turns = screen.getAllByTestId("ai-turn").map((t) => t.textContent);
+    expect(turns.some((t) => t?.includes("바꿨습니다"))).toBe(true);
+    // busy도 풀려야 "취소" 버튼이 "보내기"로 돌아온다(mountedRef가 굳으면 이 버튼이 영영 "취소"로 남는다)
+    await waitFor(() => expect(screen.queryByTestId("ai-send")).not.toBeNull());
+    expect(screen.queryByRole("button", { name: "취소" })).toBeNull();
+  });
+});

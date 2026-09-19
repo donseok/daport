@@ -35,6 +35,9 @@ export function Canvas({ zoom }: { zoom: number }) {
   const findParentRepeater = useEditor((s) => s.findParentRepeater);
   const insertComponent = useEditor((s) => s.insertComponent);
   const componentMode = useEditor((s) => s.componentMode);
+  const proposal = useEditor((s) => s.proposal);
+  const applyProposal = useEditor((s) => s.applyProposal);
+  const rejectProposal = useEditor((s) => s.rejectProposal);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   /** 우클릭 메뉴 위치(페이지 기준 mm). 캔버스 div가 scale로 확대되므로 mm로 두면 배율과 함께 따라간다 */
@@ -70,6 +73,19 @@ export function Canvas({ zoom }: { zoom: number }) {
     for (const id of selection) { const it = primaryItem(page, id); if (it) m[id] = itemBox(it); }
     return m;
   }, [page, selection]);
+
+  // AI 제안(proposal)이 있으면 그 결과(next)를 같은 보기(copyIndex·pageInCopy)로 한 번 더 그려 그림자 페이지로 겹친다
+  const shadowPages = useMemo(() => (proposal ? layoutFor(proposal.next, sampleProps) : null), [proposal, sampleProps]);
+  const shadowPage = shadowPages ? currentPage(shadowPages, view) : null;
+  // 추가·변경 요소는 제안 결과(shadowPage)에서, 삭제 요소는 지금 레이아웃(page)에서 상자를 얻는다
+  const proposalBoxes = useMemo(() => {
+    if (!proposal || !shadowPage) return [] as { id: string; kind: "added" | "changed" | "removed"; box: Box }[];
+    const out: { id: string; kind: "added" | "changed" | "removed"; box: Box }[] = [];
+    for (const id of proposal.changes.added) { const it = primaryItem(shadowPage, id); if (it) out.push({ id, kind: "added", box: itemBox(it) }); }
+    for (const id of proposal.changes.changed) { const it = primaryItem(shadowPage, id); if (it) out.push({ id, kind: "changed", box: itemBox(it) }); }
+    for (const id of proposal.changes.removed) { const it = primaryItem(page, id); if (it) out.push({ id, kind: "removed", box: itemBox(it) }); }
+    return out;
+  }, [proposal, shadowPage, page]);
 
   const drag = useDrag({
     zoom,
@@ -256,6 +272,27 @@ export function Canvas({ zoom }: { zoom: number }) {
               disabled={!makeCheck.ok} title={makeCheck.ok ? undefined : makeCheck.reason}
               onClick={() => { setMenu(null); setMaking(true); }}>컴포넌트로 만들기</button>
           </div>
+        )}
+        {proposal && shadowPage && (
+          <>
+            <div data-testid="ai-proposal" className="absolute inset-0 pointer-events-none opacity-50 outline-dashed outline-2 outline-blue-500">
+              <PaintPage page={shadowPage} />
+            </div>
+            {proposalBoxes.map(({ id, kind, box }) => (
+              <div key={id} data-ai-id={id} data-ai-change={kind}
+                className={`absolute pointer-events-none border-2 ${kind === "added" ? "border-green-500" : kind === "changed" ? "border-blue-500" : "border-red-500 border-dashed"}`}
+                style={{ left: `${box.x}mm`, top: `${box.y}mm`, width: `${box.w}mm`, height: `${box.h}mm` }} />
+            ))}
+            <div data-testid="ai-proposal-bar" className="absolute left-1/2 top-2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 rounded bg-white border shadow px-3 py-1.5 text-xs">
+              <span>{`AI 제안 · op ${proposal.patch.length} · 경고 ${proposal.warnings.length}`}</span>
+              {proposal.otherOps.length > 0 && (
+                // 요소 오버레이만으로는 안 보이는 /datasets·/params·/page·/name 변경을 밝힌다(스펙 1·11)
+                <span data-testid="ai-proposal-other-ops" className="text-amber-700">{proposal.otherOps.join(", ")}</span>
+              )}
+              <button data-testid="ai-apply" className="px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={applyProposal}>적용</button>
+              <button className="px-2 py-0.5 rounded border hover:bg-neutral-100" onClick={rejectProposal}>거절</button>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -6,6 +6,7 @@ import {
   type Report, type Element, type Page, type Preset, type ComponentBody, type ComponentProp, type Box,
 } from "@daport/core";
 import { createHistory, commit, undo, redo, type History } from "./history";
+import type { Proposal } from "./ai/proposal";
 
 export type Problem = { path: string; message: string };
 export type View = { copyIndex: number; pageInCopy: number };
@@ -25,6 +26,8 @@ export type EditorState = {
   view: View;
   /** 미리보기·PDF에 sample.data를 보내지 않고 서버 데이터셋을 실행한다. 히스토리 밖 */
   liveData: boolean;
+  /** AI가 제안한 편집·생성. 히스토리 밖이며 적용해야만 되돌리기 한 단위로 들어간다. apply를 거치는 다른 편집이 있으면 자동으로 비워진다 */
+  proposal: Proposal | null;
   // queries
   findElement(id: string): Element | undefined;
   allocateId(base: string): string;   // 트리 전체에서 비어 있는 `${base}-n`
@@ -47,6 +50,15 @@ export type EditorState = {
   markSaved(saved: Report): void;
   setView(v: Partial<View>): void;
   setLiveData(v: boolean): void;
+  /**
+   * p가 null이면 제안을 비운다(늘 true). p가 있으면 p.base가 지금 report와 같을 때만 저장한다 — 참조가 같은지로 비교한다
+   * (커밋은 늘 새 report 객체를 만들므로). 요청이 오가는 동안 다른 편집이 있었으면 저장하지 않고 false를 돌려준다(호출자가 알려야 한다)
+   */
+  setProposal(p: Proposal | null): boolean;
+  /** proposal.next를 report에 통째로 반영한다. 한 커밋(되돌리기 한 단위)이며, 끝나면 proposal은 null. base가 지금 report와 다르면(오래된 제안) 반영하지 않고 버린다 */
+  applyProposal(): void;
+  /** 반영하지 않고 proposal만 비운다 */
+  rejectProposal(): void;
   setSample(sample: Report["sample"]): void;
   setDatasets(datasets: Report["datasets"]): void;
   setParams(params: Report["params"]): void;
@@ -120,19 +132,20 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         mutate(r);
         walkElements(r.elements, (el) => { if (el.type === "line") { const b = lineBox(el); el.w = round(b.w); el.h = round(b.h); } });
       });
-      if (h !== get().history) set({ history: h, report: h.present, dirty: true, problems: [] });
+      // 다른 편집이 실제로 들어오면(내용이 바뀌면) 그 사이 보류 중이던 AI 제안은 더 이상 report와 맞지 않으므로 폐기한다
+      if (h !== get().history) set({ history: h, report: h.present, dirty: true, problems: [], proposal: null });
     };
     const pruneSelection = () => set({ selection: get().selection.filter((id) => !!get().findElement(id)) });
     const travel = (step: (h: History<Report>) => History<Report>) => {
       const h = step(get().history);
       if (h === get().history) return;   // 되돌릴 것이 없으면 dirty를 바꾸지 않는다
-      // 편집기 텍스트가 스토어 텍스트로 바뀌므로 이전 텍스트의 검증 오류는 더 이상 맞지 않는다
-      set({ history: h, report: h.present, dirty: true, problems: [] });
+      // 편집기 텍스트가 스토어 텍스트로 바뀌므로 이전 텍스트의 검증 오류는 더 이상 맞지 않는다. undo·redo도 편집이므로 제안을 비운다
+      set({ history: h, report: h.present, dirty: true, problems: [], proposal: null });
       pruneSelection();
     };
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
-      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false, bitmapPreview: false,
+      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false, bitmapPreview: false, proposal: null,
       componentMode: opts?.componentMode ?? null,
       findElement: (id) => { let found: Element | undefined; walkElements(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
       allocateId: (base) => newId(base, get().report),
@@ -205,6 +218,26 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
       markSaved: (saved) => set({ dirty: get().report !== saved }),   // 커밋·undo·redo는 늘 새 객체를 만든다
       setView: (v) => set((s) => ({ view: { ...s.view, ...v } })),
       setLiveData: (liveData) => set({ liveData }),
+      setProposal: (p) => {
+        if (p === null) { set({ proposal: null }); return true; }
+        // base가 지금 report와 다르면(요청이 오가는 동안 다른 편집이 있었다) 오래된 제안이라 저장하지 않는다
+        if (p.base !== get().report) { set({ proposal: null }); return false; }
+        set({ proposal: p });
+        return true;
+      },
+      applyProposal: () => {
+        const p = get().proposal;
+        if (!p) return;
+        if (p.base !== get().report) { set({ proposal: null }); return; }   // 오래된 제안: 반영하지 않고 버린다
+        set({ proposal: null });   // apply 전에 비워야 apply 안의 "다른 편집이면 폐기" 처리가 이 반영 자체를 지우지 않는다
+        apply((r) => {
+          const next = structuredClone(p.next);
+          for (const k of Object.keys(r)) delete (r as Record<string, unknown>)[k];
+          Object.assign(r, next);
+        });
+        pruneSelection();   // 제안이 지운 id가 선택에 남지 않게 한다 (replaceReport와 같은 처리)
+      },
+      rejectProposal: () => set({ proposal: null }),
       setSample: (sample) => apply((r) => { if (sample) r.sample = sample; else delete r.sample; }),
       setDatasets: (datasets) => apply((r) => { r.datasets = datasets; }),
       setParams: (params) => apply((r) => { r.params = params; }),
