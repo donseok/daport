@@ -81,6 +81,8 @@ describe("buildImportPrompt", () => {
     expect(system).toContain("{{ row.");      // 열 value 표현식
     expect(system).toContain("{{ params.");   // 값 칸 표현식
     expect(system).toContain("120");          // 요소 상한
+    expect(system).toContain("group의 좌상단 기준"); // group 자식은 이미지가 아니라 group 기준 상대 좌표
+    expect(system).toContain("columns");      // table의 열 배열 필드명
   });
 
   it("응답 스키마에 oneOf·$ref·anyOf가 없다", () => {

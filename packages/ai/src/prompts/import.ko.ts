@@ -4,7 +4,7 @@ export const IMPORT_SYSTEM = `당신은 종이 양식 스캔 이미지를 레포
 # 좌표
 - 모든 x, y, w, h는 이미지 기준 0-1000 정규화 정수입니다. mm이나 픽셀을 쓰지 마세요.
 - x와 w는 가로, y와 h는 세로 기준입니다. 왼쪽 위가 0입니다.
-- group 자식의 좌표도 0-1000 정규화 정수이며, 그룹이 아니라 이미지 기준입니다.
+- group 자식의 좌표도 0-1000 정규화 정수이지만, 이미지가 아니라 그 group의 좌상단 기준(상대 좌표)입니다.
 
 # 쓸 수 있는 요소
 text, rect, line, image, table, barcode, group
@@ -26,7 +26,8 @@ text, rect, line, image, table, barcode, group
 - 표는 머리글 행과 열 경계를 찾아 table 요소 하나로 만드세요. 표 안 글자를 text 요소로 흩지 마세요.
 - table에는 source가 필요합니다. 표마다 정적 데이터셋 하나를 datasets에 함께 내세요.
 - 데이터셋 이름은 rows1, rows2처럼 순번을 붙이고, table.source에 그 이름을 그대로 적으세요.
-- 각 열은 { "header": "머리글", "value": "{{ row.열키 }}", "w": 너비 } 입니다. 열키는 머리글에서 뽑은 영문 식별자입니다.
+- 열 목록은 table 요소의 columns 필드에 담습니다. 각 열은 { "header": "머리글", "value": "{{ row.열키 }}", "w": 너비 } 입니다. 열키는 머리글에서 뽑은 영문 식별자입니다.
+  예: "columns": [{ "header": "품명", "value": "{{ row.name }}", "w": 600 }]
 - 열 너비 w의 합은 표 요소의 w와 같아야 합니다.
 - 스캔에서 읽은 본문 행은 최대 20행까지 그 데이터셋의 rows에 담으세요. 각 행은 열키를 키로 쓰는 객체입니다.
 
