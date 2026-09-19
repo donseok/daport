@@ -47,7 +47,12 @@ export function AiPanel({ reportId }: { reportId: string }) {
 
   // 패널이 사라지면 진행 중인 요청은 취소한다. mountedRef를 먼저 내려서, 이후 도착하는 abort 거부가
   // 사라진 컴포넌트에 setState를 걸지 않게 한다(사용자가 누른 취소와 달리 조용한 턴도 남기지 않는다)
-  useEffect(() => () => { mountedRef.current = false; controllerRef.current?.abort(); }, []);
+  // 개발 모드 StrictMode는 마운트 → 클린업 → 재마운트를 같은 인스턴스에서 한 번 더 돌리므로,
+  // 본문에서 매번 true로 되돌리지 않으면 그 첫 클린업이 내린 false가 실제로는 계속 마운트된 상태에서도 영영 남는다
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; controllerRef.current?.abort(); };
+  }, []);
 
   const send = async () => {
     const instruction = input.trim();

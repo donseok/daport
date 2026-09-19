@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, fireEvent, cleanup, waitFor, act } from "@testing-library/react";
 import { parseReport } from "@daport/core";
@@ -91,5 +92,30 @@ describe("AiPanel", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
     expect(body.history).toEqual([{ role: "user", text: "첫 지시" }]);
+  });
+  /**
+   * 회귀 테스트: React StrictMode(개발 모드 next dev의 실제 동작)는 마운트 → 클린업 → 재마운트를
+   * 같은 컴포넌트 인스턴스에서 한 번 더 돌린다. mountedRef 초기화 effect가 클린업에서만 false를 내리고
+   * 본문에서 true로 되돌리지 않으면, 이 재마운트 이후 mountedRef.current가 영영 false로 굳어
+   * handleResult·send의 finally가 응답을 전부 무시한다(제안도, 턴도, busy 해제도 없음).
+   * 이 테스트는 고치기 전에는 실패하고 고친 뒤에는 통과해야 한다
+   */
+  it("still shows the proposal and the assistant turn after StrictMode's dev-only double mount", async () => {
+    const fetchMock = vi.fn(async () => json({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = createEditorStore(report);
+    render(
+      <StrictMode>
+        <EditorContext.Provider value={store}><AiPanel reportId="r" /></EditorContext.Provider>
+      </StrictMode>,
+    );
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(store.getState().proposal).not.toBeNull());
+    const turns = screen.getAllByTestId("ai-turn").map((t) => t.textContent);
+    expect(turns.some((t) => t?.includes("바꿨습니다"))).toBe(true);
+    // busy도 풀려야 "취소" 버튼이 "보내기"로 돌아온다(mountedRef가 굳으면 이 버튼이 영영 "취소"로 남는다)
+    await waitFor(() => expect(screen.queryByTestId("ai-send")).not.toBeNull());
+    expect(screen.queryByRole("button", { name: "취소" })).toBeNull();
   });
 });
