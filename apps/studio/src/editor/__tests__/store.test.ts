@@ -529,3 +529,29 @@ describe("component mode guards (중첩 금지, 스펙 4.1·7.5)", () => {
     expect(s.getState().report.components["hdr@1"]).toBeDefined();
   });
 });
+
+describe("scan overlay (스펙 9: 소스와 표시 여부를 분리해 끄고 켜도 다시 이관할 필요가 없다)", () => {
+  it("starts with no source and hidden", () => {
+    const s = createEditorStore(report);
+    expect(s.getState().scanOverlay).toBeNull();
+    expect(s.getState().scanOverlayVisible).toBe(false);
+  });
+  it("세우면 자동으로 보이고, 소스를 지우지 않고 표시만 꺼도 소스는 남는다", () => {
+    const s = createEditorStore(report);
+    s.getState().setScanOverlay("asset://abc");
+    expect(s.getState().scanOverlay).toBe("asset://abc");
+    expect(s.getState().scanOverlayVisible).toBe(true);   // 도착 시점엔 바로 보인다
+    s.getState().setScanOverlayVisible(false);
+    expect(s.getState().scanOverlay).toBe("asset://abc");   // 소스는 그대로
+    expect(s.getState().scanOverlayVisible).toBe(false);
+    s.getState().setScanOverlayVisible(true);               // 다시 이관하지 않고도 되돌린다
+    expect(s.getState().scanOverlayVisible).toBe(true);
+  });
+  it("소스를 null로 세우면 표시도 함께 꺼진다", () => {
+    const s = createEditorStore(report);
+    s.getState().setScanOverlay("asset://abc");
+    s.getState().setScanOverlay(null);
+    expect(s.getState().scanOverlay).toBeNull();
+    expect(s.getState().scanOverlayVisible).toBe(false);
+  });
+});

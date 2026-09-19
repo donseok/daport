@@ -30,6 +30,8 @@ export type EditorState = {
   proposal: Proposal | null;
   /** 이관한 양식 이미지(asset:// 참조 또는 data URL). 캔버스 대조 배경. 히스토리 밖이며, 제안과 달리 다른 편집이 있어도 지우지 않는다(적용 후에도 계속 대조한다) */
   scanOverlay: string | null;
+  /** 대조 배경을 실제로 그릴지 여부. scanOverlay(소스)와 분리해 두어, 껐다 켜는 데 이미지를 다시 이관할 필요가 없다(스펙 9) */
+  scanOverlayVisible: boolean;
   // queries
   findElement(id: string): Element | undefined;
   allocateId(base: string): string;   // 트리 전체에서 비어 있는 `${base}-n`
@@ -57,8 +59,11 @@ export type EditorState = {
    * (커밋은 늘 새 report 객체를 만들므로). 요청이 오가는 동안 다른 편집이 있었으면 저장하지 않고 false를 돌려준다(호출자가 알려야 한다)
    */
   setProposal(p: Proposal | null): boolean;
-  /** 대조 배경을 세우거나 비운다. null이면 배경을 끈다(토글) */
+  /** 대조 배경 소스를 세우거나 비운다. 새 소스를 세우면(이관 직후) 도착 시점이 가장 쓸모 있으므로 바로 보이게 켠다.
+   * null로 비우면(소스 자체를 버릴 때만) 표시 여부도 함께 끈다 */
   setScanOverlay(v: string | null): void;
+  /** 소스는 그대로 두고 표시 여부만 켜거나 끈다. 다시 보려고 90초짜리 이관을 다시 할 필요가 없다(스펙 9) */
+  setScanOverlayVisible(v: boolean): void;
   /** proposal.next를 report에 통째로 반영한다. 한 커밋(되돌리기 한 단위)이며, 끝나면 proposal은 null. base가 지금 report와 다르면(오래된 제안) 반영하지 않고 버린다 */
   applyProposal(): void;
   /** 반영하지 않고 proposal만 비운다 */
@@ -149,7 +154,7 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
     };
     return {
       history: createHistory(initial), report: initial, selection: [], problems: [], dirty: false, mode: "design",
-      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false, bitmapPreview: false, proposal: null, scanOverlay: null,
+      view: { copyIndex: 0, pageInCopy: 0 }, liveData: false, bitmapPreview: false, proposal: null, scanOverlay: null, scanOverlayVisible: false,
       componentMode: opts?.componentMode ?? null,
       findElement: (id) => { let found: Element | undefined; walkElements(get().report.elements, (el) => { if (el.id === id) { found = el; return true; } }); return found; },
       allocateId: (base) => newId(base, get().report),
@@ -242,7 +247,8 @@ export function createEditorStore(initial: Report, opts?: { componentMode?: Comp
         pruneSelection();   // 제안이 지운 id가 선택에 남지 않게 한다 (replaceReport와 같은 처리)
       },
       rejectProposal: () => set({ proposal: null }),
-      setScanOverlay: (v) => set({ scanOverlay: v }),
+      setScanOverlay: (v) => set({ scanOverlay: v, scanOverlayVisible: v !== null }),
+      setScanOverlayVisible: (v) => set({ scanOverlayVisible: v }),
       setSample: (sample) => apply((r) => { if (sample) r.sample = sample; else delete r.sample; }),
       setDatasets: (datasets) => apply((r) => { r.datasets = datasets; }),
       setParams: (params) => apply((r) => { r.params = params; }),

@@ -13,7 +13,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.ok) return parsed.response;
   const b = parsed.body;
   const instruction = typeof b.instruction === "string" ? b.instruction.trim() : "";
-  if (!instruction) return NextResponse.json({ error: "지시를 입력하세요", code: "AI_INPUT_TOO_LONG" }, { status: 400 });
+  if (!instruction) return NextResponse.json({ error: "지시를 입력하세요", code: "AI_INPUT_EMPTY" }, { status: 400 });
   if (instruction.length > MAX_INSTRUCTION_CHARS) return NextResponse.json({ error: `지시는 ${MAX_INSTRUCTION_CHARS}자 이하여야 합니다`, code: "AI_INPUT_TOO_LONG" }, { status: 400 });
   const client = getLlmClient();
   if (!client) return NextResponse.json({ error: "서버에 GEMINI_API_KEY를 설정하세요", code: "AI_NOT_CONFIGURED" }, { status: 503 });

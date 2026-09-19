@@ -14,7 +14,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!parsed.ok) return parsed.response;
   const b = parsed.body;
   const brief = typeof b.brief === "string" ? b.brief.trim() : "";
-  if (!brief) return NextResponse.json({ error: "요청 내용을 입력하세요", code: "AI_INPUT_TOO_LONG" }, { status: 400 });
+  if (!brief) return NextResponse.json({ error: "요청 내용을 입력하세요", code: "AI_INPUT_EMPTY" }, { status: 400 });
   if (brief.length > MAX_BRIEF_CHARS) return NextResponse.json({ error: `요청은 ${MAX_BRIEF_CHARS}자 이하여야 합니다`, code: "AI_INPUT_TOO_LONG" }, { status: 400 });
   const client = getLlmClient();
   if (!client) return NextResponse.json({ error: "서버에 GEMINI_API_KEY를 설정하세요", code: "AI_NOT_CONFIGURED" }, { status: 503 });

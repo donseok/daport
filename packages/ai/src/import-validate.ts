@@ -2,6 +2,8 @@ import { FORBIDDEN_CONTEXT_KEYS, RESERVED_CONTEXT_NAMES, safeParseReport, type E
 import { AiValidationError } from "./types";
 
 const MAX_ROWS = 20;
+/** 이관이 한 번에 만들 수 있는 요소 수 상한(스펙 5.3). prompts/import.ko.ts의 문구도 이 값을 그대로 쓴다 */
+export const MAX_IMPORT_ELEMENTS = 120;
 const DATASET_NAME_RE = /^rows[0-9]+$/;
 const PARAM_TYPES = new Set(["string", "number", "date"]);
 /** 파라미터 이름으로 쓰면 안 되는 것들. core의 예약어·프로토타입 오염 키를 그대로 가져와 한 곳만 관리한다 */
@@ -147,13 +149,18 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
   const r = raw as { elements: unknown[]; params?: unknown; datasets?: unknown };
 
   // 배열·null 등 객체가 아닌 항목은 스키마 검증까지 가지 않고 여기서 버린다
-  const elements = parseItems(r.elements, "요소", warnings).filter((e): e is Record<string, unknown> => {
+  const parsedElements = parseItems(r.elements, "요소", warnings).filter((e): e is Record<string, unknown> => {
     if (typeof e !== "object" || e === null || Array.isArray(e)) {
       warnings.push("요소 JSON이 객체가 아니라 건너뜀");
       return false;
     }
     return true;
   });
+  // 프롬프트가 120개를 상한으로 지시하지만 모델이 넘겨 낼 수 있으므로 여기서도 강제한다(스펙 5.3)
+  const elements = parsedElements.slice(0, MAX_IMPORT_ELEMENTS);
+  if (parsedElements.length > MAX_IMPORT_ELEMENTS) {
+    warnings.push(`요소가 ${MAX_IMPORT_ELEMENTS}개를 넘어 ${parsedElements.length - MAX_IMPORT_ELEMENTS}개를 버렸습니다`);
+  }
 
   // params: 이름·타입 규칙을 통과한 것만. 기존 이름과 겹치면 모델 쪽을 버린다
   const existing = new Set(report.params.map((p) => p.name));
@@ -184,7 +191,16 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
       warnings.push(`데이터셋 이름 규칙(rows<숫자>)을 어겨 버렸습니다: ${name}`);
       continue;
     }
-    const rows = Array.isArray(o.rows) ? (o.rows as Record<string, unknown>[]) : [];
+    // 배열·null 등 객체가 아닌 행은 요소와 같은 방식으로 그 행만 버린다 — 표 하나 전체를 무효로 만들지 않는다
+    const rawRows = Array.isArray(o.rows) ? o.rows : [];
+    const rows: Record<string, unknown>[] = [];
+    for (const row of rawRows) {
+      if (typeof row !== "object" || row === null || Array.isArray(row)) {
+        warnings.push(`${name}의 행이 객체가 아니라 건너뜀`);
+        continue;
+      }
+      rows.push(row as Record<string, unknown>);
+    }
     if (rows.length > MAX_ROWS) warnings.push(`${name}의 행이 많아 ${MAX_ROWS}행까지만 남겼습니다`);
     datasets.push({ name, type: "static", rows: rows.slice(0, MAX_ROWS) });
   }
@@ -207,7 +223,9 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
   const usedNames = new Set(kept.filter((e) => e.type === "table").map((e) => String(e.source)));
   const finalDatasets = datasets.filter((d) => usedNames.has(d.name));
 
-  const allowed = new Set(params.map((p) => p.name).concat([...existing]));
+  // existing에는 report가 이미 가진 파라미터 이름(호출자가 낸 문서라 예약어를 걸러낸 적이 없다)이 섞여 있다.
+  // 표현식에서 실제로 쓸 수 있게 허용하는 이름 집합에서는 새 이름과 똑같이 금지 목록을 통과시킨다
+  const allowed = new Set([...params.map((p) => p.name), ...existing].filter((n) => !FORBIDDEN_PARAM_NAMES.has(n)));
   for (const e of kept) {
     toMm(e, page);
     fixExpressions(e, allowed, warnings);

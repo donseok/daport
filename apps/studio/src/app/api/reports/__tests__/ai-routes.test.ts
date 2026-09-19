@@ -27,8 +27,13 @@ describe("POST ai/edit", () => {
     expect(JSON.stringify(body)).not.toMatch(/JSON Patch|허용 경로|system/);   // 프롬프트 원문 비노출
     expect(fake.calls[0].messages.at(-1)!.text).toContain("제목 바꿔");
   });
-  it("400 AI_INPUT_TOO_LONG, 400 AI_INVALID_PATCH, and the LlmError mapping", async () => {
-    expect((await post(edit, { report, instruction: "가".repeat(2001), selection: [], history: [] })).status).toBe(400);
+  it("400 AI_INPUT_TOO_LONG, 400 AI_INPUT_EMPTY, 400 AI_INVALID_PATCH, and the LlmError mapping", async () => {
+    const tooLong = await post(edit, { report, instruction: "가".repeat(2001), selection: [], history: [] });
+    expect(tooLong.status).toBe(400);
+    expect((await tooLong.json()).code).toBe("AI_INPUT_TOO_LONG");
+    const empty = await post(edit, { report, instruction: "  ", selection: [], history: [] });
+    expect(empty.status).toBe(400);
+    expect((await empty.json()).code).toBe("AI_INPUT_EMPTY");
     fake = new FakeLlmClient({ patch: [op("replace", "/elements/0/w", -1)], explanation: "" });
     const bad = await post(edit, { report, instruction: "x", selection: [], history: [] });
     expect(bad.status).toBe(400); expect((await bad.json()).code).toBe("AI_INVALID_PATCH");
@@ -63,6 +68,11 @@ describe("POST ai/edit", () => {
 });
 
 describe("POST ai/generate", () => {
+  it("400 AI_INPUT_EMPTY for an empty or blank brief", async () => {
+    const res = await post(generate, { report: { ...report, elements: [] }, brief: "   " });
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe("AI_INPUT_EMPTY");
+  });
   it("400 AI_NOT_EMPTY for a report with elements; returns elements for an empty one", async () => {
     fake = new FakeLlmClient({ elements: [JSON.stringify({ id: "t1", type: "text", x: 10, y: 10, w: 80, h: 8, value: "품질보증서" })], explanation: "생성" });
     const notEmpty = await post(generate, { report, brief: "품질보증서" });
