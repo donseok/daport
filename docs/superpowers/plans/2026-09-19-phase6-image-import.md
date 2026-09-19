@@ -1198,7 +1198,7 @@ export function proposalFromImport(
 ```ts
 export type ImportResponse = {
   elements: Element[]; params: Report["params"]; datasets: Report["datasets"];
-  explanation: string; warnings: string[]; scan: { assetId: string; angle: number };
+  explanation: string; warnings: string[]; scan: { src: string | null; angle: number };
 };
 
 /** 이미지를 base64로 실어 이관을 요청한다. 파일을 그대로 보내지 않는 이유는 라우트가 JSON content-type 검사를 공유하기 때문이다 */
