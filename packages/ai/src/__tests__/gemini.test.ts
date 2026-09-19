@@ -60,6 +60,16 @@ describe("createGeminiClient", () => {
   it("refuses to construct without an api key", () => {
     expect(() => createGeminiClient({ apiKey: "", model: "m" })).toThrow(expect.objectContaining({ code: "LLM_NOT_CONFIGURED" }));
   });
+  it("maps a GoogleGenAI constructor throw through the same error mapping and key masking", () => {
+    ctor.mockImplementationOnce(() => { throw new Error("bad config key=AIza-secret-key"); });
+    expect(() => client()).toThrow(expect.objectContaining({ code: "LLM_ERROR" }));
+    try {
+      client();
+    } catch (e) {
+      expect(e).toBeInstanceOf(LlmError);
+      if (e instanceof LlmError) { expect(e.message).not.toContain("AIza-secret-key"); expect(e.message).toContain("***"); }
+    }
+  });
   it("images를 마지막 user 파트에 inlineData로 싣는다", async () => {
     generateContent.mockResolvedValueOnce({ text: '{"ok":1}' });
     await client().complete({

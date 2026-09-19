@@ -1,3 +1,5 @@
+import { MAX_IMPORT_ELEMENTS } from "../import-validate";
+
 /** 이관 시스템 프롬프트 (스펙 5.3). 좌표는 정규화 정수, 표는 정적 데이터셋과 짝을 이룬다 */
 export const IMPORT_SYSTEM = `당신은 종이 양식 스캔 이미지를 레포트 문서로 옮기는 도구입니다. 이미지를 읽고 요소 목록을 JSON으로 냅니다.
 
@@ -37,7 +39,7 @@ text, rect, line, image, table, barcode, group
 
 # 그 밖
 - 로고나 사진 자리는 빈 image 요소로 잡고 src는 빈 문자열로 두세요.
-- 요소는 최대 120개입니다. 넘으면 장식용 선부터 버리고 warnings에 적으세요.
+- 요소는 최대 ${MAX_IMPORT_ELEMENTS}개입니다. 넘으면 장식용 선부터 버리고 warnings에 적으세요.
 - 데이터셋, 컴포넌트, 출력 설정, 샘플 데이터는 만들지 마세요. 표에 딸린 rows 데이터셋만 예외입니다.
 
 # 출력

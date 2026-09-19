@@ -13,11 +13,17 @@ export const maxDuration = 120;
 const MAX_IMPORT_BODY_BYTES = MAX_IMAGE_BYTES * 2;
 
 const DEFAULT_IMPORT_TIMEOUT_MS = 90_000;
+// maxDuration(초)을 넘는 요청은 이 라우트가 504 AI_TIMEOUT을 만들기도 전에 플랫폼이 강제 종료한다.
+// 응답 조립(검증 등)에 쓸 여유를 두고, 설정값이 maxDuration보다 크거나 같으면 그 아래로 눌러 클램프한다
+const ROUTE_MAX_DURATION_MS = maxDuration * 1000;
+const IMPORT_TIMEOUT_MARGIN_MS = 5_000;
+const MAX_IMPORT_TIMEOUT_MS = ROUTE_MAX_DURATION_MS - IMPORT_TIMEOUT_MARGIN_MS;
 
 /** 이관 요청에만 적용할 타임아웃(스펙 5.2). 이미지 인식은 편집·생성보다 오래 걸린다 */
-function importTimeoutMs(): number {
+export function importTimeoutMs(): number {
   const v = Number(process.env.AI_IMPORT_TIMEOUT_MS);
-  return v > 0 ? v : DEFAULT_IMPORT_TIMEOUT_MS;
+  const configured = v > 0 ? v : DEFAULT_IMPORT_TIMEOUT_MS;
+  return Math.min(configured, MAX_IMPORT_TIMEOUT_MS);
 }
 
 const MAX_MODEL_WARNINGS = 20;

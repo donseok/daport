@@ -18,8 +18,10 @@ function matchingPresetId(page: { width: number; height: number }): string | und
 }
 
 // "cancelled"는 사용자가 요청을 취소했을 때만 붙는 조용한 턴이다. history에는 user·assistant만 실어 보내므로
-// 취소 턴은 다음 요청의 history에 절대 섞이지 않는다
-type Turn = { role: "user" | "assistant" | "error" | "cancelled"; text: string; warnings?: string[] };
+// 취소 턴은 다음 요청의 history에 절대 섞이지 않는다.
+// kind: "import"는 업로드한 파일명을 담은 턴 표시다 — role은 user라 필터를 그냥 통과하지만, 파일명이
+// 다음 요청의 history에 실려 모델로 나가면 안 되므로 cancel 턴과 같은 방식으로 따로 걸러낸다
+type Turn = { role: "user" | "assistant" | "error" | "cancelled"; text: string; warnings?: string[]; kind?: "import" };
 
 const HISTORY_LIMIT = 6;
 
@@ -44,6 +46,8 @@ export function AiPanel({ reportId }: { reportId: string }) {
   const setProposal = useEditor((s) => s.setProposal);
   const scanOverlay = useEditor((s) => s.scanOverlay);
   const setScanOverlay = useEditor((s) => s.setScanOverlay);
+  const scanOverlayVisible = useEditor((s) => s.scanOverlayVisible);
+  const setScanOverlayVisible = useEditor((s) => s.setScanOverlayVisible);
   const isEmpty = report.elements.length === 0;
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
@@ -72,7 +76,7 @@ export function AiPanel({ reportId }: { reportId: string }) {
     const instruction = input.trim();
     if (!instruction || busy) return;
     const kind = isEmpty && generateMode ? "generate" : "edit";
-    const history = turns.filter((t) => t.role === "user" || t.role === "assistant").slice(-HISTORY_LIMIT).map((t) => ({ role: t.role, text: t.text }));
+    const history = turns.filter((t) => (t.role === "user" || t.role === "assistant") && t.kind !== "import").slice(-HISTORY_LIMIT).map((t) => ({ role: t.role, text: t.text }));
     setTurns((prev) => [...prev, { role: "user", text: instruction }]);
     setInput("");
     setNotConfigured(false);
@@ -126,7 +130,7 @@ export function AiPanel({ reportId }: { reportId: string }) {
     const file = e.target.files?.[0];
     e.target.value = "";   // 같은 파일을 다시 골라도 change 이벤트가 다시 뜨도록 비운다
     if (!file || busy) return;
-    setTurns((prev) => [...prev, { role: "user", text: `이미지 업로드: ${file.name}` }]);
+    setTurns((prev) => [...prev, { role: "user", text: `이미지 업로드: ${file.name}`, kind: "import" }]);
     setNotConfigured(false);
     const controller = new AbortController();
     controllerRef.current = controller;
@@ -190,8 +194,9 @@ export function AiPanel({ reportId }: { reportId: string }) {
           </label>
         )}
         {scanOverlay && (
-          <button type="button" data-testid="ai-scan-clear" className="self-start text-neutral-500 underline" onClick={() => setScanOverlay(null)}>
-            대조 배경 끄기
+          // 소스는 지우지 않고 표시만 토글한다 — 다시 보려고 90초짜리 이관을 또 할 필요가 없다(스펙 9)
+          <button type="button" data-testid="ai-scan-toggle" className="self-start text-neutral-500 underline" onClick={() => setScanOverlayVisible(!scanOverlayVisible)}>
+            {scanOverlayVisible ? "대조 배경 끄기" : "대조 배경 보이기"}
           </button>
         )}
         <textarea aria-label="AI 지시" className="w-full border rounded px-1 py-0.5 resize-none" rows={2}

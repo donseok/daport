@@ -44,10 +44,6 @@ daport 레포트를 자연어로 편집하거나(부분 지시 → JSON Patch), 
 
 이관이 만들 수 있는 `datasets`는 표 하나당 정적 데이터셋 하나뿐이다. 이름은 `rows1`, `rows2`처럼 `rows<숫자>` 형태만 허용하고(`DATASET_NAME_RE`), 표 요소의 `source`가 그 이름을 그대로 가리켜야 렌더된다. 행은 최대 20행까지만 남기고(`MAX_ROWS`, 넘으면 잘라내고 경고), 남는 데이터셋이 없는 표는 렌더할 수 없으므로 표 자체를 함께 버린다. `datasets`·`components`·`output`·`sample`·`id`·`version`은 이관이 건드리지 않는 경로다 — 표에 딸린 `rows<N>` 정적 데이터셋만 예외다.
 
-### 알려진 제약
-
-- 좌표가 0–1000 정규화라서, 올린 이미지의 가로세로 비율이 선택한 용지 크기와 다르면 요소 위치·크기가 그 차이만큼 늘어나거나 눌린다. 스튜디오 라우트는 비율이 5% 넘게 어긋나면 경고를 얹지만 좌표 자체를 보정하지는 않는다.
-
 ## 실제 Gemini로 통합 테스트 (`GEMINI_IT=1`)
 
 기본 `pnpm test`(`vitest.config.ts`)는 `GEMINI_API_KEY` 없이 통과한다. 실제 API를 부르는 테스트는 `src/__it__/*.it.test.ts`에 있고 `vitest.it.config.ts`로만 수집되며, `GEMINI_IT=1`이고 `GEMINI_API_KEY`가 있을 때만 켜진다(`describe.skipIf`).
@@ -60,6 +56,7 @@ GEMINI_IT=1 GEMINI_API_KEY=... pnpm --filter @daport/ai test:it
 
 - `@google/genai` 2.23.0의 `ApiError`는 `message`와 `status`만 노출한다. 그래서 `gemini.ts`의 `toLlmError`는 429(`LLM_RATE_LIMIT`)에서 `retryAfterMs`를 절대 채우지 못하고, 스튜디오 AI 탭은 이 경우 (`Retry-After` 헤더 없이) 일반적인 "다시 시도하세요" 문구만 보여준다.
 - `AI_FAKE`는 프로덕션(`NODE_ENV === "production"`)에서는 무시된다. E2E는 `pnpm dev`로 뜨는 서버를 쓰므로 `NODE_ENV`가 production이 아니어서 문제없이 켜진다.
+- 이관 좌표가 0–1000 정규화라서, 올린 이미지의 가로세로 비율이 선택한 용지 크기와 다르면 요소 위치·크기가 그 차이만큼 늘어나거나 눌린다. 스튜디오 라우트는 비율이 5% 넘게 어긋나면 경고를 얹지만 좌표 자체를 보정하지는 않는다.
 
 ## 수동 검증 기록
 

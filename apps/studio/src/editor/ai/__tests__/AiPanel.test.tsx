@@ -131,7 +131,50 @@ describe("AiPanel", () => {
     await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/ai/import");
     expect(store.getState().scanOverlay).toBe("asset://abc123");   // 응답의 scan.src를 그대로 쓴다
+    expect(store.getState().scanOverlayVisible).toBe(true);        // 도착 시점엔 바로 보인다(스펙 9)
     expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("옮겼습니다");
+  });
+  it("대조 배경은 소스를 지우지 않고 표시만 토글한다 — 다시 보려고 재이관할 필요가 없다(스펙 9)", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({
+      elements: [{ id: "t1", type: "text", x: 10, y: 10, w: 50, h: 8, value: "검사 성적서" }],
+      params: [], datasets: [], page: { width: 210, height: 297, margin: [10, 10, 10, 10], unit: "mm" },
+      explanation: "옮겼습니다", warnings: [], scan: { src: "asset://abc123", angle: 3 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    const file = new File([new Uint8Array([1, 2, 3])], "form.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
+    expect(store.getState().scanOverlayVisible).toBe(true);
+    fireEvent.click(screen.getByTestId("ai-scan-toggle"));
+    expect(store.getState().scanOverlay).toBe("asset://abc123");   // 소스는 그대로
+    expect(store.getState().scanOverlayVisible).toBe(false);
+    fireEvent.click(screen.getByTestId("ai-scan-toggle"));
+    expect(store.getState().scanOverlayVisible).toBe(true);        // 재이관 없이 다시 보인다
+    expect(fetchMock).toHaveBeenCalledTimes(1);                    // 토글은 서버를 다시 부르지 않는다
+  });
+  it("업로드 턴의 파일명은 다음 편집 요청의 history에 실리지 않는다(취소 턴과 같은 방식으로 걸러낸다)", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({
+      elements: [{ id: "t1", type: "text", x: 10, y: 10, w: 50, h: 8, value: "검사 성적서" }],
+      params: [], datasets: [], page: { width: 210, height: 297, margin: [10, 10, 10, 10], unit: "mm" },
+      explanation: "옮겼습니다", warnings: [], scan: { src: "asset://abc123", angle: 3 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    const file = new File([new Uint8Array([1, 2, 3])], "비밀파일이름.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
+    act(() => { store.getState().applyProposal(); });   // 빈 레포트를 벗어나야 생성 모드가 아니라 edit로 다음 지시를 보낸다
+
+    const editMock = vi.fn(async (_u: string, _i?: RequestInit) => json({ patch: [], explanation: "됐습니다", warnings: [] }));
+    vi.stubGlobal("fetch", editMock);
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "다음 지시" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(editMock).toHaveBeenCalled());
+    const body = JSON.parse(String((editMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(JSON.stringify(body.history)).not.toContain("비밀파일이름");
+    // 업로드 턴(파일명)은 빠지지만, 그 설명 턴(파일명이 없다)은 다른 assistant 턴과 똑같이 history에 남는다
+    expect(body.history).toEqual([{ role: "assistant", text: "옮겼습니다" }]);
   });
   it("이관 프리셋: 레포트 크기가 알려진 프리셋과 같으면 그것을, 아니면 A4를 기본으로 고르고, 고른 프리셋 크기 그대로 보내며, 응답의 page를 문서에 반영한다(스펙 9, I1)", async () => {
     // 알려진 프리셋(60×40 라벨)과 크기가 같은 레포트 — 초기 선택이 그 프리셋이어야 한다

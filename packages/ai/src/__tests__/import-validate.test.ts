@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { parseReport } from "@daport/core";
 import { flatten } from "@daport/renderer";
-import { validateImported } from "../import-validate";
+import { validateImported, MAX_IMPORT_ELEMENTS } from "../import-validate";
 import { AiValidationError } from "../types";
 
 const page = { width: 210, height: 297 };
@@ -191,6 +191,34 @@ describe("validateImported", () => {
     expect(res.elements).toHaveLength(1);
     expect(res.elements[0].id).toBe("t1");
     expect(res.warnings.join(" ")).toContain("건너뜀");
+  });
+
+  it(`요소는 ${MAX_IMPORT_ELEMENTS}개까지만 남기고 넘는 개수를 경고에 적는다(프롬프트 상한이 지켜지지 않아도 서버가 강제한다)`, () => {
+    const many = Array.from({ length: MAX_IMPORT_ELEMENTS + 5 }, (_, i) => el({ id: `t${i}`, type: "text", x: 0, y: 0, w: 10, h: 10, value: String(i) }));
+    const res = validateImported(empty, { elements: many, explanation: "" }, page);
+    expect(res.elements).toHaveLength(MAX_IMPORT_ELEMENTS);
+    expect(res.elements[0].id).toBe("t0");   // 앞에서부터 남긴다
+    expect(res.warnings.join(" ")).toContain("5");
+  });
+
+  it("데이터셋의 객체가 아닌 행은 그 행만 버리고 나머지는 남긴다", () => {
+    const res = validateImported(empty, {
+      elements: [el({ id: "tb1", type: "table", x: 0, y: 0, w: 1000, h: 200, source: "rows1", columns: [{ header: "a", value: "{{ row.a }}", w: 1000 }] })],
+      datasets: [JSON.stringify({ name: "rows1", rows: [{ a: 1 }, "깨짐", null, ["배열"], { a: 2 }] })],
+      explanation: "",
+    }, page);
+    expect(res.datasets).toEqual([{ name: "rows1", type: "static", rows: [{ a: 1 }, { a: 2 }] }]);
+    expect(res.warnings.join(" ")).toContain("객체가 아니라 건너뜀");
+  });
+
+  it("report에 이미 있던 예약어 파라미터 이름은 표현식에서 쓸 수 없다", () => {
+    const withReserved = parseReport({ id: "r", version: 1, page, params: [{ name: "__proto__", type: "string" }] });
+    const res = validateImported(withReserved, {
+      elements: [el({ id: "t1", type: "text", x: 0, y: 0, w: 100, h: 20, value: "{{ params.__proto__ }}" })],
+      explanation: "",
+    }, page);
+    expect((res.elements[0] as { value: string }).value).toBe("");
+    expect(res.warnings.join(" ")).toContain("__proto__");
   });
 
   it("좌표가 유한수가 아니면 요소를 버린다", () => {

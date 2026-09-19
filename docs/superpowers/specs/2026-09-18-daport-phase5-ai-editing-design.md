@@ -169,6 +169,7 @@ export const MAX_CONTEXT_TOKENS = 60_000; export const MAX_INSTRUCTION_CHARS = 2
 | 패치 적용 모델이 스키마 위반 | `AI_INVALID_PATCH` | 400 + zod 메시지 |
 | 금지 경로·적용 불가 op | — | 200, 그 op 제거 + `warnings` |
 | 생성 요청인데 요소가 있음 | `AI_NOT_EMPTY` | 400 |
+| 지시문·브리프가 비어 있음 | `AI_INPUT_EMPTY` | 400 |
 | 지시문 길이 초과 | `AI_INPUT_TOO_LONG` | 400 |
 | 컨텍스트 잘라냄 | — | 200 + `warnings` |
 

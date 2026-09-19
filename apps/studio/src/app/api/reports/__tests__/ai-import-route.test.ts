@@ -12,7 +12,7 @@ vi.mock("@/lib/scan", async (orig) => {
   const actual = await orig<typeof import("@/lib/scan")>();
   return { ...actual, preprocessScan: vi.fn(actual.preprocessScan) };
 });
-const { POST } = await import("../[id]/ai/import/route");
+const { POST, importTimeoutMs } = await import("../[id]/ai/import/route");
 const { preprocessScan } = await import("@/lib/scan");
 
 const ctx = { params: Promise.resolve({ id: "r" }) };
@@ -128,6 +128,20 @@ describe("POST ai/import", () => {
     expect(res.status).toBe(503);
     expect((await res.json()).code).toBe("AI_NOT_CONFIGURED");
   }, 30_000);
+
+  it("AI_IMPORT_TIMEOUT_MS가 라우트의 maxDuration(120초)을 넘으면 그 아래로 클램프한다", () => {
+    const prev = process.env.AI_IMPORT_TIMEOUT_MS;
+    try {
+      process.env.AI_IMPORT_TIMEOUT_MS = "999000";   // maxDuration(120000ms)을 크게 넘는 값
+      expect(importTimeoutMs()).toBeLessThan(120_000);
+      process.env.AI_IMPORT_TIMEOUT_MS = "60000";     // 한도 안이면 그대로 쓴다
+      expect(importTimeoutMs()).toBe(60_000);
+      delete process.env.AI_IMPORT_TIMEOUT_MS;
+      expect(importTimeoutMs()).toBe(90_000);         // 기본값
+    } finally {
+      if (prev === undefined) delete process.env.AI_IMPORT_TIMEOUT_MS; else process.env.AI_IMPORT_TIMEOUT_MS = prev;
+    }
+  });
 
   it("전처리 결과가 출력 상한을 넘으면 배경 없이 200을 돌려준다(I4: 저장소를 두지 않는다)", async () => {
     vi.mocked(preprocessScan).mockResolvedValueOnce({
