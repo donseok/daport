@@ -3,9 +3,19 @@ import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../store";
 import { postAi, postImport } from "./api";
 import { proposalFromEdit, proposalFromGenerate, proposalFromImport, type Proposal } from "./proposal";
+import { BUILTIN_PRESETS } from "@/lib/presets";
 
 type EditResponse = Parameters<typeof proposalFromEdit>[1];
 type GenerateResponse = Parameters<typeof proposalFromGenerate>[1];
+
+// 스펙 9: 이관은 사용자가 확인한 용지 프리셋을 쓴다(기본 A4). 새 레포트는 아무 프리셋으로나 만들 수 있어(예: 60x40 라벨)
+// report.page를 그대로 보내면 90초짜리 요청이 끝난 뒤에야 잘못된 용지로 앉혀진 요소를 보게 된다
+const DEFAULT_IMPORT_PRESET_ID = "a4-portrait";
+
+/** report.page와 크기(너비·높이)가 같은 내장 프리셋의 id. 여백은 이관에 안 쓰이므로 비교하지 않는다 */
+function matchingPresetId(page: { width: number; height: number }): string | undefined {
+  return BUILTIN_PRESETS.find((p) => p.page.width === page.width && p.page.height === page.height)?.id;
+}
 
 // "cancelled"는 사용자가 요청을 취소했을 때만 붙는 조용한 턴이다. history에는 user·assistant만 실어 보내므로
 // 취소 턴은 다음 요청의 history에 절대 섞이지 않는다
@@ -40,6 +50,8 @@ export function AiPanel({ reportId }: { reportId: string }) {
   const [busy, setBusy] = useState(false);
   const [notConfigured, setNotConfigured] = useState(false);
   const [generateMode, setGenerateMode] = useState(() => isEmpty);
+  // 이관에 쓸 용지 프리셋. 지금 레포트 페이지가 알려진 프리셋과 크기가 같으면 그것으로, 아니면 A4로 초기화한다
+  const [importPresetId, setImportPresetId] = useState(() => matchingPresetId(report.page) ?? DEFAULT_IMPORT_PRESET_ID);
   const controllerRef = useRef<AbortController | null>(null);
   // 언마운트로 인한 abort는 조용한 취소 턴도 남기지 않는다 — catch·finally에서 상태를 건드리기 전에 이 값을 먼저 확인한다
   const mountedRef = useRef(true);
@@ -120,7 +132,8 @@ export function AiPanel({ reportId }: { reportId: string }) {
     controllerRef.current = controller;
     setBusy(true);
     try {
-      const res = await postImport(reportId, report, file, { width: report.page.width, height: report.page.height }, controller.signal);
+      const preset = BUILTIN_PRESETS.find((p) => p.id === importPresetId) ?? BUILTIN_PRESETS.find((p) => p.id === DEFAULT_IMPORT_PRESET_ID)!;
+      const res = await postImport(reportId, report, file, { width: preset.page.width, height: preset.page.height }, controller.signal);
       // scan.src가 null이면 저장에 실패했거나 너무 큰 것이므로 대조 배경 없이 진행한다(경고는 이미 warnings에 실려 있다)
       handleResult(res, (data) => proposalFromImport(report, data), (data) => setScanOverlay(data.scan.src));
     } catch (e) {
@@ -159,6 +172,15 @@ export function AiPanel({ reportId }: { reportId: string }) {
           <label className="flex items-center gap-1 text-neutral-500">
             <input type="checkbox" data-testid="ai-generate-mode" checked={generateMode} disabled={busy} onChange={(e) => setGenerateMode(e.target.checked)} />
             생성 모드 (빈 레포트)
+          </label>
+        )}
+        {isEmpty && (
+          <label className="flex items-center gap-1 text-neutral-600">
+            용지 크기
+            <select data-testid="ai-import-preset" className="border rounded px-1 py-0.5" value={importPresetId} disabled={busy}
+              onChange={(e) => setImportPresetId(e.target.value)}>
+              {BUILTIN_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
           </label>
         )}
         {isEmpty && (
