@@ -116,7 +116,11 @@ function fixExpressions(el: Record<string, unknown>, allowed: Set<string>, warni
   for (const child of childArrays(el)) for (const c of child) fixExpressions(c, allowed, warnings);
 }
 
-/** 최상위 요소를 페이지 안으로 민다. 자식 좌표는 부모 기준이 아니라 이미지 기준이라 같이 움직인다 */
+/**
+ * 최상위 요소를 페이지 안으로 민다. 자식 좌표는 부모(자기 자신) 기준 상대좌표라 렌더러가
+ * flatten할 때 부모 원점을 더해준다(packages/renderer/src/layout/flatten.ts) — 부모만 옮기면
+ * 자식은 이미 부모를 따라간 것이므로 자식 좌표는 그대로 둔다
+ */
 function clampToPage(el: Record<string, unknown>, page: { width: number; height: number }, warnings: string[]): void {
   const w = typeof el.w === "number" ? el.w : 0;
   const h = typeof el.h === "number" ? el.h : 0;
@@ -126,18 +130,9 @@ function clampToPage(el: Record<string, unknown>, page: { width: number; height:
   const ny = Math.min(Math.max(0, y), Math.max(0, page.height - h));
   if (nx !== x || ny !== y) {
     warnings.push(`요소 ${String(el.id)}를 페이지 안으로 옮겼습니다`);
-    const dx = nx - x;
-    const dy = ny - y;
     el.x = nx;
     el.y = ny;
-    for (const child of childArrays(el)) for (const c of child) shift(c, dx, dy);
   }
-}
-
-function shift(el: Record<string, unknown>, dx: number, dy: number): void {
-  if (typeof el.x === "number") el.x += dx;
-  if (typeof el.y === "number") el.y += dy;
-  for (const child of childArrays(el)) for (const c of child) shift(c, dx, dy);
 }
 
 /**

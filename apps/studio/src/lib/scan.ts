@@ -103,22 +103,32 @@ export async function preprocessScan(input: Buffer, opts?: { maxOutputBytes?: nu
   if ((meta.width ?? 0) * (meta.height ?? 0) > MAX_IMAGE_PIXELS) throw new ImageInputError("IMAGE_TOO_LARGE", "이미지 픽셀 수가 한도를 넘습니다");
 
   const notes: string[] = [];
-  const upright = sharp(input, NO_PIXEL_LIMIT).rotate();   // 인자 없는 rotate가 EXIF 방향을 적용한다
-  const correction = await estimateAngle(upright);
+  // sharp 파이프라인은 clone한 뒤 toBuffer()할 때마다 원본 바이트부터 다시 디코드한다(중간 결과를
+  // 재사용하지 않는다). 원본 해상도(최대 50MP)로 기울기 추정·트림 비교·인코딩을 각각 따로 디코드하면
+  // 그 수만큼 전체 픽셀을 반복해서 들고 있게 된다. 그래서 EXIF 회전 직후 딱 한 번만 작업 해상도
+  // (LONG_EDGE)로 실제 버퍼를 못박아 두고, 이후 기울기 보정·트림·트림 전후 비교는 전부 이 작은
+  // 버퍼 위에서만 돈다. withoutEnlargement라 이미 더 작은 이미지는 그대로 지나간다
+  const base = await sharp(input, NO_PIXEL_LIMIT)
+    .rotate()   // 인자 없는 rotate가 EXIF 방향을 적용한다
+    .resize({ width: LONG_EDGE, height: LONG_EDGE, fit: "inside", withoutEnlargement: true })
+    .toBuffer({ resolveWithObject: true });
+
+  const correction = await estimateAngle(sharp(base.data, NO_PIXEL_LIMIT));
   const angle = -correction;   // 보고용 각도: 원본이 기울어진 방향과 부호가 같다
 
-  let work = upright.clone();
+  // 회전이 필요 없으면 base를 그대로 쓴다 — 그래야 불필요한 재인코딩 한 번을 더 줄인다
+  let work = { data: base.data, info: base.info };
   if (Math.abs(correction) >= ANGLE_STEP) {
-    work = work.rotate(correction, { background: "#ffffff" });
+    work = await sharp(base.data, NO_PIXEL_LIMIT).rotate(correction, { background: "#ffffff" }).toBuffer({ resolveWithObject: true });
     notes.push(`기울기 보정을 위해 ${correction.toFixed(1)}도 회전을 적용했습니다`);   // 실제 적용한 회전값을 남긴다(보고용 angle과 부호가 다르다)
   }
 
-  const beforeTrim = await work.clone().toBuffer({ resolveWithObject: true });
-  const trimmed = await work.clone().trim().toBuffer({ resolveWithObject: true }).catch(() => beforeTrim);
-  const beforeArea = beforeTrim.info.width * beforeTrim.info.height;
+  // 트림 전 면적은 work의 info에 이미 있으므로(위에서 한 번만 materialize) 비교용으로 또 디코드할 필요가 없다
+  const beforeArea = work.info.width * work.info.height;
+  const trimmed = await sharp(work.data, NO_PIXEL_LIMIT).trim().toBuffer({ resolveWithObject: true }).catch(() => work);
   const trimArea = trimmed.info.width * trimmed.info.height;
   // 트림이 너무 많이 먹었으면(종이보다 어두운 배경 등) 버린다
-  const chosen = trimArea >= beforeArea * 0.3 ? trimmed : beforeTrim;
+  const chosen = trimArea >= beforeArea * 0.3 ? trimmed : work;
   if (chosen === trimmed && trimArea < beforeArea) notes.push(`바깥 여백을 잘라냈습니다 (${trimmed.info.width}×${trimmed.info.height})`);
 
   const out = await encodeWithinBudget(chosen.data, opts?.maxOutputBytes ?? MAX_OUTPUT_BYTES);

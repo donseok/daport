@@ -37,6 +37,7 @@ export type ImportResponse = {
   elements: Element[];
   params: Report["params"];
   datasets: Report["datasets"];
+  page: Report["page"];
   explanation: string;
   warnings: string[];
   scan: { src: string | null; angle: number };

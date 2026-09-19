@@ -40,6 +40,7 @@ describe("proposal", () => {
       elements: [{ id: "t1", type: "text", x: 1, y: 1, w: 10, h: 5, value: "A" } as never],
       params: [{ name: "lotNo", type: "string" } as never],
       datasets: [{ name: "rows1", type: "static", rows: [] } as never],
+      page: base.page,
       explanation: "옮겼습니다",
       warnings: ["도장 못 읽음"],
     });
@@ -49,5 +50,17 @@ describe("proposal", () => {
     expect(p.next.datasets.map((d) => d.name)).toContain("rows1");
     expect(p.changes.added).toEqual(["t1"]);
     expect(p.warnings).toContain("도장 못 읽음");
+  });
+  it("proposalFromImport는 서버가 검증에 쓴 page를 문서에 반영한다(I1: 프리셋·문서 불일치 방지)", () => {
+    const p = proposalFromImport(base, {
+      elements: [{ id: "t1", type: "text", x: 1, y: 1, w: 10, h: 5, value: "A" } as never],
+      params: [],
+      datasets: [],
+      page: { ...base.page, width: 297, height: 420 },
+      explanation: "옮겼습니다",
+      warnings: [],
+    });
+    expect(p.next.page).toMatchObject({ width: 297, height: 420 });
+    expect(p.otherOps.join(" ")).toContain("용지 크기");
   });
 });

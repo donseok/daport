@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
-import { parseReport } from "@daport/core";
+import { parseReport, type Report } from "@daport/core";
 import { buildImportPrompt, validateImported } from "@daport/ai";
 import { readJsonBody } from "@/lib/body";
 import { getLlmClient, importErrorResponse } from "@/lib/ai";
-import { preprocessScan, MAX_IMAGE_BYTES } from "@/lib/scan";
-import { assetStorageEnabled, putAsset } from "@/lib/asset-io";
-import { randomUUID } from "node:crypto";
+import { preprocessScan, MAX_IMAGE_BYTES, MAX_OUTPUT_BYTES } from "@/lib/scan";
 
 export const maxDuration = 120;
 
@@ -20,6 +18,25 @@ const DEFAULT_IMPORT_TIMEOUT_MS = 90_000;
 function importTimeoutMs(): number {
   const v = Number(process.env.AI_IMPORT_TIMEOUT_MS);
   return v > 0 ? v : DEFAULT_IMPORT_TIMEOUT_MS;
+}
+
+const MAX_MODEL_WARNINGS = 20;
+const MAX_MODEL_WARNING_LEN = 200;
+
+/**
+ * 모델이 낸 warnings(스펙 5.2·5.3: 읽지 못한 영역, 120개 초과로 버린 요소 등)를 병합한다.
+ * 이미지 내용에 따라 모델이 마음대로 채우는 문자열이라 개수·길이를 방어적으로 자른다
+ */
+function sanitizeModelWarnings(raw: unknown): string[] {
+  const list = (raw as { warnings?: unknown } | null)?.warnings;
+  if (!Array.isArray(list)) return [];
+  const out: string[] = [];
+  for (const w of list) {
+    if (typeof w !== "string") continue;
+    out.push(w.length > MAX_MODEL_WARNING_LEN ? w.slice(0, MAX_MODEL_WARNING_LEN) : w);
+    if (out.length >= MAX_MODEL_WARNINGS) break;
+  }
+  return out;
 }
 
 /** 스캔 이미지 → 요소 제안 (스펙 7장). 빈 레포트에서만 시작한다 */
@@ -45,46 +62,29 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       width: typeof preset?.width === "number" && preset.width > 0 ? preset.width : report.page.width,
       height: typeof preset?.height === "number" && preset.height > 0 ? preset.height : report.page.height,
     };
+    // 클라이언트가 실제로 확인한 용지 크기. 검증·클램프도 이 값 기준이고, 응답에도 그대로 실어
+    // 보내 클라이언트가 자기 레포트의 기존 페이지가 아니라 이 값을 반영하게 한다(스펙 9, I1)
+    const resolvedPage: Report["page"] = { ...report.page, ...page };
 
     const prompt = buildImportPrompt(page, { mimeType: scan.mimeType, data: scan.data.toString("base64") });
     const raw = await client.complete({ system: prompt.system, messages: prompt.messages, schema: prompt.schema, images: prompt.images, signal: req.signal, timeoutMs: importTimeoutMs() });
-    const result = validateImported({ ...report, page: { ...report.page, ...page } }, raw, page);
+    const result = validateImported({ ...report, page: resolvedPage }, raw, page);
 
-    // 에셋 저장소는 Blob 토큰이 있을 때만 쓴다. 개발·E2E에는 토큰이 없어 작은 이미지는 data URL로 돌려준다.
-    // 저장 자체(일시적 5xx, 쿼터 초과 등)가 실패해도 이미 검증을 통과한 요소·파라미터를 버리면 안 된다 —
-    // 스캔은 대조용 배경일 뿐이라 저장에 실패하면 배경 없이 200으로 돌려주고 경고만 남긴다
-    let src: string | null;
-    let storeFailed = false;
-    try {
-      src = await storeScan(scan);
-    } catch (e) {
-      console.warn("[ai] 스캔 배경 저장 실패", e);
-      src = null;
-      storeFailed = true;
-    }
+    // 전처리된 스캔은 대조 배경일 뿐이다. 별도 저장소에 영구히 두지 않는다 — 사용자가 제안을
+    // 거절해도 지울 방법이 없어 이미지가 그대로 남기 때문이다(스펙 7 재검토, I4). preprocessScan의
+    // 출력 용량 상한 안에 있으면(기본적으로 항상 그렇다 — encodeWithinBudget이 그 상한을 보장한다)
+    // data URL로 바로 실어 보내고, 그렇지 않으면 배경 없이 진행한다
+    const src = scan.data.byteLength <= MAX_OUTPUT_BYTES ? `data:${scan.mimeType};base64,${scan.data.toString("base64")}` : null;
+
     const ratio = scan.width / scan.height;
     const target = page.width / page.height;
-    const warnings = [...scan.notes, ...result.warnings];
-    if (storeFailed) warnings.push("스캔 배경 이미지를 저장하지 못해 대조 화면 없이 진행합니다");
+    const warnings = [...scan.notes, ...sanitizeModelWarnings(raw), ...result.warnings];
     if (Math.abs(ratio - target) / target > 0.05) warnings.push("이미지 비율이 선택한 용지와 5% 넘게 달라 요소 위치가 늘어났을 수 있습니다");
 
     const explanation = typeof (raw as { explanation?: unknown }).explanation === "string" ? (raw as { explanation: string }).explanation : "";
     console.log(`[ai] ts=${new Date().toISOString()} id=${report.id} kind=import ms=${Date.now() - started} px=${scan.width}x${scan.height} elements=${result.elements.length}`);
-    return NextResponse.json({ elements: result.elements, params: result.params, datasets: result.datasets, explanation, warnings, scan: { src, angle: scan.angle } });
+    return NextResponse.json({ elements: result.elements, params: result.params, datasets: result.datasets, explanation, warnings, page: resolvedPage, scan: { src, angle: scan.angle } });
   } catch (e) {
     return importErrorResponse(e);
   }
-}
-
-const MAX_DATA_URL_BYTES = 1024 * 1024;
-
-/** 전처리본을 어디에 둘지 정한다. Blob 토큰이 있으면 에셋으로, 없으면 작은 이미지에 한해 data URL로 */
-async function storeScan(scan: { data: Buffer; mimeType: "image/jpeg" }): Promise<string | null> {
-  if (assetStorageEnabled()) {
-    const id = randomUUID().replace(/-/g, "").slice(0, 16);
-    await putAsset({ id, name: "scan.jpg", mime: scan.mimeType, data: new Uint8Array(scan.data) });
-    return `asset://${id}`;
-  }
-  if (scan.data.byteLength <= MAX_DATA_URL_BYTES) return `data:${scan.mimeType};base64,${scan.data.toString("base64")}`;
-  return null;   // 저장할 곳이 없고 본문에 싣기엔 크다 — 대조 배경 없이 진행한다
 }

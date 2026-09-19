@@ -88,7 +88,7 @@ describe("preprocessScan", () => {
 
   it("한도를 넘는 바이트는 IMAGE_TOO_LARGE", async () => {
     const big = Buffer.alloc(MAX_IMAGE_BYTES + 1);
-    await expect(preprocessScan(big)).rejects.toBeInstanceOf(ImageInputError);
+    await expect(preprocessScan(big)).rejects.toMatchObject({ code: "IMAGE_TOO_LARGE" });
   });
 
   it("픽셀 수가 한도를 넘으면 전체를 디코드하지 않고도 IMAGE_TOO_LARGE로 거절한다", async () => {

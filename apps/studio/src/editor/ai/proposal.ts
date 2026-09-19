@@ -93,19 +93,26 @@ export function proposalFromGenerate(
   return { kind: "generate", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps: [], base };
 }
 
-/** 이관 응답 → 제안. 요소뿐 아니라 params·datasets도 함께 바뀐다 */
+/**
+ * 이관 응답 → 제안. 요소뿐 아니라 params·datasets·page도 함께 바뀐다.
+ * page는 서버가 실제로 검증·클램프에 쓴 용지다(사용자가 이관 시 고른 프리셋) — 이것을 반영하지
+ * 않으면 요소는 그 용지 기준으로 배치·클램프됐는데 문서는 기존 페이지 그대로라 크기가 안 맞는
+ * 용지에서는 요소가 페이지 밖으로 밀려난 채로 보인다(스펙 9, I1)
+ */
 export function proposalFromImport(
   base: Report,
-  res: { elements: Element[]; params: Report["params"]; datasets: Report["datasets"]; explanation: string; warnings: string[] },
+  res: { elements: Element[]; params: Report["params"]; datasets: Report["datasets"]; page: Report["page"]; explanation: string; warnings: string[] },
 ): Proposal {
   const next = parseReport({
     ...base,
     elements: res.elements,
     params: [...base.params, ...res.params],
     datasets: [...base.datasets, ...res.datasets],
+    page: res.page,
   });
   const otherOps: string[] = [];
   if (res.params.length > 0) otherOps.push(`파라미터 ${res.params.length}개 추가`);
   if (res.datasets.length > 0) otherOps.push(`데이터셋 ${res.datasets.length}개 추가`);
+  if (res.page.width !== base.page.width || res.page.height !== base.page.height) otherOps.push(`용지 크기를 ${res.page.width}×${res.page.height}로 바꿨습니다`);
   return { kind: "import", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps, base };
 }

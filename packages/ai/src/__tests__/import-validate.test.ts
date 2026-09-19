@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseReport } from "@daport/core";
+import { flatten } from "@daport/renderer";
 import { validateImported } from "../import-validate";
 import { AiValidationError } from "../types";
 
@@ -30,6 +31,27 @@ describe("validateImported", () => {
     const res = validateImported(empty, { elements: [el({ id: "t1", type: "text", x: 950, y: 10, w: 200, h: 20, value: "밖" })], explanation: "" }, page);
     expect(res.elements[0].x + res.elements[0].w).toBeLessThanOrEqual(210 + 1e-6);
     expect(res.warnings.join(" ")).toContain("페이지");
+  });
+
+  it("페이지 밖 group을 안으로 밀어도 자식의 저장된 좌표는 그대로다(자식은 그룹 상대좌표)", () => {
+    const res = validateImported(empty, {
+      elements: [el({
+        id: "g1", type: "group", x: 900, y: 0, w: 200, h: 100,
+        children: [{ id: "c1", type: "text", x: 0, y: 0, w: 50, h: 50, value: "안" }],
+      })],
+      explanation: "",
+    }, page);
+    const g = res.elements[0] as { x: number; children: { x: number; y: number }[] };
+    // 그룹은 페이지 안으로 밀렸다
+    expect(g.x + 42).toBeLessThanOrEqual(210 + 1e-6);
+    // 자식은 부모를 따라가는 상대좌표이므로 밀기 전과 같은 값이어야 한다(0 그대로)
+    expect(g.children[0].x).toBeCloseTo(0, 6);
+    expect(g.children[0].y).toBeCloseTo(0, 6);
+    // flatten으로 절대좌표를 계산해도 자식이 그룹 밖으로 나가지 않는다
+    const flat = flatten(res.elements);
+    const child = flat.find((f) => f.id === "c1")!;
+    expect(child.x).toBeCloseTo(g.x, 6);
+    expect(child.x + child.w).toBeLessThanOrEqual(210 + 1e-6);
   });
 
   it("params에 없는 이름을 쓰면 표현식을 비우고 경고를 남긴다", () => {
