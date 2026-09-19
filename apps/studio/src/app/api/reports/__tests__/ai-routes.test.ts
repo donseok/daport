@@ -39,6 +39,22 @@ describe("POST ai/edit", () => {
       expect(r.status).toBe(status); expect((await r.json()).code).toBe(out);
     }
   });
+  it("never forwards the provider's own LLM_ERROR message to the client", async () => {
+    fake = new FakeLlmClient(() => { throw new LlmError("LLM_ERROR", "invalid argument: field system quota-project=daport-prod model=gemini-3.8-flash"); });
+    const r = await post(edit, { report, instruction: "x", selection: [], history: [] });
+    expect(r.status).toBe(502);
+    const body = await r.json();
+    expect(body.code).toBe("AI_ERROR");
+    expect(body.error).not.toMatch(/quota-project|gemini-3\.8-flash/);   // I2: 502 사유 문구만
+  });
+  it("drops an inapplicable op end to end and returns only the surviving ops (C1)", async () => {
+    fake = new FakeLlmClient({ patch: [op("replace", "/elements/9/value", "x"), op("replace", "/elements/0/value", "ok")], explanation: "e" });
+    const res = await post(edit, { report, instruction: "x", selection: [], history: [] });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.patch).toEqual([{ op: "replace", path: "/elements/0/value", value: "ok" }]);
+    expect(body.warnings.some((w: string) => w.includes("/elements/9/value"))).toBe(true);
+  });
   it("503 AI_NOT_CONFIGURED when there is no client", async () => {
     fake = null as never;
     const r = await post(edit, { report, instruction: "x", selection: [], history: [] });

@@ -34,6 +34,13 @@ describe("createGeminiClient", () => {
     await expect(client().complete(input)).rejects.toMatchObject({ code: "LLM_BAD_OUTPUT" });
     expect(generateContent).toHaveBeenCalledTimes(2);
   });
+  it("shares one deadline signal across the bad-output retry instead of a fresh timeout per attempt", async () => {
+    generateContent.mockResolvedValueOnce({ text: "not json" }).mockResolvedValueOnce({ text: '{"a":1}' });
+    await client().complete(input);
+    const firstSignal = generateContent.mock.calls[0][0].config.abortSignal;
+    const secondSignal = generateContent.mock.calls[1][0].config.abortSignal;
+    expect(secondSignal).toBe(firstSignal);   // I4: 60s 예산이 재시도로 2배가 되면 안 된다
+  });
   it("maps SDK errors by status and masks the api key", async () => {
     const err = (status: number, message = `status ${status} key=AIza-secret-key`) => Object.assign(new Error(message), { status });
     generateContent.mockRejectedValueOnce(err(429));

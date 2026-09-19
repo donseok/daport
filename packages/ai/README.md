@@ -4,7 +4,7 @@ daport 레포트를 자연어로 편집하거나(부분 지시 → JSON Patch), 
 
 ## 의존 방향
 
-`ai → core, fast-json-patch, @google/genai`. `ai`는 renderer·datasource·studio·browser를 import하지 않는다. 실제 모델 키는 서버 환경변수 `GEMINI_API_KEY`에서만 읽으며, 프롬프트 원문·모델 원응답·키는 어떤 HTTP 응답에도 넣지 않는다(서버 로그에는 원응답 앞 500자와 `***`로 마스킹한 키만 남긴다).
+`ai → core, fast-json-patch, @google/genai`. `ai`는 renderer·datasource·studio·browser를 import하지 않는다. 실제 모델 키는 서버 환경변수 `GEMINI_API_KEY`에서만 읽으며, 프롬프트 원문·모델 원응답·키는 어떤 HTTP 응답에도 넣지 않는다. 서버 로그(`[ai] ...`)에는 시각·레포트 id·종류·경과 시간·추정 토큰·op(또는 요소) 수만 남긴다 — 모델 원응답 로그는 현재 없다.
 
 ## 공개 API
 

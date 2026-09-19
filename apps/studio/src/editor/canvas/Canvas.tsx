@@ -285,6 +285,10 @@ export function Canvas({ zoom }: { zoom: number }) {
             ))}
             <div data-testid="ai-proposal-bar" className="absolute left-1/2 top-2 -translate-x-1/2 pointer-events-auto flex items-center gap-2 rounded bg-white border shadow px-3 py-1.5 text-xs">
               <span>{`AI 제안 · op ${proposal.patch.length} · 경고 ${proposal.warnings.length}`}</span>
+              {proposal.otherOps.length > 0 && (
+                // 요소 오버레이만으로는 안 보이는 /datasets·/params·/page·/name 변경을 밝힌다(스펙 1·11)
+                <span data-testid="ai-proposal-other-ops" className="text-amber-700">{proposal.otherOps.join(", ")}</span>
+              )}
               <button data-testid="ai-apply" className="px-2 py-0.5 rounded bg-blue-600 text-white hover:bg-blue-700" onClick={applyProposal}>적용</button>
               <button className="px-2 py-0.5 rounded border hover:bg-neutral-100" onClick={rejectProposal}>거절</button>
             </div>

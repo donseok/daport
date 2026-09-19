@@ -1,5 +1,5 @@
 import { applyPatch, deepClone, JsonPatchError, type Operation } from "fast-json-patch";
-import { collectIds, componentKey, safeParseReport, type ComponentBody, type Element, type Report } from "@daport/core";
+import { collectIds, componentKey, safeParseReport, walkElements, type ComponentBody, type Element, type Report } from "@daport/core";
 import { AiValidationError } from "./types";
 
 /** 모델이 건드릴 수 있는 경로. 이 밖은 서버가 관리하는 필드(id·output 등)라 건드리지 못하게 막는다 */
@@ -15,8 +15,11 @@ function firstZodMessages(error: { issues: { message: string }[] }): string {
   return error.issues.slice(0, 3).map((i) => i.message).join("; ");
 }
 
-/** raw 응답 한 항목을 Operation으로 정규화한다. 형식이 틀리면 AiValidationError */
-function normalizeOp(raw: unknown): Operation {
+/** value의 JSON.parse가 실패했다는 뜻. 패치 전체를 버리지 않고 이 op만 경고와 함께 건너뛴다(모델 출력은 확률적이라 한 항목의 인코딩 실수로 나머지 op까지 버릴 필요는 없다) */
+type UnparseableValue = { unparseableValue: string };
+
+/** raw 응답 한 항목을 Operation으로 정규화한다. 구조 자체가 틀리면 AiValidationError, value의 JSON 파싱만 실패하면 UnparseableValue */
+function normalizeOp(raw: unknown): Operation | UnparseableValue {
   if (typeof raw !== "object" || raw === null) {
     throw new AiValidationError("패치 항목이 객체가 아닙니다");
   }
@@ -51,7 +54,7 @@ function normalizeOp(raw: unknown): Operation {
     try {
       value = JSON.parse(value);
     } catch {
-      throw new AiValidationError(`value의 JSON 파싱에 실패했습니다: ${path}`);
+      return { unparseableValue: path };
     }
   }
   return { op: kind, path, value } as Operation;
@@ -76,8 +79,8 @@ function nextId(type: string, used: Set<string>): string {
   return `${type}-${n}`;
 }
 
-/** add 연산의 value.id가 겹치면 <type>-<n>으로 바꾼다. 경로는 그대로 둔다(뒤 op은 인덱스 기반이라 영향 없음) */
-function renameCollidingIds(patch: Operation[], report: Report): void {
+/** add 연산의 value.id가 겹치면 <type>-<n>으로 바꾼다. 경로는 그대로 둔다(뒤 op은 인덱스 기반이라 영향 없음). 스펙 4.1: 바꿨다는 사실을 경고로 알린다 */
+function renameCollidingIds(patch: Operation[], report: Report, warnings: string[]): void {
   const used = allIds(report);
   for (const o of patch) {
     if (o.op !== "add") continue;
@@ -88,6 +91,7 @@ function renameCollidingIds(patch: Operation[], report: Report): void {
     if (used.has(v.id)) {
       const type = typeof v.type === "string" ? v.type : "element";
       const id = nextId(type, used);
+      warnings.push(`id 충돌로 ${v.id} → ${id}로 바꿨습니다`);
       v.id = id;
       used.add(id);
     } else {
@@ -96,13 +100,16 @@ function renameCollidingIds(patch: Operation[], report: Report): void {
   }
 }
 
-/** validateOperation=true로 적용하고, 실패한 op을 지워가며 최대 MAX_APPLY_ATTEMPTS번 재시도한다 */
-function applyWithRetry(report: Report, patch: Operation[], warnings: string[]): unknown {
+/**
+ * validateOperation=true로 적용하고, 실패한 op을 지워가며 최대 MAX_APPLY_ATTEMPTS번 재시도한다.
+ * 살아남은 op과 그 결과 문서를 함께 돌려준다 — 호출자가 버려진 op을 다시 응답에 담지 않도록
+ */
+function applyWithRetry(report: Report, patch: Operation[], warnings: string[]): { document: unknown; patch: Operation[] } {
   let current = patch;
   for (let attempt = 0; attempt < MAX_APPLY_ATTEMPTS; attempt++) {
     try {
       const result = applyPatch(deepClone(report), current, true, false);
-      return result.newDocument;
+      return { document: result.newDocument, patch: current };
     } catch (e) {
       if (e instanceof JsonPatchError && typeof e.index === "number" && current[e.index]) {
         const failed = current[e.index];
@@ -131,6 +138,10 @@ export function validateEditPatch(report: Report, raw: unknown): { patch: Operat
   const warnings: string[] = [];
   const patch: Operation[] = [];
   for (const o of normalized) {
+    if ("unparseableValue" in o) {
+      warnings.push(`값 JSON 파싱에 실패해 건너뜀: ${o.unparseableValue}`);
+      continue;
+    }
     if (!pathAllowed(o.path)) {
       warnings.push(`금지된 경로라 건너뜀: ${o.path}`);
       continue;
@@ -143,16 +154,18 @@ export function validateEditPatch(report: Report, raw: unknown): { patch: Operat
     patch.push(o);
   }
 
-  renameCollidingIds(patch, report);
+  renameCollidingIds(patch, report, warnings);
 
-  const applied = applyWithRetry(report, patch, warnings);
+  // applyWithRetry가 지운 op은 patch에서도 지워야 한다 — 그래야 서버가 버린 op을
+  // 클라이언트가 검증 없이 다시 적용하는 일이 없다(스펙 §1/§4.1: 서버가 검증한 것만 캔버스로)
+  const { document: applied, patch: survivors } = applyWithRetry(report, patch, warnings);
 
   const parsed = safeParseReport(applied);
   if (!parsed.success) {
     throw new AiValidationError(`패치 결과가 스키마를 통과하지 못했습니다: ${firstZodMessages(parsed.error)}`);
   }
 
-  return { patch, warnings, next: parsed.data };
+  return { patch: survivors, warnings, next: parsed.data };
 }
 
 export type LibraryLookup = (id: string) => Promise<{ version: number; body: ComponentBody } | null>;
@@ -168,6 +181,20 @@ function clampToPage(el: Element, width: number, height: number, warnings: strin
     return { ...e, x, y };
   }
   return e;
+}
+
+/** 요소 트리를 순회하며 만나는 ref를 모두 모은다(그룹·반복 템플릿에 중첩된 것 포함). 구조가 스키마와 안 맞으면 멈추고, 그 오류는 뒤의 safeParseReport가 보고한다 */
+function collectRefs(elements: unknown[]): Record<string, unknown>[] {
+  const refs: Record<string, unknown>[] = [];
+  try {
+    walkElements(elements as Element[], (el) => {
+      const e = el as unknown as Record<string, unknown>;
+      if (e && e.type === "ref" && typeof e.ref === "string") refs.push(e);
+    });
+  } catch {
+    // 무시 — 구조 오류는 safeParseReport에서 zod 메시지로 잡힌다
+  }
+  return refs;
 }
 
 /**
@@ -203,25 +230,24 @@ export async function validateGenerated(
   const width = report.page.width;
   const height = report.page.height;
 
-  const filled: unknown[] = [];
-  for (const item of elements) {
-    const e = item as Record<string, unknown>;
-    if (e && e.type === "ref" && typeof e.ref === "string") {
-      const found = await library(e.ref);
-      if (!found) {
-        throw new AiValidationError(`알 수 없는 컴포넌트를 참조했습니다: ${e.ref}`);
-      }
-      if (e.version !== found.version) {
-        warnings.push(`컴포넌트 ${e.ref}를 최신 버전(${found.version})으로 맞췄습니다`);
-      }
-      components[componentKey(e.ref, found.version)] = found.body;
-      filled.push({ ...e, version: found.version });
-    } else {
-      filled.push(e);
+  // ref는 group·repeater 안에 중첩되어도 채워야 한다(스펙 4.2). elements는 아직 스키마 검증 전이라
+  // 구조가 틀리면 walkElements가 던질 수 있고, 그 경우는 아래 safeParseReport가 제대로 된 오류로 잡는다
+  for (const e of collectRefs(elements)) {
+    const ref = e.ref as string;
+    const found = await library(ref);
+    if (!found) {
+      throw new AiValidationError(`알 수 없는 컴포넌트를 참조했습니다: ${ref}`);
     }
+    if (e.version !== found.version) {
+      warnings.push(`컴포넌트 ${ref}를 최신 버전(${found.version})으로 맞췄습니다`);
+    }
+    components[componentKey(ref, found.version)] = found.body;
+    e.version = found.version;   // 같은 객체 참조를 수정 — elements 트리 안에서 바로 반영된다
   }
 
-  const clamped = filled.map((el) => clampToPage(el as Element, width, height, warnings));
+  // 클램프는 오늘처럼 최상위 요소만: 자식 좌표는 부모(group·repeater 밴드) 기준 상대좌표라
+  // 페이지 절대좌표와 그대로 비교해 클램프하면 틀린 위치가 된다
+  const clamped = elements.map((el) => clampToPage(el as Element, width, height, warnings));
 
   const parsed = safeParseReport({ ...report, elements: clamped, components });
   if (!parsed.success) {

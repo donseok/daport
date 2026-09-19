@@ -19,6 +19,15 @@ describe("proposal", () => {
     expect(p.changes.changed).toEqual(["a"]);
     expect(p.kind).toBe("edit");
   });
+  it("proposalFromEdit summarizes ops outside /elements (I1)", () => {
+    const p = proposalFromEdit(base, { patch: [
+      { op: "add", path: "/datasets/-", value: { name: "ds1", type: "static", rows: [] } },
+      { op: "replace", path: "/name", value: "새 이름" },
+    ], explanation: "e", warnings: [] });
+    expect(p.otherOps).toContain("datasets 1건 추가");
+    expect(p.otherOps).toContain("name 1건 변경");
+    expect(p.changes).toEqual({ added: [], changed: [], removed: [] });   // diffIds는 이 변화를 못 본다
+  });
   it("proposalFromGenerate puts elements and components into the next report", () => {
     const empty = parseReport({ id: "e", version: 1, page: { width: 100, height: 100 } });
     const p = proposalFromGenerate(empty, { elements: [base.elements[0]], components: {}, explanation: "g", warnings: ["w"] });

@@ -27,4 +27,14 @@ describe("Canvas proposal overlay", () => {
     expect(store.getState().report.elements[0]).toMatchObject({ value: "AI" });
     expect(queryByTestId("ai-proposal")).toBeNull();
   });
+  it("surfaces a visible, non-empty summary for a dataset-only patch (I1: invisible outside /elements otherwise)", () => {
+    const store = createEditorStore(report);
+    const { getByTestId } = render(<EditorContext.Provider value={store}><Canvas zoom={1} /></EditorContext.Provider>);
+    act(() => store.getState().setProposal(proposalFromEdit(report, {
+      patch: [{ op: "add", path: "/datasets/-", value: { name: "ds1", type: "static", rows: [] } }],
+      explanation: "e", warnings: [] })));
+    const summary = getByTestId("ai-proposal-other-ops");
+    expect(summary.textContent).toMatch(/datasets/);
+    expect(summary.textContent!.trim().length).toBeGreaterThan(0);
+  });
 });

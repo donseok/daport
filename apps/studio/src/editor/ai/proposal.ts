@@ -9,6 +9,8 @@ export type Proposal = {
   warnings: string[];
   next: Report;
   changes: { added: string[]; changed: string[]; removed: string[] };
+  /** /elements 밖(datasets·params·page·name)을 건드리는 op 요약. diffIds는 요소만 보므로 이게 없으면 그런 패치가 화면상 무변화로 보인다 */
+  otherOps: string[];
   /** 제안을 만들 때의 레포트. 이후 다른 편집으로 report가 바뀌면 이 base와 달라져 제안이 더 이상 유효하지 않다 */
   base: Report;
 };
@@ -49,11 +51,36 @@ export function diffIds(before: Report, after: Report): Proposal["changes"] {
   return { added, changed, removed };
 }
 
-/** /api/reports/:id/ai/edit 응답으로 제안을 만든다. base는 복사본에만 패치를 적용하고 그대로 둔다 */
+/** op의 종류를 한국어 동사로 */
+function opVerb(op: Operation["op"]): string {
+  if (op === "add" || op === "copy") return "추가";
+  if (op === "remove") return "삭제";
+  return "변경";   // replace, move
+}
+
+/** /elements 밖(datasets·params·page·name)을 건드리는 op을 최상위 경로별로 묶어 "datasets 1건 추가" 같은 요약을 만든다.
+ * diffIds는 요소 트리만 비교하므로 이런 패치는 오버레이가 그대로라 사용자가 알아챌 방법이 없다(스펙 1·11) */
+function summarizeOtherOps(patch: Operation[]): string[] {
+  const counts = new Map<string, Map<string, number>>();
+  for (const o of patch) {
+    const top = o.path.split("/")[1];
+    if (!top || top === "elements") continue;
+    const byVerb = counts.get(top) ?? new Map<string, number>();
+    const verb = opVerb(o.op);
+    byVerb.set(verb, (byVerb.get(verb) ?? 0) + 1);
+    counts.set(top, byVerb);
+  }
+  const out: string[] = [];
+  for (const [top, byVerb] of counts) for (const [verb, n] of byVerb) out.push(`${top} ${n}건 ${verb}`);
+  return out;
+}
+
+/** /api/reports/:id/ai/edit 응답으로 제안을 만든다. base는 복사본에만 패치를 적용하고 그대로 둔다.
+ * validateOperation=true: 서버가 이미 검증·적용까지 마친 패치이므로 여기서 실패하면(서버·클라 검증 괴리) 조용히 넘어가지 않고 바로 드러나야 한다 */
 export function proposalFromEdit(base: Report, res: { patch: Operation[]; explanation: string; warnings: string[] }): Proposal {
-  const applied = applyPatch(deepClone(base) as object, deepClone(res.patch), false, false).newDocument;
+  const applied = applyPatch(deepClone(base) as object, deepClone(res.patch), true, false).newDocument;
   const next = parseReport(applied);
-  return { kind: "edit", patch: res.patch, explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), base };
+  return { kind: "edit", patch: res.patch, explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps: summarizeOtherOps(res.patch), base };
 }
 
 /** /api/reports/:id/ai/generate 응답으로 제안을 만든다. 요소는 통째로 교체하고 컴포넌트는 base 위에 덧붙인다 */
@@ -63,5 +90,5 @@ export function proposalFromGenerate(
 ): Proposal {
   const merged = { ...deepClone(base), elements: deepClone(res.elements), components: { ...deepClone(base.components), ...deepClone(res.components) } };
   const next = parseReport(merged);
-  return { kind: "generate", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), base };
+  return { kind: "generate", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps: [], base };
 }

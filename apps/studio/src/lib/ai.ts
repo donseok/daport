@@ -29,7 +29,11 @@ export function aiErrorResponse(e: unknown): NextResponse {
   if (e instanceof AiValidationError) return NextResponse.json({ error: e.message, code: "AI_INVALID_PATCH" }, { status: 400 });
   if (e instanceof LlmError) {
     const [status, code] = STATUS[e.code];
-    const res = NextResponse.json({ error: e.message, code }, { status });
+    // LLM_ERROR만 provider(Gemini) 원문 메시지를 담고 있다 — 요청 필드·모델명·리전 같은 내부 정보가
+    // 섞여 나올 수 있어 그대로 내보내지 않는다(스펙 8: "502 사유 문구만"). 상세는 서버 로그로만 남긴다
+    const message = e.code === "LLM_ERROR" ? "AI 모델 호출 중 오류가 발생했습니다" : e.message;
+    if (e.code === "LLM_ERROR") console.warn("[ai] LLM_ERROR", e.message);
+    const res = NextResponse.json({ error: message, code }, { status });
     if (e.retryAfterMs) res.headers.set("retry-after", String(Math.ceil(e.retryAfterMs / 1000)));
     return res;
   }

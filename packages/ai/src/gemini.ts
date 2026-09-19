@@ -20,8 +20,8 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   if (!opts.apiKey) throw new LlmError("LLM_NOT_CONFIGURED", "GEMINI_API_KEY가 설정되지 않았습니다");
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
   const timeoutMs = opts.timeoutMs ?? 60_000;
-  const call = async (input: LlmInput, contents: { role: string; parts: { text: string }[] }[]): Promise<string> => {
-    const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+  // 한 요청 안에서 재시도 두 번이 이 신호 하나를 나눠 쓴다 — 매 호출마다 새로 만들면 마감이 2배가 된다(스펙 8: 60s → AI_TIMEOUT)
+  const call = async (input: LlmInput, contents: { role: string; parts: { text: string }[] }[], signal: AbortSignal): Promise<string> => {
     try {
       const res = await ai.models.generateContent({
         model: opts.model,
@@ -43,10 +43,11 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   };
   return {
     async complete(input) {
+      const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
       const contents = input.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
-      const first = parse(await call(input, contents));
+      const first = parse(await call(input, contents, signal));
       if (first.ok) return first.value;
-      const second = parse(await call(input, [...contents, { role: "user", parts: [{ text: RETRY_NOTE }] }]));
+      const second = parse(await call(input, [...contents, { role: "user", parts: [{ text: RETRY_NOTE }] }], signal));
       if (second.ok) return second.value;
       throw new LlmError("LLM_BAD_OUTPUT", "모델 응답이 JSON 형식이 아닙니다");
     },
