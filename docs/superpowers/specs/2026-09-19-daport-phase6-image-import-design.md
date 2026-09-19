@@ -149,10 +149,10 @@ Gemini 구조화 출력은 `oneOf`·`$ref`를 쓸 수 없다. 5단계와 같이 
 응답은 5단계 생성과 같은 모양이다.
 
 ```
-{ elements: Element[], params: Param[], datasets: Dataset[], explanation: string, warnings: string[], scan: { assetId: string, angle: number } }
+{ elements: Element[], params: Param[], datasets: Dataset[], explanation: string, warnings: string[], scan: { src: string | null, angle: number } }
 ```
 
-`scan.assetId`는 전처리한 이미지를 기존 에셋 저장소(`lib/asset-io.ts`)에 넣은 id다. 클라이언트가 대조 배경으로 쓴다. 원본이 아니라 전처리본을 저장한다. 캔버스에 겹칠 그림과 모델이 본 그림이 같아야 대조가 의미 있다. 에셋 한도는 5MB(`MAX_ASSET_BYTES`)이고 전처리 출력은 4MB 이하라 항상 들어간다. 저장은 라우트가 직접 한다(파일 업로드 폼을 거치지 않는다).
+`scan.src`는 전처리한 이미지를 가리킨다. 에셋 저장소(`lib/asset-io.ts`)는 Blob 토큰이 있을 때만 동작하므로, 토큰이 있으면 `asset://<id>`를 저장 후 돌려주고, 없으면(개발·E2E) 1MB 이하일 때 data URL을 돌려준다. 둘 다 안 되면 `null`이고 대조 배경 없이 진행한다. 클라이언트가 대조 배경으로 쓴다. 원본이 아니라 전처리본을 저장한다. 캔버스에 겹칠 그림과 모델이 본 그림이 같아야 대조가 의미 있다. 에셋 한도는 5MB(`MAX_ASSET_BYTES`)이고 전처리 출력은 4MB 이하라 항상 들어간다. 저장은 라우트가 직접 한다(파일 업로드 폼을 거치지 않는다).
 
 레포트에 요소가 하나라도 있으면 400 `AI_NOT_EMPTY`다. 빈 레포트에서만 시작한다.
 
