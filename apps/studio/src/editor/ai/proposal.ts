@@ -3,7 +3,7 @@ import { parseReport, walkElements, type ComponentBody, type Element, type Repor
 
 /** AI 편집·생성 응답을 사용자 모델에 반영하기 전에 미리 보여주는 상태. 히스토리 밖에 존재하며, 적용해야만 되돌리기 한 단위로 들어간다 */
 export type Proposal = {
-  kind: "edit" | "generate";
+  kind: "edit" | "generate" | "import";
   patch: Operation[];
   explanation: string;
   warnings: string[];
@@ -91,4 +91,21 @@ export function proposalFromGenerate(
   const merged = { ...deepClone(base), elements: deepClone(res.elements), components: { ...deepClone(base.components), ...deepClone(res.components) } };
   const next = parseReport(merged);
   return { kind: "generate", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps: [], base };
+}
+
+/** 이관 응답 → 제안. 요소뿐 아니라 params·datasets도 함께 바뀐다 */
+export function proposalFromImport(
+  base: Report,
+  res: { elements: Element[]; params: Report["params"]; datasets: Report["datasets"]; explanation: string; warnings: string[] },
+): Proposal {
+  const next = parseReport({
+    ...base,
+    elements: res.elements,
+    params: [...base.params, ...res.params],
+    datasets: [...base.datasets, ...res.datasets],
+  });
+  const otherOps: string[] = [];
+  if (res.params.length > 0) otherOps.push(`파라미터 ${res.params.length}개 추가`);
+  if (res.datasets.length > 0) otherOps.push(`데이터셋 ${res.datasets.length}개 추가`);
+  return { kind: "import", patch: [], explanation: res.explanation, warnings: res.warnings, next, changes: diffIds(base, next), otherOps, base };
 }

@@ -118,4 +118,18 @@ describe("AiPanel", () => {
     await waitFor(() => expect(screen.queryByTestId("ai-send")).not.toBeNull());
     expect(screen.queryByRole("button", { name: "취소" })).toBeNull();
   });
+  it("빈 레포트에서 이미지를 올리면 이관을 호출하고 제안과 대조 배경을 세운다", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({
+      elements: [{ id: "t1", type: "text", x: 10, y: 10, w: 50, h: 8, value: "검사 성적서" }],
+      params: [], datasets: [], explanation: "옮겼습니다", warnings: [], scan: { src: "asset://abc123", angle: 3 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    const file = new File([new Uint8Array([1, 2, 3])], "form.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/ai/import");
+    expect(store.getState().scanOverlay).toBe("asset://abc123");   // 응답의 scan.src를 그대로 쓴다
+    expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("옮겼습니다");
+  });
 });
