@@ -4,7 +4,8 @@ import { compactFields, compactLibrary, compactReport, estimateTokens } from "./
 import { summarizeSchema } from "./schema-summary";
 import { EDIT_SYSTEM } from "./prompts/edit.ko";
 import { GENERATE_SYSTEM } from "./prompts/generate.ko";
-import { EDIT_RESPONSE_SCHEMA, GENERATE_RESPONSE_SCHEMA } from "./response-schema";
+import { IMPORT_SYSTEM } from "./prompts/import.ko";
+import { EDIT_RESPONSE_SCHEMA, GENERATE_RESPONSE_SCHEMA, IMPORT_RESPONSE_SCHEMA } from "./response-schema";
 
 export type PromptBundle = {
   system: string;
@@ -135,4 +136,10 @@ export function buildGeneratePrompt(ctx: Omit<EditContext, "selection" | "histor
     schema: GENERATE_RESPONSE_SCHEMA,
     truncated,
   };
+}
+
+/** 이관 프롬프트 (스펙 5.3). 컨텍스트는 페이지 크기뿐이다 — 빈 레포트에서만 시작하므로 압축할 모델이 없다 */
+export function buildImportPrompt(page: { width: number; height: number }, image: { mimeType: string; data: string }) {
+  const text = `# 대상 페이지\n${page.width}×${page.height}mm\n\n# 지시\n이 이미지의 양식을 위 페이지 크기의 레포트로 옮기세요.`;
+  return { system: IMPORT_SYSTEM, messages: [{ role: "user" as const, text }], schema: IMPORT_RESPONSE_SCHEMA, images: [image] };
 }
