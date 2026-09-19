@@ -1,9 +1,19 @@
-import { safeParseReport, type Element, type Report } from "@daport/core";
+import { FORBIDDEN_CONTEXT_KEYS, RESERVED_CONTEXT_NAMES, safeParseReport, type Element, type Report } from "@daport/core";
 import { AiValidationError } from "./types";
 
 const MAX_ROWS = 20;
 const DATASET_NAME_RE = /^rows[0-9]+$/;
 const PARAM_TYPES = new Set(["string", "number", "date"]);
+/** 파라미터 이름으로 쓰면 안 되는 것들. core의 예약어·프로토타입 오염 키를 그대로 가져와 한 곳만 관리한다 */
+const FORBIDDEN_PARAM_NAMES = new Set<string>([...FORBIDDEN_CONTEXT_KEYS, ...RESERVED_CONTEXT_NAMES]);
+
+/**
+ * `params` 참조를 점(`params.x`)·대괄호(`params["x"]`, `params['x']`, 공백 포함)로 찾는다.
+ * 매치했지만 이름을 뽑아내지 못하면(`params[x]`처럼 계산된 키, `params` 단독 사용 등) 신뢰할 수 없는 참조로 본다
+ */
+const PARAMS_REF_RE = /(?<![.\w$])params(?![\w$])(?:\s*\.\s*([A-Za-z_][A-Za-z0-9_]*)|\s*\[\s*(?:'([^']*)'|"([^"]*)")\s*\])?/g;
+/** `row`·`record` 참조. 표 밖에서는 어떤 형태(점·대괄호·단독)로 와도 금지한다 */
+const ROW_RE = /(?<![.\w$])(row|record)(?![\w$])/;
 
 export type ImportParam = { name: string; type: "string" | "number" | "date" };
 export type ImportDataset = { name: string; type: "static"; rows: Record<string, unknown>[] };
@@ -66,26 +76,42 @@ function toMm(el: Record<string, unknown>, page: { width: number; height: number
   for (const child of childArrays(el)) for (const c of child) toMm(c, page);
 }
 
-/** 요소 트리의 모든 문자열 값을 제자리에서 고친다. row·record 참조는 표 밖에서만 막는다 */
-function fixExpressions(el: Record<string, unknown>, allowed: Set<string>, warnings: string[]): void {
-  const clean = (v: string): string => {
-    for (const m of v.matchAll(/\{\{\s*params\.([A-Za-z_][A-Za-z0-9_]*)/g)) {
-      if (!allowed.has(m[1])) {
-        warnings.push(`선언되지 않은 파라미터 ${m[1]}를 써서 표현식을 비웠습니다`);
-        return "";
-      }
-    }
-    if (/\{\{[^}]*\b(row|record)\./.test(v)) {
-      warnings.push("표 밖에서 row 참조를 써서 표현식을 비웠습니다");
+/**
+ * 문자열 하나를 검사해 필요하면 비운다. allowRow가 true면 표 열처럼 행 컨텍스트에서 평가되는
+ * 값이라 row·record 참조를 허용한다. params 참조는 항상 이름을 뽑아 allowed에 있는지 본다 —
+ * 이름을 뽑을 수 없는 참조(계산된 키 등)는 신뢰할 수 없으므로 비운다
+ */
+function cleanExpr(v: string, allowed: Set<string>, warnings: string[], allowRow: boolean): string {
+  for (const m of v.matchAll(PARAMS_REF_RE)) {
+    const name = m[1] ?? m[2] ?? m[3] ?? null;
+    if (name === null) {
+      warnings.push("파라미터 참조를 식별할 수 없어 표현식을 비웠습니다");
       return "";
     }
-    return v;
-  };
-  // 표 열의 value는 행 컨텍스트에서 평가되어 row 참조가 정상이라 건드리지 않는다
-  if (el.type !== "table") {
-    if (typeof el.value === "string") el.value = clean(el.value);
-    if (typeof el.src === "string") el.src = clean(el.src);
-    if (typeof el.visible === "string") el.visible = clean(el.visible);
+    if (!allowed.has(name)) {
+      warnings.push(`선언되지 않은 파라미터 ${name}를 써서 표현식을 비웠습니다`);
+      return "";
+    }
+  }
+  if (!allowRow && ROW_RE.test(v)) {
+    warnings.push("표 밖에서 row 참조를 써서 표현식을 비웠습니다");
+    return "";
+  }
+  return v;
+}
+
+/**
+ * 요소 트리의 모든 문자열 값을 제자리에서 고친다. row·record 참조는 표 밖에서만 막는다.
+ * 표 요소 자신의 value·src·visible은 다른 요소와 똑같이 검사하고, 행 컨텍스트를 쓰는 열 value만 예외로 둔다
+ */
+function fixExpressions(el: Record<string, unknown>, allowed: Set<string>, warnings: string[]): void {
+  if (typeof el.value === "string") el.value = cleanExpr(el.value, allowed, warnings, false);
+  if (typeof el.src === "string") el.src = cleanExpr(el.src, allowed, warnings, false);
+  if (typeof el.visible === "string") el.visible = cleanExpr(el.visible, allowed, warnings, false);
+  if (el.type === "table" && Array.isArray(el.columns)) {
+    for (const c of el.columns as Record<string, unknown>[]) {
+      if (typeof c.value === "string") c.value = cleanExpr(c.value, allowed, warnings, true);
+    }
   }
   for (const child of childArrays(el)) for (const c of child) fixExpressions(c, allowed, warnings);
 }
@@ -125,9 +151,14 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
   const warnings: string[] = [];
   const r = raw as { elements: unknown[]; params?: unknown; datasets?: unknown };
 
-  const elements = parseItems(r.elements, "요소", warnings).filter(
-    (e): e is Record<string, unknown> => typeof e === "object" && e !== null,
-  );
+  // 배열·null 등 객체가 아닌 항목은 스키마 검증까지 가지 않고 여기서 버린다
+  const elements = parseItems(r.elements, "요소", warnings).filter((e): e is Record<string, unknown> => {
+    if (typeof e !== "object" || e === null || Array.isArray(e)) {
+      warnings.push("요소 JSON이 객체가 아니라 건너뜀");
+      return false;
+    }
+    return true;
+  });
 
   // params: 이름·타입 규칙을 통과한 것만. 기존 이름과 겹치면 모델 쪽을 버린다
   const existing = new Set(report.params.map((p) => p.name));
@@ -137,6 +168,10 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
     const name = typeof o.name === "string" ? o.name : "";
     if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
       warnings.push(`파라미터 이름 규칙을 어겨 버렸습니다: ${name}`);
+      continue;
+    }
+    if (FORBIDDEN_PARAM_NAMES.has(name)) {
+      warnings.push(`예약된 이름이라 파라미터로 쓸 수 없어 버렸습니다: ${name}`);
       continue;
     }
     if (existing.has(name)) continue;
@@ -162,6 +197,11 @@ export function validateImported(report: Report, raw: unknown, page: { width: nu
   // 남은 데이터셋이 없는 표는 렌더할 수 없다 — 표를 함께 버린다
   const names = new Set(datasets.map((d) => d.name));
   const kept = elements.filter((e) => {
+    // 좌표가 유한수가 아니면(Infinity·NaN 등) mm 변환·클램프 계산이 깨지므로 스케일링 전에 버린다
+    if (!["x", "y", "w", "h"].every((k) => typeof e[k] === "number" && Number.isFinite(e[k] as number))) {
+      warnings.push(`좌표가 유효한 수가 아니라 요소를 버렸습니다: ${String(e.id)}`);
+      return false;
+    }
     if (e.type !== "table") return true;
     const src = typeof e.source === "string" ? e.source : "";
     if (names.has(src)) return true;

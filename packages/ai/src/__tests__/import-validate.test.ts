@@ -106,4 +106,78 @@ describe("validateImported", () => {
   it("elements 배열이 없으면 던진다", () => {
     expect(() => validateImported(empty, { explanation: "" }, page)).toThrow(AiValidationError);
   });
+
+  it("params·row의 대괄호 참조도 잡아낸다", () => {
+    const res = validateImported(empty, {
+      elements: [
+        el({ id: "t1", type: "text", x: 0, y: 0, w: 100, h: 20, value: '{{ params["unknown"] }}' }),
+        el({ id: "t2", type: "text", x: 0, y: 30, w: 100, h: 20, value: "{{ row['qty'] }}" }),
+      ],
+      explanation: "",
+    }, page);
+    expect((res.elements[0] as { value: string }).value).toBe("");
+    expect((res.elements[1] as { value: string }).value).toBe("");
+    expect(res.warnings.join(" ")).toContain("unknown");
+    expect(res.warnings.join(" ")).toContain("row");
+  });
+
+  it("__proto__ 같은 예약 이름은 파라미터로 거부한다", () => {
+    const res = validateImported(empty, {
+      elements: [el({ id: "t1", type: "text", x: 0, y: 0, w: 100, h: 20, value: "본문" })],
+      params: [JSON.stringify({ name: "__proto__", type: "string" }), JSON.stringify({ name: "row", type: "string" })],
+      explanation: "",
+    }, page);
+    expect(res.params).toEqual([]);
+    expect(res.warnings.join(" ")).toContain("__proto__");
+    expect(res.warnings.join(" ")).toContain("row");
+  });
+
+  it("표 자신의 visible도 다른 요소와 같은 검사를 받는다", () => {
+    const res = validateImported(empty, {
+      elements: [el({
+        id: "tb1", type: "table", x: 0, y: 0, w: 1000, h: 200, source: "rows1",
+        visible: "{{ params.unknown }}",
+        columns: [{ header: "a", value: "{{ row.a }}", w: 1000 }],
+      })],
+      datasets: [JSON.stringify({ name: "rows1", rows: [] })],
+      explanation: "",
+    }, page);
+    expect((res.elements[0] as { visible?: string }).visible).toBe("");
+    expect(res.warnings.join(" ")).toContain("unknown");
+  });
+
+  it("표 열 value의 미선언 파라미터는 비우고 row 참조는 그대로 둔다", () => {
+    const res = validateImported(empty, {
+      elements: [el({
+        id: "tb1", type: "table", x: 0, y: 0, w: 1000, h: 200, source: "rows1",
+        columns: [{ header: "a", value: "{{ row.a }}", w: 500 }, { header: "b", value: "{{ params.unknown }}", w: 500 }],
+      })],
+      datasets: [JSON.stringify({ name: "rows1", rows: [{ a: 1 }] })],
+      explanation: "",
+    }, page);
+    const cols = (res.elements[0] as { columns: { value: string }[] }).columns;
+    expect(cols[0].value).toBe("{{ row.a }}");
+    expect(cols[1].value).toBe("");
+    expect(res.warnings.join(" ")).toContain("unknown");
+  });
+
+  it("배열인 요소 JSON은 그 요소만 버린다", () => {
+    const res = validateImported(empty, {
+      elements: [el([1, 2, 3]), el({ id: "t1", type: "text", x: 0, y: 0, w: 100, h: 20, value: "정상" })],
+      explanation: "",
+    }, page);
+    expect(res.elements).toHaveLength(1);
+    expect(res.elements[0].id).toBe("t1");
+    expect(res.warnings.join(" ")).toContain("건너뜀");
+  });
+
+  it("좌표가 유한수가 아니면 요소를 버린다", () => {
+    const res = validateImported(empty, {
+      // 1e400은 JS 숫자 범위를 넘어 JSON.parse가 Infinity로 읽는다
+      elements: ['{"id":"t1","type":"text","x":1e400,"y":0,"w":100,"h":20,"value":"정상"}'],
+      explanation: "",
+    }, page);
+    expect(res.elements).toHaveLength(0);
+    expect(res.warnings.join(" ")).toContain("t1");
+  });
 });
