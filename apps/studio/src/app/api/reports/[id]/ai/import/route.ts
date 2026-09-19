@@ -50,11 +50,22 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     const raw = await client.complete({ system: prompt.system, messages: prompt.messages, schema: prompt.schema, images: prompt.images, signal: req.signal, timeoutMs: importTimeoutMs() });
     const result = validateImported({ ...report, page: { ...report.page, ...page } }, raw, page);
 
-    // 에셋 저장소는 Blob 토큰이 있을 때만 쓴다. 개발·E2E에는 토큰이 없어 작은 이미지는 data URL로 돌려준다
-    const src = await storeScan(scan);
+    // 에셋 저장소는 Blob 토큰이 있을 때만 쓴다. 개발·E2E에는 토큰이 없어 작은 이미지는 data URL로 돌려준다.
+    // 저장 자체(일시적 5xx, 쿼터 초과 등)가 실패해도 이미 검증을 통과한 요소·파라미터를 버리면 안 된다 —
+    // 스캔은 대조용 배경일 뿐이라 저장에 실패하면 배경 없이 200으로 돌려주고 경고만 남긴다
+    let src: string | null;
+    let storeFailed = false;
+    try {
+      src = await storeScan(scan);
+    } catch (e) {
+      console.warn("[ai] 스캔 배경 저장 실패", e);
+      src = null;
+      storeFailed = true;
+    }
     const ratio = scan.width / scan.height;
     const target = page.width / page.height;
     const warnings = [...scan.notes, ...result.warnings];
+    if (storeFailed) warnings.push("스캔 배경 이미지를 저장하지 못해 대조 화면 없이 진행합니다");
     if (Math.abs(ratio - target) / target > 0.05) warnings.push("이미지 비율이 선택한 용지와 5% 넘게 달라 요소 위치가 늘어났을 수 있습니다");
 
     const explanation = typeof (raw as { explanation?: unknown }).explanation === "string" ? (raw as { explanation: string }).explanation : "";

@@ -6,7 +6,19 @@ import { LlmError } from "@daport/ai";
 
 let fake: FakeLlmClient;
 vi.mock("@/lib/ai", async (orig) => ({ ...(await orig<typeof import("@/lib/ai")>()), getLlmClient: () => fake }));
+// assetStorageEnabled·putAsset·preprocessScan은 기본적으로 실제 구현을 그대로 쓰되, 저장 실패·큰 출력
+// 같은 예외 경로만 테스트별로 vi.fn 오버라이드로 흉내낸다
+vi.mock("@/lib/asset-io", async (orig) => {
+  const actual = await orig<typeof import("@/lib/asset-io")>();
+  return { ...actual, assetStorageEnabled: vi.fn(actual.assetStorageEnabled), putAsset: vi.fn(actual.putAsset) };
+});
+vi.mock("@/lib/scan", async (orig) => {
+  const actual = await orig<typeof import("@/lib/scan")>();
+  return { ...actual, preprocessScan: vi.fn(actual.preprocessScan) };
+});
 const { POST } = await import("../[id]/ai/import/route");
+const { assetStorageEnabled, putAsset } = await import("@/lib/asset-io");
+const { preprocessScan } = await import("@/lib/scan");
 
 const ctx = { params: Promise.resolve({ id: "r" }) };
 const report = { id: "r", name: "R", version: 1, page: { width: 210, height: 297 }, elements: [] };
@@ -27,6 +39,11 @@ describe("POST ai/import", () => {
       explanation: "제목과 값 칸을 옮겼습니다",
       warnings: [],
     });
+    // 호출 기록만 지운다(기본 구현은 유지) — 이전 테스트의 누적 호출이 다음 테스트의
+    // toHaveBeenCalled 계열 단언에 섞여 들어가지 않게 한다
+    vi.mocked(assetStorageEnabled).mockClear();
+    vi.mocked(putAsset).mockClear();
+    vi.mocked(preprocessScan).mockClear();
   });
 
   it("요소·파라미터·설명·스캔 에셋을 돌려준다", async () => {
@@ -77,5 +94,35 @@ describe("POST ai/import", () => {
     const res = await post({ report, image: { mimeType: "image/png", dataBase64: await png() }, preset: { width: 210, height: 297 } });
     expect(res.status).toBe(503);
     expect((await res.json()).code).toBe("AI_NOT_CONFIGURED");
+  }, 30_000);
+
+  it("스캔 배경 저장이 실패해도 이관 결과는 200을 유지하고 배경 경고만 남긴다", async () => {
+    vi.mocked(assetStorageEnabled).mockReturnValueOnce(true);
+    vi.mocked(putAsset).mockRejectedValueOnce(new Error("blob 5xx"));
+    const res = await post({ report, image: { mimeType: "image/png", dataBase64: await png() }, preset: { width: 210, height: 297 } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.elements[0]).toMatchObject({ id: "t1", type: "text" });         // 이미 검증한 결과는 버리지 않는다
+    expect(body.params).toEqual([{ name: "lotNo", type: "string" }]);
+    expect(body.scan.src).toBeNull();
+    expect(body.warnings.some((w: string) => w.includes("배경"))).toBe(true);
+  }, 30_000);
+
+  it("저장소가 없고 전처리 결과가 data URL 상한을 넘으면 배경 없이 200을 돌려준다", async () => {
+    vi.mocked(assetStorageEnabled).mockReturnValueOnce(false);
+    vi.mocked(preprocessScan).mockResolvedValueOnce({
+      data: Buffer.alloc(2 * 1024 * 1024, 1),   // 1MB(data URL 상한)를 넘는 전처리 결과를 흉내낸다
+      mimeType: "image/jpeg",
+      width: 400,
+      height: 560,
+      angle: 0,
+      notes: [],
+    });
+    const res = await post({ report, image: { mimeType: "image/png", dataBase64: await png() }, preset: { width: 210, height: 297 } });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.elements[0]).toMatchObject({ id: "t1", type: "text" });
+    expect(body.scan.src).toBeNull();
+    expect(putAsset).not.toHaveBeenCalled();
   }, 30_000);
 });
