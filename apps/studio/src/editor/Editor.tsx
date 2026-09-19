@@ -88,8 +88,11 @@ export function Editor({ initial, componentMode }: { initial: Report; componentM
               {/* Monaco는 숨길 때도 언마운트하지 않는다(편집기 상태 보존) */}
               <div id="bottom-panel-json" role="tabpanel" {...(!componentMode ? { "aria-labelledby": "bottom-tab-json" } : {})}
                 className={`flex-1 min-h-0 ${!componentMode && bottomTab === "ai" ? "hidden" : ""}`}><JsonEditor /></div>
-              {!componentMode && bottomTab === "ai" && (
-                <div id="bottom-panel-ai" role="tabpanel" aria-labelledby="bottom-tab-ai" className="flex-1 min-h-0"><AiPanel reportId={initial.id} /></div>
+              {/* AiPanel도 JSON과 똑같이 숨길 때 언마운트하지 않는다 — 그렇지 않으면 탭 전환마다 대화 기록이 사라지고
+                  진행 중인 요청도 unmount cleanup으로 조용히 취소돼 버린다(스펙 7.1: 대화 목록 유지) */}
+              {!componentMode && (
+                <div id="bottom-panel-ai" role="tabpanel" aria-labelledby="bottom-tab-ai"
+                  className={`flex-1 min-h-0 ${bottomTab === "json" ? "hidden" : ""}`}><AiPanel reportId={initial.id} /></div>
               )}
             </div>
           </main>

@@ -60,6 +60,35 @@ describe("Editor", () => {
   });
 });
 
+describe("Editor 하단 AI 탭", () => {
+  const reportWithElement = parseReport({
+    id: "r", name: "R", version: 1, page: { width: 100, height: 100 },
+    elements: [{ id: "a", type: "text", x: 0, y: 0, w: 30, h: 5, value: "A" }],
+  });
+
+  // JSON은 숨겨도 언마운트하지 않는데(Monaco 상태 보존), AI 탭도 같은 취급을 받아야 한다.
+  // 그렇지 않으면 JSON 탭으로 갔다 오는 것만으로 대화 기록이 통째로 사라지고 진행 중인 요청도
+  // unmount cleanup에 의해 조용히 취소된다(스펙 7.1: 대화 목록 유지)
+  it("keeps AI conversation turns after switching to the JSON tab and back", async () => {
+    const fetchMock = vi.fn(async () => new Response(
+      JSON.stringify({ patch: [{ op: "replace", path: "/elements/0/value", value: "B" }], explanation: "바꿨습니다", warnings: [] }),
+      { status: 200, headers: { "content-type": "application/json" } },
+    ));
+    vi.stubGlobal("fetch", fetchMock);
+    render(<Editor initial={reportWithElement} />);
+
+    fireEvent.click(screen.getByRole("tab", { name: "AI" }));
+    fireEvent.change(screen.getByLabelText("AI 지시"), { target: { value: "값을 B로" } });
+    fireEvent.click(screen.getByTestId("ai-send"));
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").length).toBe(2));
+    const before = screen.getAllByTestId("ai-turn").map((t) => t.textContent);
+
+    fireEvent.click(screen.getByRole("tab", { name: "JSON" }));
+    fireEvent.click(screen.getByRole("tab", { name: "AI" }));
+    expect(screen.getAllByTestId("ai-turn").map((t) => t.textContent)).toEqual(before);
+  });
+});
+
 describe("Editor 컴포넌트 탭", () => {
   const summary = { id: "hdr", name: "회사 헤더", latestVersion: 2, w: 180, h: 24, updatedAt: "2026-09-17T00:00:00.000Z" };
   const stubFetch = () => vi.stubGlobal("fetch", vi.fn(async (url: string) =>
