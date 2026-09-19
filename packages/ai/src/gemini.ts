@@ -48,14 +48,17 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
       const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
       const contents = input.messages.map((m, i) => {
         const parts: Part[] = [{ text: m.text }];
-        // 이미지는 마지막 메시지에만 싣는다 — 모델이 "지금 보는 그림"과 지시를 한 턴으로 읽게 한다
-        if (i === input.messages.length - 1) {
+        // 이미지는 마지막 user 메시지에만 싣는다 — 모델이 "지금 보는 그림"과 지시를 한 턴으로 읽게 한다
+        if (i === input.messages.length - 1 && m.role === "user") {
           for (const img of input.images ?? []) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
         }
         return { role: m.role, parts };
       });
       const first = parse(await call(input, contents, signal));
       if (first.ok) return first.value;
+      // 재시도는 contents를 그대로 재사용한다 — 여기 이미 실린 inlineData가 그대로 두 번째 요청에도 포함되어
+      // 이미지 바이트가 같은 마감(deadline) 안에서 한 번 더 업로드된다. generateContent는 상태를 유지하지 않으므로
+      // 모델이 이전 턴을 "기억"하는 게 아니라, 매 요청마다 전체 대화(이미지 포함)를 새로 보내는 것이다
       const second = parse(await call(input, [...contents, { role: "user", parts: [{ text: RETRY_NOTE }] }], signal));
       if (second.ok) return second.value;
       throw new LlmError("LLM_BAD_OUTPUT", "모델 응답이 JSON 형식이 아닙니다");

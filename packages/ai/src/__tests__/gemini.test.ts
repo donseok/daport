@@ -76,4 +76,13 @@ describe("createGeminiClient", () => {
     await client().complete({ system: "s", messages: [{ role: "user", text: "t" }], schema: {} });
     expect(generateContent.mock.calls[0][0].contents.at(-1).parts).toEqual([{ text: "t" }]);
   });
+  it("마지막 메시지가 model이면 images를 싣지 않는다", async () => {
+    generateContent.mockResolvedValueOnce({ text: '{"ok":1}' });
+    await client().complete({
+      system: "s", messages: [{ role: "user", text: "지시" }, { role: "model", text: "답" }], schema: {},
+      images: [{ mimeType: "image/jpeg", data: "QUJD" }],
+    });
+    const contents = generateContent.mock.calls[0][0].contents;
+    expect(contents.at(-1)).toEqual({ role: "model", parts: [{ text: "답" }] });
+  });
 });
