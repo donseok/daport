@@ -4,6 +4,7 @@ import { inferFields, type Report } from "@daport/core";
 import { createGeminiClient, LlmError, AiValidationError, type LlmClient, type LlmInput, type EditContext, type ChatTurn, type LibraryItem } from "@daport/ai";
 import { FakeLlmClient } from "@daport/ai/testing";
 import { getComponentStore } from "./component-store";
+import { ImageInputError } from "./scan";
 
 const holder = globalThis as typeof globalThis & { __daportLlm?: LlmClient | null };
 
@@ -43,6 +44,16 @@ export function aiErrorResponse(e: unknown): NextResponse {
   return NextResponse.json({ error: "AI 요청을 처리하지 못했습니다", code: "AI_ERROR" }, { status: 502 });
 }
 
+/** 이관 오류 → 응답 (스펙 8장). 이미지 오류와 검증 오류만 다르고 나머지는 공통 매핑을 쓴다 */
+export function importErrorResponse(e: unknown): NextResponse {
+  if (e instanceof ImageInputError) {
+    const status = e.code === "IMAGE_TOO_LARGE" ? 413 : 415;
+    return NextResponse.json({ error: e.message, code: e.code }, { status });
+  }
+  if (e instanceof AiValidationError) return NextResponse.json({ error: e.message, code: "AI_INVALID_IMPORT" }, { status: 400 });
+  return aiErrorResponse(e);
+}
+
 /** 프롬프트 컨텍스트 (스펙 4.3). sample.data의 값은 넣지 않고 필드 이름·타입만 */
 export async function buildContext(report: Report, selection: string[], history: ChatTurn[]): Promise<EditContext> {
   const fields: EditContext["fields"] = {};
@@ -63,6 +74,18 @@ export async function buildContext(report: Report, selection: string[], history:
 export function fakeScript(input: LlmInput): unknown {
   const text = input.messages.at(-1)?.text ?? "";
   const instruction = text.slice(text.lastIndexOf("# 지시") + 5);
+  if (input.system.includes("0-1000")) {   // 이관 프롬프트
+    return {
+      elements: [
+        JSON.stringify({ id: "title", type: "text", x: 100, y: 40, w: 800, h: 40, value: "검사 성적서", style: { fontSize: 16, bold: true, align: "center" } }),
+        JSON.stringify({ id: "lot", type: "text", x: 100, y: 120, w: 400, h: 30, value: "{{ params.lotNo }}" }),
+      ],
+      params: [JSON.stringify({ name: "lotNo", type: "string" })],
+      datasets: [],
+      explanation: "제목과 값 칸을 옮겼습니다. 머리글 그룹은 컴포넌트 후보입니다",
+      warnings: ["도장 영역은 읽지 못했습니다"],
+    };
+  }
   if (input.system.includes("elements 배열")) {   // 생성 프롬프트
     return { elements: [
       JSON.stringify({ id: "text-1", type: "text", x: 10, y: 10, w: 120, h: 12, value: "품질보증서" }),

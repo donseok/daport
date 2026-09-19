@@ -45,7 +45,9 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   };
   return {
     async complete(input) {
-      const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
+      // 호출마다 타임아웃을 다르게 둘 수 있다 — 이관은 이미지 인식이 오래 걸려 기본값보다 더 준다
+      const effectiveTimeoutMs = input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : timeoutMs;
+      const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(effectiveTimeoutMs)]) : AbortSignal.timeout(effectiveTimeoutMs);
       const contents = input.messages.map((m, i) => {
         const parts: Part[] = [{ text: m.text }];
         // 이미지는 마지막 user 메시지에만 싣는다 — 모델이 "지금 보는 그림"과 지시를 한 턴으로 읽게 한다

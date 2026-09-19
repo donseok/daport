@@ -26,6 +26,7 @@ export type LlmInput = {
   images?: { mimeType: string; data: string }[];   // base64. 마지막 user 메시지에 함께 실린다
   maxOutputTokens?: number;
   signal?: AbortSignal;
+  timeoutMs?: number;   // 클라이언트 기본 타임아웃을 이 호출에서만 덮어쓴다 (예: 이관은 더 오래 걸린다)
 };
 
 export interface LlmClient {
