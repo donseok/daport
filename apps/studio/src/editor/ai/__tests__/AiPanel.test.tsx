@@ -118,4 +118,64 @@ describe("AiPanel", () => {
     await waitFor(() => expect(screen.queryByTestId("ai-send")).not.toBeNull());
     expect(screen.queryByRole("button", { name: "취소" })).toBeNull();
   });
+  it("빈 레포트에서 이미지를 올리면 이관을 호출하고 제안과 대조 배경을 세운다", async () => {
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({
+      elements: [{ id: "t1", type: "text", x: 10, y: 10, w: 50, h: 8, value: "검사 성적서" }],
+      params: [], datasets: [], page: { width: 210, height: 297, margin: [10, 10, 10, 10], unit: "mm" },
+      explanation: "옮겼습니다", warnings: [], scan: { src: "asset://abc123", angle: 3 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    const file = new File([new Uint8Array([1, 2, 3])], "form.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/reports/r/ai/import");
+    expect(store.getState().scanOverlay).toBe("asset://abc123");   // 응답의 scan.src를 그대로 쓴다
+    expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("옮겼습니다");
+  });
+  it("이관 프리셋: 레포트 크기가 알려진 프리셋과 같으면 그것을, 아니면 A4를 기본으로 고르고, 고른 프리셋 크기 그대로 보내며, 응답의 page를 문서에 반영한다(스펙 9, I1)", async () => {
+    // 알려진 프리셋(60×40 라벨)과 크기가 같은 레포트 — 초기 선택이 그 프리셋이어야 한다
+    mount(parseReport({ id: "r", version: 1, page: { width: 60, height: 40 } }));
+    expect((screen.getByTestId("ai-import-preset") as HTMLSelectElement).value).toBe("product-label-60x40");
+    cleanup();
+
+    // 어떤 내장 프리셋과도 크기가 다른 레포트 — 초기 선택은 A4다
+    const fetchMock = vi.fn(async (_u: string, _i?: RequestInit) => json({
+      elements: [], params: [], datasets: [], page: { width: 297, height: 420, margin: [10, 10, 10, 10], unit: "mm" },
+      explanation: "옮겼습니다", warnings: [], scan: { src: null, angle: 0 },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 123, height: 77 } }));
+    const select = screen.getByTestId("ai-import-preset") as HTMLSelectElement;
+    expect(select.value).toBe("a4-portrait");
+
+    // A4가 아닌 다른 프리셋을 고르면, report.page(123×77)가 아니라 고른 프리셋의 크기를 보낸다
+    fireEvent.change(select, { target: { value: "a3-portrait" } });
+    const file = new File([new Uint8Array([1, 2, 3])], "form.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(store.getState().proposal?.kind).toBe("import"));
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.preset).toEqual({ width: 297, height: 420 });
+    // 서버가 실제로 검증에 쓴 page(응답의 page)가 문서에 반영돼야 한다 — report.page(123×77)에
+    // 그대로 남아 요소가 페이지 밖으로 밀려나 보이던 예전 동작(I1)을 여기서 고쳤다고 기록해둔다
+    expect(store.getState().proposal?.next.page).toMatchObject({ width: 297, height: 420 });
+  });
+  it("업로드 중 레포트가 바뀌면 이관 제안과 대조 배경을 모두 버린다", async () => {
+    let resolveFetch: ((v: Response) => void) | undefined;
+    const fetchMock = vi.fn(() => new Promise<Response>((resolve) => { resolveFetch = resolve; }));
+    vi.stubGlobal("fetch", fetchMock);
+    const store = mount(parseReport({ id: "r", version: 1, page: { width: 100, height: 100 } }));
+    const file = new File([new Uint8Array([1, 2, 3])], "form.png", { type: "image/png" });
+    fireEvent.change(screen.getByTestId("ai-import-file"), { target: { files: [file] } });
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    act(() => { store.getState().updatePage({ width: 150 }); });   // 업로드 응답을 기다리는 동안 다른 편집
+    act(() => { resolveFetch!(json({
+      elements: [{ id: "t1", type: "text", x: 1, y: 1, w: 10, h: 5, value: "A" }],
+      params: [], datasets: [], page: { width: 100, height: 100, margin: [10, 10, 10, 10], unit: "mm" },
+      explanation: "옮겼습니다", warnings: [], scan: { src: "asset://xyz", angle: 0 },
+    })); });
+    await waitFor(() => expect(screen.getAllByTestId("ai-turn").at(-1)!.textContent).toContain("편집 중 레포트가 바뀌어"));
+    expect(store.getState().proposal).toBeNull();
+    expect(store.getState().scanOverlay).toBeNull();   // 제안이 거절됐으니 대조 배경도 세우지 않는다
+  });
 });

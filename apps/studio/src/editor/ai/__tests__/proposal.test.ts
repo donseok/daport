@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseReport } from "@daport/core";
-import { diffIds, proposalFromEdit, proposalFromGenerate } from "../proposal";
+import { diffIds, proposalFromEdit, proposalFromGenerate, proposalFromImport } from "../proposal";
 
 const base = parseReport({ id: "r", version: 1, page: { width: 100, height: 100 }, elements: [
   { id: "a", type: "text", x: 0, y: 0, w: 10, h: 5, value: "A" },
@@ -34,5 +34,33 @@ describe("proposal", () => {
     expect(p.next.elements).toHaveLength(1);
     expect(p.changes.added).toEqual(["a"]);
     expect(p.warnings).toEqual(["w"]);
+  });
+  it("proposalFromImport는 요소·파라미터·데이터셋을 함께 넣는다", () => {
+    const p = proposalFromImport(base, {
+      elements: [{ id: "t1", type: "text", x: 1, y: 1, w: 10, h: 5, value: "A" } as never],
+      params: [{ name: "lotNo", type: "string" } as never],
+      datasets: [{ name: "rows1", type: "static", rows: [] } as never],
+      page: base.page,
+      explanation: "옮겼습니다",
+      warnings: ["도장 못 읽음"],
+    });
+    expect(p.kind).toBe("import");
+    expect(p.next.elements).toHaveLength(1);
+    expect(p.next.params.map((x) => x.name)).toContain("lotNo");
+    expect(p.next.datasets.map((d) => d.name)).toContain("rows1");
+    expect(p.changes.added).toEqual(["t1"]);
+    expect(p.warnings).toContain("도장 못 읽음");
+  });
+  it("proposalFromImport는 서버가 검증에 쓴 page를 문서에 반영한다(I1: 프리셋·문서 불일치 방지)", () => {
+    const p = proposalFromImport(base, {
+      elements: [{ id: "t1", type: "text", x: 1, y: 1, w: 10, h: 5, value: "A" } as never],
+      params: [],
+      datasets: [],
+      page: { ...base.page, width: 297, height: 420 },
+      explanation: "옮겼습니다",
+      warnings: [],
+    });
+    expect(p.next.page).toMatchObject({ width: 297, height: 420 });
+    expect(p.otherOps.join(" ")).toContain("용지 크기");
   });
 });

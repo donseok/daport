@@ -27,6 +27,27 @@ daport 레포트를 자연어로 편집하거나(부분 지시 → JSON Patch), 
 - 금지: `/id`, `/version`, `/components/**`, `/sample/**`, `/output/**`, `/repeat/**`.
 - 금지 경로를 가리키는 op은 패치 전체를 버리지 않고 그 op만 제거하며 경고를 남긴다(`validateEditPatch`의 `warnings`).
 
+## 이관 (이미지 → 양식)
+
+빈 레포트에서 스캔한 종이 양식 이미지 한 장을 올리면, 요소 전체(패치가 아니라 `elements` 배열 통째)를 제안받는다. 편집·생성과 달리 멀티모달 호출이라 `LlmInput.images`(`{ mimeType, data }[]`, base64, 마지막 user 메시지에 함께 실린다)를 쓴다.
+
+- `prompts/import.ko.ts` — `IMPORT_SYSTEM`. 좌표 규칙, 쓸 수 있는 요소, 값 칸(`params` 선언), 표(`datasets`) 규칙, 컴포넌트 후보 표시, 요소 수 상한(120개)을 담은 이관 전용 시스템 프롬프트.
+- `prompt.ts` — `buildImportPrompt(page, image)`. `page`(대상 페이지 mm 크기)와 이미지 하나를 받아 `{ system, messages, schema, images }`(`PromptBundle` + `images`)를 만든다.
+- `response-schema.ts` — `IMPORT_RESPONSE_SCHEMA`(`{ elements, params, datasets, explanation, warnings }`). `elements`·`params`·`datasets`의 각 원소는 객체 하나를 담은 JSON 문자열이다(중첩 스키마 대신 문자열 배열로 둬서 Gemini 구조화 출력이 임의 깊이 트리를 다루게 한다).
+- `import-validate.ts` — `validateImported(report, raw, page)`. 파싱 → 0–1000 좌표를 `page` mm로 스케일 변환 → 페이지 밖 요소를 안으로 클램프 → id 정리 → `params` 병합(이름 규칙·예약어·기존 이름과 충돌 시 버림) → `datasets` 규칙 검증 → `parseReport`. 결과는 `{ elements, params, datasets, warnings }`(`ImportResult`)이며, 원본 `report`는 건드리지 않는다.
+
+### 좌표 규칙
+
+모델이 내는 모든 `x`·`y`·`w`·`h`는 mm이 아니라 **이미지 기준 0–1000 정규화 정수**다(`x`·`w`는 가로, `y`·`h`는 세로). mm 변환은 서버(`validateImported`)가 대상 페이지 크기로 스케일링해서 한다 — 모델은 픽셀도 mm도 모른다. `group` 자식의 좌표는 여전히 0–1000 정규화 정수이지만 이미지가 아니라 그 `group`의 좌상단 기준 상대 좌표다.
+
+### 표에 딸린 `rows<N>` 데이터셋 규칙
+
+이관이 만들 수 있는 `datasets`는 표 하나당 정적 데이터셋 하나뿐이다. 이름은 `rows1`, `rows2`처럼 `rows<숫자>` 형태만 허용하고(`DATASET_NAME_RE`), 표 요소의 `source`가 그 이름을 그대로 가리켜야 렌더된다. 행은 최대 20행까지만 남기고(`MAX_ROWS`, 넘으면 잘라내고 경고), 남는 데이터셋이 없는 표는 렌더할 수 없으므로 표 자체를 함께 버린다. `datasets`·`components`·`output`·`sample`·`id`·`version`은 이관이 건드리지 않는 경로다 — 표에 딸린 `rows<N>` 정적 데이터셋만 예외다.
+
+### 알려진 제약
+
+- 좌표가 0–1000 정규화라서, 올린 이미지의 가로세로 비율이 선택한 용지 크기와 다르면 요소 위치·크기가 그 차이만큼 늘어나거나 눌린다. 스튜디오 라우트는 비율이 5% 넘게 어긋나면 경고를 얹지만 좌표 자체를 보정하지는 않는다.
+
 ## 실제 Gemini로 통합 테스트 (`GEMINI_IT=1`)
 
 기본 `pnpm test`(`vitest.config.ts`)는 `GEMINI_API_KEY` 없이 통과한다. 실제 API를 부르는 테스트는 `src/__it__/*.it.test.ts`에 있고 `vitest.it.config.ts`로만 수집되며, `GEMINI_IT=1`이고 `GEMINI_API_KEY`가 있을 때만 켜진다(`describe.skipIf`).
@@ -62,3 +83,19 @@ pnpm --filter studio dev
 | (미실행) | | | |
 
 빈 레포트 생성(완료 기준 2)도 같은 방식으로 브리프·경고 수·PDF 성공 여부를 표로 남긴다. 위 명령을 실행한 뒤 이 표를 채워 넣는다.
+
+### 이관 수동 검증
+
+스펙 10장 완료 기준(이관) — 실제 스캔 사진 몇 장을 올려 이관 결과가 쓸 만한지 — 도 실제 Gemini API가 있어야 확인할 수 있다.
+
+**미실행.** 이 작업을 수행한 환경에도 `GEMINI_API_KEY`가 설정되어 있지 않아 실제 모델 호출을 하지 못했다. 키를 넣고 아래를 실행해 확인한다.
+
+```bash
+# 스튜디오를 실제 키로 띄운 뒤(.env.local에 GEMINI_API_KEY 설정) 빈 레포트에서 AI 탭의 "양식 이미지로 시작"으로
+# 실제 스캔 사진(품질보증서·검사 성적서 등)을 올려 제안 → 적용 → PDF까지 브라우저에서 확인
+pnpm --filter studio dev
+```
+
+| 스캔 이미지 | 용지 크기 | 경고 수 | 적용 후 PDF 성공 |
+|------|-----------|---------|-------------------|
+| (미실행) | | | |

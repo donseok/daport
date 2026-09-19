@@ -4,6 +4,8 @@ import { LlmError, MAX_OUTPUT_TOKENS, type LlmClient, type LlmInput } from "./ty
 const mask = (s: string, key: string) => (key ? s.split(key).join("***") : s);
 const RETRY_NOTE = "직전 응답이 JSON 형식에 맞지 않았습니다. 지정한 스키마에 맞는 JSON 하나만 다시 출력하세요.";
 
+type Part = { text: string } | { inlineData: { mimeType: string; data: string } };
+
 function toLlmError(e: unknown, key: string): LlmError {
   if (e instanceof LlmError) return e;
   const status = (e as { status?: number } | null)?.status;
@@ -21,7 +23,7 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
   const timeoutMs = opts.timeoutMs ?? 60_000;
   // 한 요청 안에서 재시도 두 번이 이 신호 하나를 나눠 쓴다 — 매 호출마다 새로 만들면 마감이 2배가 된다(스펙 8: 60s → AI_TIMEOUT)
-  const call = async (input: LlmInput, contents: { role: string; parts: { text: string }[] }[], signal: AbortSignal): Promise<string> => {
+  const call = async (input: LlmInput, contents: { role: string; parts: Part[] }[], signal: AbortSignal): Promise<string> => {
     try {
       const res = await ai.models.generateContent({
         model: opts.model,
@@ -43,10 +45,22 @@ export function createGeminiClient(opts: { apiKey: string; model: string; timeou
   };
   return {
     async complete(input) {
-      const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(timeoutMs)]) : AbortSignal.timeout(timeoutMs);
-      const contents = input.messages.map((m) => ({ role: m.role, parts: [{ text: m.text }] }));
+      // 호출마다 타임아웃을 다르게 둘 수 있다 — 이관은 이미지 인식이 오래 걸려 기본값보다 더 준다
+      const effectiveTimeoutMs = input.timeoutMs && input.timeoutMs > 0 ? input.timeoutMs : timeoutMs;
+      const signal = input.signal ? AbortSignal.any([input.signal, AbortSignal.timeout(effectiveTimeoutMs)]) : AbortSignal.timeout(effectiveTimeoutMs);
+      const contents = input.messages.map((m, i) => {
+        const parts: Part[] = [{ text: m.text }];
+        // 이미지는 마지막 user 메시지에만 싣는다 — 모델이 "지금 보는 그림"과 지시를 한 턴으로 읽게 한다
+        if (i === input.messages.length - 1 && m.role === "user") {
+          for (const img of input.images ?? []) parts.push({ inlineData: { mimeType: img.mimeType, data: img.data } });
+        }
+        return { role: m.role, parts };
+      });
       const first = parse(await call(input, contents, signal));
       if (first.ok) return first.value;
+      // 재시도는 contents를 그대로 재사용한다 — 여기 이미 실린 inlineData가 그대로 두 번째 요청에도 포함되어
+      // 이미지 바이트가 같은 마감(deadline) 안에서 한 번 더 업로드된다. generateContent는 상태를 유지하지 않으므로
+      // 모델이 이전 턴을 "기억"하는 게 아니라, 매 요청마다 전체 대화(이미지 포함)를 새로 보내는 것이다
       const second = parse(await call(input, [...contents, { role: "user", parts: [{ text: RETRY_NOTE }] }], signal));
       if (second.ok) return second.value;
       throw new LlmError("LLM_BAD_OUTPUT", "모델 응답이 JSON 형식이 아닙니다");

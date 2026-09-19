@@ -60,4 +60,29 @@ describe("createGeminiClient", () => {
   it("refuses to construct without an api key", () => {
     expect(() => createGeminiClient({ apiKey: "", model: "m" })).toThrow(expect.objectContaining({ code: "LLM_NOT_CONFIGURED" }));
   });
+  it("images를 마지막 user 파트에 inlineData로 싣는다", async () => {
+    generateContent.mockResolvedValueOnce({ text: '{"ok":1}' });
+    await client().complete({
+      system: "s", messages: [{ role: "user", text: "이 이미지를 읽어라" }], schema: {},
+      images: [{ mimeType: "image/jpeg", data: "QUJD" }],
+    });
+    const req = generateContent.mock.calls[0][0];
+    const parts = req.contents.at(-1).parts;
+    expect(parts[0]).toEqual({ text: "이 이미지를 읽어라" });
+    expect(parts[1]).toEqual({ inlineData: { mimeType: "image/jpeg", data: "QUJD" } });
+  });
+  it("images가 없으면 파트는 텍스트 하나뿐이다", async () => {
+    generateContent.mockResolvedValueOnce({ text: '{"ok":1}' });
+    await client().complete({ system: "s", messages: [{ role: "user", text: "t" }], schema: {} });
+    expect(generateContent.mock.calls[0][0].contents.at(-1).parts).toEqual([{ text: "t" }]);
+  });
+  it("마지막 메시지가 model이면 images를 싣지 않는다", async () => {
+    generateContent.mockResolvedValueOnce({ text: '{"ok":1}' });
+    await client().complete({
+      system: "s", messages: [{ role: "user", text: "지시" }, { role: "model", text: "답" }], schema: {},
+      images: [{ mimeType: "image/jpeg", data: "QUJD" }],
+    });
+    const contents = generateContent.mock.calls[0][0].contents;
+    expect(contents.at(-1)).toEqual({ role: "model", parts: [{ text: "답" }] });
+  });
 });

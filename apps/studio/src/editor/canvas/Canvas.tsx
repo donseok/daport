@@ -38,6 +38,7 @@ export function Canvas({ zoom }: { zoom: number }) {
   const proposal = useEditor((s) => s.proposal);
   const applyProposal = useEditor((s) => s.applyProposal);
   const rejectProposal = useEditor((s) => s.rejectProposal);
+  const scanOverlay = useEditor((s) => s.scanOverlay);
   const [ghost, setGhost] = useState<Record<string, Box> | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   /** 우클릭 메뉴 위치(페이지 기준 mm). 캔버스 div가 scale로 확대되므로 mm로 두면 배율과 함께 따라간다 */
@@ -58,7 +59,12 @@ export function Canvas({ zoom }: { zoom: number }) {
   const pages = useMemo(() => layoutFor(report, sampleProps), [report, sampleProps]);
   // layoutFor는 전체 함수라 오류가 나도 던지지 않고 빈 페이지를 준다 — 여기서 배너로 알린다 (Finding 1)
   const error = layoutError(report, sampleProps);
-  const css = useMemo(() => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height), [report.page.width, report.page.height]);
+  // 대조 배경이 있으면 .dp-page의 불투명한 흰 배경(pageCss)을 투명하게 덮어써서 그 아래 그린 배경 이미지가 비치게 한다.
+  // 그렇지 않으면 페이지 자체가 이미지를 완전히 가려 배경이 보이지 않는다
+  const css = useMemo(
+    () => fontFaceCss("/fonts") + "\n" + pageCss(report.page.width, report.page.height) + (scanOverlay ? "\n.dp-page{background:transparent}" : ""),
+    [report.page.width, report.page.height, scanOverlay],
+  );
   const page = currentPage(pages, view);
 
   // 편집으로 페이지 수가 줄면 보기를 마지막 페이지로 당긴다 (스펙 7.4)
@@ -248,6 +254,13 @@ export function Canvas({ zoom }: { zoom: number }) {
       data-testid="canvas" onPointerDown={onPagePointerDown} onPointerMove={drag.move} onPointerUp={drag.end} onPointerCancel={drag.cancel} onDoubleClick={onDoubleClick}
       onDragOver={onDragOver} onDrop={onDrop} onContextMenu={onContextMenu}>
       <style>{css}</style>
+      {scanOverlay && (
+        // 페이지 밑바탕(흰색) 위, 요소 아래에 놓인 대조 배경. .dp-page를 투명하게 만들었으니 여기 흰 배경을 대신 채운다
+        <div className="absolute inset-0 bg-white pointer-events-none">
+          <img data-testid="scan-overlay" src={scanOverlay.startsWith("asset://") ? `/api/assets/${scanOverlay.slice(8)}` : scanOverlay} alt=""
+            className="absolute inset-0 w-full h-full object-fill opacity-30 pointer-events-none" />
+        </div>
+      )}
       <PaintPage page={{ ...page, items: page.items.map((it) => (isOtherInstance(it.instance, (id) => findElement(id)?.type === "repeater") ? dim(it) : it)) }} />
       <div className="absolute inset-0 pointer-events-none">
         {report.output.kind === "label" && (

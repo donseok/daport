@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { parseReport } from "@daport/core";
-import { buildEditPrompt, buildGeneratePrompt, EDIT_RESPONSE_SCHEMA, GENERATE_RESPONSE_SCHEMA, estimateTokens, MAX_CONTEXT_TOKENS } from "../index";
+import { buildEditPrompt, buildGeneratePrompt, buildImportPrompt, EDIT_RESPONSE_SCHEMA, GENERATE_RESPONSE_SCHEMA, IMPORT_RESPONSE_SCHEMA, estimateTokens, MAX_CONTEXT_TOKENS } from "../index";
 
 const base = { id: "r", name: "R", version: 1, page: { width: 210, height: 297 },
   params: [{ name: "lot", type: "string" }],
@@ -59,6 +59,36 @@ describe("buildGeneratePrompt", () => {
     expect(p.truncated.length).toBeGreaterThan(0);
     expect(p.truncated).not.toContain("history");
     expect(estimateTokens(p.system + p.messages.map((m) => m.text).join(""))).toBeLessThanOrEqual(MAX_CONTEXT_TOKENS);
+  });
+});
+
+describe("buildImportPrompt", () => {
+  const img = { mimeType: "image/jpeg", data: "QUJD" };
+
+  it("페이지 크기를 사용자 메시지에 싣고 이미지를 함께 넘긴다", () => {
+    const p = buildImportPrompt({ width: 210, height: 297 }, img);
+    expect(p.messages).toHaveLength(1);
+    expect(p.messages[0].text).toContain("210×297mm");
+    expect(p.images).toEqual([img]);
+    expect(p.schema).toBe(IMPORT_RESPONSE_SCHEMA);
+  });
+
+  it("시스템 프롬프트가 좌표·금지 요소·표 규칙을 못 박는다", () => {
+    const { system } = buildImportPrompt({ width: 210, height: 297 }, img);
+    expect(system).toContain("0-1000");       // 정규화 좌표
+    expect(system).toContain("repeater");     // 금지 요소
+    expect(system).toContain("rows1");        // 표에 딸린 정적 데이터셋 이름 규칙
+    expect(system).toContain("{{ row.");      // 열 value 표현식
+    expect(system).toContain("{{ params.");   // 값 칸 표현식
+    expect(system).toContain("120");          // 요소 상한
+    expect(system).toContain("group의 좌상단 기준"); // group 자식은 이미지가 아니라 group 기준 상대 좌표
+    expect(system).toContain("columns");      // table의 열 배열 필드명
+  });
+
+  it("응답 스키마에 oneOf·$ref·anyOf가 없다", () => {
+    const json = JSON.stringify(IMPORT_RESPONSE_SCHEMA);
+    expect(json).not.toMatch(/oneOf|\$ref|anyOf/);
+    expect(IMPORT_RESPONSE_SCHEMA).toMatchObject({ required: ["elements", "explanation"] });
   });
 });
 

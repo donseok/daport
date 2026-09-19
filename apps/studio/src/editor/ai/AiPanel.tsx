@@ -1,11 +1,21 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useEditor } from "../store";
-import { postAi } from "./api";
-import { proposalFromEdit, proposalFromGenerate, type Proposal } from "./proposal";
+import { postAi, postImport } from "./api";
+import { proposalFromEdit, proposalFromGenerate, proposalFromImport, type Proposal } from "./proposal";
+import { BUILTIN_PRESETS } from "@/lib/presets";
 
 type EditResponse = Parameters<typeof proposalFromEdit>[1];
 type GenerateResponse = Parameters<typeof proposalFromGenerate>[1];
+
+// 스펙 9: 이관은 사용자가 확인한 용지 프리셋을 쓴다(기본 A4). 새 레포트는 아무 프리셋으로나 만들 수 있어(예: 60x40 라벨)
+// report.page를 그대로 보내면 90초짜리 요청이 끝난 뒤에야 잘못된 용지로 앉혀진 요소를 보게 된다
+const DEFAULT_IMPORT_PRESET_ID = "a4-portrait";
+
+/** report.page와 크기(너비·높이)가 같은 내장 프리셋의 id. 여백은 이관에 안 쓰이므로 비교하지 않는다 */
+function matchingPresetId(page: { width: number; height: number }): string | undefined {
+  return BUILTIN_PRESETS.find((p) => p.page.width === page.width && p.page.height === page.height)?.id;
+}
 
 // "cancelled"는 사용자가 요청을 취소했을 때만 붙는 조용한 턴이다. history에는 user·assistant만 실어 보내므로
 // 취소 턴은 다음 요청의 history에 절대 섞이지 않는다
@@ -32,12 +42,16 @@ export function AiPanel({ reportId }: { reportId: string }) {
   const report = useEditor((s) => s.report);
   const selection = useEditor((s) => s.selection);
   const setProposal = useEditor((s) => s.setProposal);
+  const scanOverlay = useEditor((s) => s.scanOverlay);
+  const setScanOverlay = useEditor((s) => s.setScanOverlay);
   const isEmpty = report.elements.length === 0;
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [notConfigured, setNotConfigured] = useState(false);
   const [generateMode, setGenerateMode] = useState(() => isEmpty);
+  // 이관에 쓸 용지 프리셋. 지금 레포트 페이지가 알려진 프리셋과 크기가 같으면 그것으로, 아니면 A4로 초기화한다
+  const [importPresetId, setImportPresetId] = useState(() => matchingPresetId(report.page) ?? DEFAULT_IMPORT_PRESET_ID);
   const controllerRef = useRef<AbortController | null>(null);
   // 언마운트로 인한 abort는 조용한 취소 턴도 남기지 않는다 — catch·finally에서 상태를 건드리기 전에 이 값을 먼저 확인한다
   const mountedRef = useRef(true);
@@ -83,7 +97,10 @@ export function AiPanel({ reportId }: { reportId: string }) {
     }
   };
 
-  function handleResult<T extends { explanation: string; warnings: string[] }>(res: Awaited<ReturnType<typeof postAi<T>>>, toProposal: (data: T) => Proposal) {
+  // onApplied는 제안이 저장된 뒤(그리고 조수 턴이 남기 전) 한 번 더 반영할 부수 효과다. 이관의 대조 배경 설정에 쓴다
+  function handleResult<T extends { explanation: string; warnings: string[] }>(
+    res: Awaited<ReturnType<typeof postAi<T>>>, toProposal: (data: T) => Proposal, onApplied?: (data: T) => void,
+  ) {
     if (!mountedRef.current) return;   // 응답이 오는 동안 패널이 사라졌으면 아무 상태도 건드리지 않는다
     if (res.ok) {
       try {
@@ -93,6 +110,7 @@ export function AiPanel({ reportId }: { reportId: string }) {
           setTurns((prev) => [...prev, { role: "error", text: "편집 중 레포트가 바뀌어 제안을 버렸습니다. 다시 요청하세요." }]);
           return;
         }
+        onApplied?.(res.data);
         setTurns((prev) => [...prev, { role: "assistant", text: res.data.explanation, warnings: res.data.warnings }]);
       } catch (e) {
         setTurns((prev) => [...prev, { role: "error", text: e instanceof Error ? e.message : String(e) }]);
@@ -102,6 +120,31 @@ export function AiPanel({ reportId }: { reportId: string }) {
     if (res.code === "AI_NOT_CONFIGURED") { setNotConfigured(true); return; }
     setTurns((prev) => [...prev, { role: "error", text: res.message }]);
   }
+
+  /** 빈 레포트에서 양식 이미지를 올리면 이관을 호출해 제안과 대조 배경을 함께 세운다. send와 같은 뼈대(턴 기록 → 요청 → handleResult) */
+  const onPickImage = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";   // 같은 파일을 다시 골라도 change 이벤트가 다시 뜨도록 비운다
+    if (!file || busy) return;
+    setTurns((prev) => [...prev, { role: "user", text: `이미지 업로드: ${file.name}` }]);
+    setNotConfigured(false);
+    const controller = new AbortController();
+    controllerRef.current = controller;
+    setBusy(true);
+    try {
+      const preset = BUILTIN_PRESETS.find((p) => p.id === importPresetId) ?? BUILTIN_PRESETS.find((p) => p.id === DEFAULT_IMPORT_PRESET_ID)!;
+      const res = await postImport(reportId, report, file, { width: preset.page.width, height: preset.page.height }, controller.signal);
+      // scan.src가 null이면 저장에 실패했거나 너무 큰 것이므로 대조 배경 없이 진행한다(경고는 이미 warnings에 실려 있다)
+      handleResult(res, (data) => proposalFromImport(report, data), (data) => setScanOverlay(data.scan.src));
+    } catch (e) {
+      if (!mountedRef.current) return;   // 언마운트가 일으킨 abort — 사라진 패널에 턴을 남기지 않는다
+      if (e instanceof Error && e.name === "AbortError") setTurns((prev) => [...prev, { role: "cancelled", text: "취소됨" }]);
+      else setTurns((prev) => [...prev, { role: "error", text: e instanceof Error ? e.message : String(e) }]);
+    } finally {
+      controllerRef.current = null;
+      if (mountedRef.current) setBusy(false);
+    }
+  };
 
   const cancel = () => controllerRef.current?.abort();
 
@@ -130,6 +173,26 @@ export function AiPanel({ reportId }: { reportId: string }) {
             <input type="checkbox" data-testid="ai-generate-mode" checked={generateMode} disabled={busy} onChange={(e) => setGenerateMode(e.target.checked)} />
             생성 모드 (빈 레포트)
           </label>
+        )}
+        {isEmpty && (
+          <label className="flex items-center gap-1 text-neutral-600">
+            용지 크기
+            <select data-testid="ai-import-preset" className="border rounded px-1 py-0.5" value={importPresetId} disabled={busy}
+              onChange={(e) => setImportPresetId(e.target.value)}>
+              {BUILTIN_PRESETS.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </label>
+        )}
+        {isEmpty && (
+          <label className="text-xs text-neutral-600">
+            양식 이미지로 시작
+            <input data-testid="ai-import-file" type="file" accept="image/png,image/jpeg" className="ml-2" disabled={busy} onChange={(e) => void onPickImage(e)} />
+          </label>
+        )}
+        {scanOverlay && (
+          <button type="button" data-testid="ai-scan-clear" className="self-start text-neutral-500 underline" onClick={() => setScanOverlay(null)}>
+            대조 배경 끄기
+          </button>
         )}
         <textarea aria-label="AI 지시" className="w-full border rounded px-1 py-0.5 resize-none" rows={2}
           value={input} onChange={(e) => setInput(e.target.value)} onKeyDown={onKeyDown} disabled={busy} />

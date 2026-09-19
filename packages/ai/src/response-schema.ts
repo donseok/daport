@@ -40,3 +40,28 @@ export const GENERATE_RESPONSE_SCHEMA = {
   },
   required: ["elements", "explanation"],
 };
+
+/** 이관 응답: 요소·파라미터·표 데이터셋(각 JSON 문자열) + 설명 + 경고 */
+export const IMPORT_RESPONSE_SCHEMA = {
+  type: "object",
+  properties: {
+    elements: {
+      type: "array",
+      description: "요소 전체. 각 원소는 요소 객체 하나의 JSON 문자열. 좌표는 0-1000 정규화 정수",
+      items: { type: "string" },
+    },
+    params: {
+      type: "array",
+      description: '파라미터 선언. 각 원소는 {"name":"lotNo","type":"string"} 꼴의 JSON 문자열',
+      items: { type: "string" },
+    },
+    datasets: {
+      type: "array",
+      description: '표에 딸린 정적 데이터셋. 각 원소는 {"name":"rows1","rows":[{"col":"값"}]} 꼴의 JSON 문자열',
+      items: { type: "string" },
+    },
+    explanation: { type: "string", description: "무엇을 어떻게 옮겼는지, 컴포넌트 후보는 무엇인지 한국어 한두 문장" },
+    warnings: { type: "array", description: "읽지 못한 영역 등 사람이 확인해야 할 점", items: { type: "string" } },
+  },
+  required: ["elements", "explanation"],
+};
